@@ -1,0 +1,545 @@
+{
+  "levels": [
+    {
+      "title": "Level 0：环境与 Spark 初识",
+      "description": "认识 Spark 的定位、核心组件，并跑通第一个 PySpark 程序。",
+      "order_index": 0,
+      "lessons": [
+        {
+          "title": "Spark 是什么",
+          "slug": "l0-what-is-spark",
+          "description": "了解 Spark 的定位：大规模数据处理的统一计算引擎。",
+          "objective": "能说清 Spark 是什么、适合解决什么规模的问题。",
+          "estimated_minutes": 10,
+          "order_index": 0,
+          "content": {
+            "explanation": "Spark 是一个【大规模数据处理的统一计算引擎】。它不是数据库，不是编程语言，而是一个分布式计算框架：把一个大任务拆成很多小任务，分给多台机器（或多个核心）同时计算。\n\n统一的意思是：一套引擎覆盖多种场景——批处理（Spark SQL / DataFrame）、流处理（Structured Streaming）、机器学习（MLlib）、图计算（GraphX）。以前每种场景要学一套框架，现在一套 API 全搞定。\n\nSpark 最著名的特点是【内存计算】：中间结果可以留在内存里，不必像老一代 MapReduce 那样每一步都写磁盘。数据量大、计算步骤多时，速度可以快出一个数量级。\n\n本课程使用 PySpark——Spark 官方的 Python 接口。",
+            "examples": [
+              {
+                "title": "安装 PySpark（本地学习模式）",
+                "code": "pip install pyspark",
+                "note": "本地学习装这一个包就够了，它会自带一份 Spark 运行时；生产集群上通常由集群提供运行时，版本要与集群一致。"
+              },
+              {
+                "title": "Spark 能干什么的直观感受",
+                "code": "# 一台笔记本就能数完 1000 万行日志里每个 IP 出现的次数\n# 后面几课你会亲手写出这段程序",
+                "note": "Spark 的价值在「数据大到单机 pandas 处理不动」时才明显；几百行的表用 pandas 反而更方便。"
+              }
+            ],
+            "key_points": [
+              "Spark = 分布式统一计算引擎，不是数据库、不是语言",
+              "一套引擎覆盖批处理、流处理、机器学习、图计算",
+              "核心优势：内存计算，多步任务不反复读写磁盘",
+              "PySpark 是 Spark 的官方 Python 接口",
+              "适用场景：数据量大到单机工具（pandas）处理不动时"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "把 Spark 当成数据库或存储系统",
+                "why": "Spark 只负责「计算」，数据通常存在 HDFS、对象存储、数据仓库等外部系统。",
+                "fix": "记住分工：Spark 管算，存储系统管存。"
+              },
+              {
+                "mistake": "以为 Spark 是一种编程语言",
+                "why": "Spark 是框架，写程序仍然用 Python / Scala / Java / R，只是调用 Spark 的 API。",
+                "fix": "说法改成「我用 Python 写 Spark 程序（PySpark）」。"
+              },
+              {
+                "mistake": "小数据也用 Spark",
+                "why": "Spark 有启动和分布式调度的开销，几百 MB 以内的数据用 pandas 更快更简单。",
+                "fix": "经验法则：数据上 GB、或单机内存装不下时再考虑 Spark。"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Spark 解决什么问题",
+          "slug": "l0-what-problem-spark-solves",
+          "description": "对比 MapReduce 时代，理解 Spark 为什么快、为什么流行。",
+          "objective": "能解释 Spark 相对 MapReduce 的核心优势。",
+          "estimated_minutes": 10,
+          "order_index": 1,
+          "content": {
+            "explanation": "Spark 诞生（2009，UC Berkeley AMPLab）之前，大数据批处理的标配是 Hadoop MapReduce。MapReduce 有一个致命的性能瓶颈：每个阶段（Map、Reduce）结束后，中间结果必须【写入磁盘】，下一阶段再从磁盘读回来。\n\n想象你有一道 10 步的统计任务：MapReduce 要写 10 次磁盘、读 10 次磁盘。磁盘速度比内存慢百倍，机器大部分时间在「等硬盘」，而不是在算。\n\nSpark 的两个关键改进：\n\n1. 【内存计算】：中间结果默认留在内存，只有内存不够时才溢写磁盘。\n2. 【DAG 执行引擎】：把整条计算链看成一张有向无环图（DAG），统一优化后再执行，而不是机械地一步步 Map→Reduce。\n\n官方经典测试中多步迭代任务 Spark 比 MapReduce 快 10~100 倍。加上 API 好用得多（MapReduce 写个单词计数要一两百行 Java），Spark 迅速成为主流。",
+            "examples": [
+              {
+                "title": "同一个任务两种写法的体感差异",
+                "code": "# MapReduce：一个 Java 工程两个类（Mapper + Reducer），约 100+ 行\n\n# Spark (PySpark)：3 行\nsc.textFile(\"logs.txt\") \\\n  .flatMap(lambda line: line.split()) \\\n  .countByValue()   # 每个单词出现次数",
+                "note": "代码量差几十倍只是表象；更重要的是 Spark 可以把这 3 步连成一条流水线在内存里跑完。"
+              },
+              {
+                "title": "迭代计算（机器学习）受益最大",
+                "code": "# 机器学习要反复迭代同一批数据\n# MapReduce：每轮迭代都要重新从磁盘读全量数据\n# Spark：数据 cache 在内存，第二轮迭代直接用",
+                "note": "迭代次数越多、步骤越多，Spark 的内存优势越明显；只有一步的简单任务差距不大。"
+              }
+            ],
+            "key_points": [
+              "MapReduce 的瓶颈：每个阶段中间结果必须读写磁盘",
+              "Spark 改进一：中间结果留在内存（内存计算）",
+              "Spark 改进二：DAG 执行引擎，整条计算链统一优化",
+              "多步、迭代型任务提速最明显（10~100 倍量级）",
+              "API 表达力强：单词计数 3 行 vs 100+ 行"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "认为 Spark 全面取代了 Hadoop",
+                "why": "Hadoop 是生态总称：HDFS（存储）+ YARN（资源调度）+ MapReduce（计算）。Spark 取代的是「计算」这一层，很多集群仍用 HDFS 存数据、YARN 调资源。",
+                "fix": "准确说法：Spark 取代 MapReduce 成为流行的计算引擎，常与 Hadoop 生态的存储和调度搭配使用。"
+              },
+              {
+                "mistake": "认为 Spark 任何任务都比 MapReduce 快上百倍",
+                "why": "官方数字来自多步迭代任务。单步任务、或 shuffle 极重的任务，Spark 提升有限——shuffle 数据仍要落盘。",
+                "fix": "记住优势边界：步骤多、迭代多、能装进内存 → 快；shuffle 主导的任务 → 瓶颈在磁盘和网络。"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Driver / Executor",
+          "slug": "l0-driver-executor",
+          "description": "理解 Spark 的基本进程模型与职责划分。",
+          "objective": "能解释 Driver 和 Executor 各自负责什么。",
+          "estimated_minutes": 15,
+          "order_index": 2,
+          "content": {
+            "explanation": "一个 Spark 应用由两类进程组成：\n\n【Driver（驱动器）】——「大脑」：\n· 运行你的 main 程序（Python 脚本）\n· 持有 SparkSession，是应用的入口\n· 负责把代码翻译成执行计划（DAG），切成一个个 Task\n· 把 Task 分发出去、追踪结果、汇总返回给你的代码\n\n【Executor（执行器）】——「手脚」：\n· 真正干活的进程，每个节点上可以有一个或多个\n· 接收 Driver 发来的 Task，在自己的数据分区上执行\n· 把计算结果返回给 Driver，或写到存储系统\n\n一个类比：Driver 是包工头——看图纸、拆任务、派活；Executor 是工人——接到活就地施工。工人不需要理解整个工程，只管完成自己那份。\n\n本地学习模式下（local[*]），Driver 和 Executor 其实跑在同一个 JVM 进程里；理解职责划分在集群模式下才真正体现，但心智模型从第一天就该建立。",
+            "examples": [
+              {
+                "title": "一个典型集群部署",
+                "code": "# 你的笔记本（提交程序，运行 Driver）\npython my_job.py\n#      │  拆任务、派活\n#      ▼\n# 集群节点 1: Executor 1 ── 处理数据分区 A、B\n# 集群节点 2: Executor 2 ── 处理数据分区 C、D\n# 集群节点 3: Executor 3 ── 处理数据分区 E、F",
+                "note": "数据被切成分区（partition），分区跟着 Executor 走——尽量让计算发生在数据所在的机器上。"
+              },
+              {
+                "title": "Driver 与 Executor 的分工在代码中的体现",
+                "code": "df = spark.read.csv(\"sales.csv\")  # Driver 记录读取计划\nbig = df.filter(df.amount > 100)   # Driver 记录过滤计划（还没执行！）\ntotal = big.count()                # 这时才由 Executor 真正执行\nprint(total)                       # 一个普通 Python int，回到 Driver",
+                "note": "所有 Spark API 调用发生在 Driver；真正的数据计算发生在 Executor；像 count() 的结果会送回 Driver。"
+              }
+            ],
+            "key_points": [
+              "Driver：运行 main、持有 SparkSession、翻译执行计划、分发 Task、汇总结果",
+              "Executor：真正执行 Task 的进程，负责具体数据分区的计算",
+              "Task 是最小执行单元，由 Driver 切分并分发",
+              "数据切成分区（partition），计算尽量发生在数据所在节点",
+              "local 模式下两者同进程，职责划分依然存在"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "在 Driver 端对大数据做 collect / toPandas()",
+                "why": "collect 会把所有 Executor 上的数据拉回 Driver。数据大时直接把 Driver 内存打爆（OOM）。",
+                "fix": "大数据用 count()、take(10)、聚合后再取回；调试时用 df.limit(100).toPandas() 这类受限写法。"
+              },
+              {
+                "mistake": "把重量级逻辑写在 Driver 的普通 Python 循环里",
+                "why": "Driver 只有一个，普通 Python 循环不享受分布式并行，等于退回单机程序。",
+                "fix": "数据处理交给 DataFrame / RDD 算子（在 Executor 并行执行），Driver 只做流程控制和少量汇总。"
+              },
+              {
+                "mistake": "以为代码是在数据所在的节点执行的",
+                "why": "PySpark 的 Python 算子（lambda/UDF）会在 Executor 端的 Python 子进程执行，但 collect 等动作把数据拉回 Driver 的那部分，发生在 Driver 端。",
+                "fix": "心中始终问一句：这行代码在 Driver 还是 Executor 执行？数据在哪一端？"
+              }
+            ]
+          }
+        },
+        {
+          "title": "SparkSession",
+          "slug": "l0-sparksession",
+          "description": "认识 Spark 应用入口 SparkSession。",
+          "objective": "知道 SparkSession 是什么、如何创建。",
+          "estimated_minutes": 10,
+          "order_index": 3,
+          "content": {
+            "explanation": "SparkSession 是 Spark 2.0 起的【统一应用入口】：创建它之后，才能读数据、创建 DataFrame、提交计算。可以把它理解为「你和 Spark 集群之间的握手」。\n\n在 Spark 2.0 之前，入口是更底层的 SparkContext（RDD 时代的入口）。SparkSession 内部包含并封装了 SparkContext，新手只需要认识 SparkSession；在 spark-shell / pys-shell 里还会自动帮你创建好一个叫 spark 的变量。\n\n创建用标准的 builder 模式，master 指定在哪运行、appName 给任务起名（在集群管理界面上能看到）。\n\n一个应用里通常只要一个 SparkSession；getOrCreate() 的设计让你可以在多个模块里写同样的获取代码而不会重复创建。用完记得 stop() 释放资源。",
+            "examples": [
+              {
+                "title": "标准创建方式",
+                "code": "from pyspark.sql import SparkSession\n\nspark = (SparkSession.builder\n    .master(\"local[*]\")            # 本地模式，用满所有 CPU 核心\n    .appName(\"my-first-app\")       # 应用名，显示在监控界面\n    .getOrCreate())                 # 已存在就复用\n\n# ... 干活 ...\n\nspark.stop()",
+                "note": "local[*] 的 * 表示「使用本机全部核心」，本地学习和测试的标准写法。"
+              },
+              {
+                "title": "用 SparkSession 做的第一件事：读数据",
+                "code": "df = spark.read.json(\"data/people.json\")\ndf.show()        # 表格形式打印前 20 行\ndf.printSchema() # 打印字段结构",
+                "note": "读出来的 df 是 DataFrame——Spark 最常用的数据结构，Level 1 之后会深入。"
+              }
+            ],
+            "key_points": [
+              "SparkSession 是 Spark 2.0+ 的统一入口，内部封装 SparkContext",
+              "创建模板：builder.master().appName().getOrCreate()",
+              "local[*] = 本地模式用满所有核心，学习调试标配",
+              "appName 会显示在集群监控界面，起个能认出来的名字",
+              "一个应用一个 session 即可；结束调用 spark.stop()"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "每次要用 Spark 都新建一个 SparkSession",
+                "why": "创建 session 开销不小（启动 JVM、申请资源），重复创建拖慢程序还浪费资源。",
+                "fix": "全应用共享一个；用 getOrCreate() 保证幂等。"
+              },
+              {
+                "mistake": "master 地址写错或漏写",
+                "why": "local 模式漏写可能默认尝试连集群而失败；生产上写错地址会连不上集群管理器。",
+                "fix": "本地固定写 master(\"local[*]\")；生产由 spark-submit 的 --master 参数指定，代码里可不写。"
+              },
+              {
+                "mistake": "用完不 stop()",
+                "why": "尤其在脚本/Notebook 里，不 stop 会导致进程或资源一直占着，本地甚至会卡住退出。",
+                "fix": "脚本结尾加 spark.stop()；Notebook 结束时也要显式释放。"
+              }
+            ]
+          }
+        },
+        {
+          "title": "第一个 PySpark 程序",
+          "slug": "l0-first-pyspark-program",
+          "description": "动手运行一个读取数据并 show 的 PySpark 程序。",
+          "objective": "能独立运行一个读取数据并 show 的 PySpark 程序。",
+          "estimated_minutes": 20,
+          "order_index": 4,
+          "content": {
+            "explanation": "这一课动手把前面所有概念串起来：创建 SparkSession → 读文件成 DataFrame → 查看 → 统计 → 停止。\n\n运行前置条件：\n1. Python 3.8+ 已装\n2. pip install pyspark 已完成\n3. 本机装有 Java 8/11/17（Spark 运行在 JVM 上，Java 是必须的依赖）\n\n把代码存成 first_spark.py，命令行运行 python first_spark.py。第一次运行会看到大量 INFO 日志（Spark 启动信息），看到最终打印的表格就说明成功了。\n\n这个程序虽小，五脏俱全：spark.read 是「读」、show 是「算+看」、stop 是「收拾」。之后所有 Spark 程序都是这个骨架的变体。",
+            "examples": [
+              {
+                "title": "完整可运行的第一个程序",
+                "code": "from pyspark.sql import SparkSession\n\nspark = (SparkSession.builder\n         .master(\"local[*]\")\n         .appName(\"first-spark\")\n         .getOrCreate())\n\n# 1. 读 CSV：第一行当表头，自动推断类型\ndf = (spark.read\n      .option(\"header\", True)\n      .option(\"inferSchema\", True)\n      .csv(\"sales.csv\"))\n\n# 2. 看看数据长什么样\ndf.show(5)          # 前 5 行\ndf.printSchema()    # 字段名和类型\n\n# 3. 做一个真正的统计：每个地区的总销售额\n(df.groupBy(\"region\")\n   .sum(\"amount\")\n   .show())\n\nspark.stop()",
+                "note": "准备一个 sales.csv，内容如 region,product,amount 三列若干行，即可完整跑通。"
+              },
+              {
+                "title": "sales.csv 示例内容",
+                "code": "region,product,amount\nnorth,apple,120\north,banana,80\nsouth,apple,200\neast,banana,60\nsouth,cherry,150",
+                "note": "五行小数据当然用不着 Spark——这里练的是骨架，骨架后面可以接 5 亿行。"
+              }
+            ],
+            "key_points": [
+              "运行 PySpark 需要三样：Python、pyspark 包、Java（JVM）",
+              "程序骨架：创建 session → read → show/统计 → stop",
+              "spark.read.csv 加 option(\"header\", True) 才认表头",
+              "inferSchema=True 让 Spark 自动猜列类型，否则全是字符串",
+              "首次运行的大量 INFO 日志是正常的，不是报错"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "没装 Java 直接跑，报 JAVA_HOME is not set",
+                "why": "Spark 本体运行在 JVM 上，Java 是硬依赖，pyspark 包里不含 JVM。",
+                "fix": "安装 JDK 8/11/17 并设置 JAVA_HOME（Spark 4.x 需要 Java 17+）。"
+              },
+              {
+                "mistake": "把 INFO 日志当成程序出错",
+                "why": "Spark 启动时会刷屏式输出 INFO 级日志，新手常被吓到。",
+                "fix": "认准 ERROR / Exception 关键字；想安静可在代码里设 spark.sparkContext.setLogLevel(\"WARN\")。"
+              },
+              {
+                "mistake": "读 CSV 没指定 header，表头变成第一行数据",
+                "why": "CSV 默认把第一行当数据，于是出现名为「region」的奇怪取值。",
+                "fix": "加 .option(\"header\", True)；类型不对再加 .option(\"inferSchema\", True)。"
+              },
+              {
+                "mistake": "show() 默认只显示 20 行，以为数据丢了",
+                "why": "show 的默认参数是前 20 行，这是刻意设计——防止误打印海量数据。",
+                "fix": "要更多行写 df.show(100)；要全部请先用 count() 确认量级再决定。"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "Level 1：RDD 基础",
+      "description": "理解 Spark 最底层的抽象 RDD，为理解 DataFrame 打基础。",
+      "order_index": 1,
+      "lessons": [
+        {
+          "title": "RDD 是什么",
+          "slug": "l1-what-is-rdd",
+          "description": "弹性分布式数据集：Spark 最核心的抽象。",
+          "objective": "能解释 RDD 的含义与基本特征。",
+          "estimated_minutes": 15,
+          "order_index": 0,
+          "content": {
+            "explanation": "RDD = Resilient Distributed Dataset，弹性分布式数据集。它是 Spark 最底层数据抽象——哪怕你以后天天用 DataFrame，底层执行的仍然是 RDD 的机制。\n\n拆开名字理解四个词：\n\n· Dataset：一个数据集合，装着一堆元素（数字、字符串、对象都行）。\n· Distributed：数据被切成分区（partition），散布在集群多个 Executor 上，各自并行处理。\n· Resilient：容错。某个节点挂了，Spark 能根据血缘关系（lineage）——「这份数据是怎么算出来的」——自动重算丢失的分区，不需要复制备份。\n\n还有一条铁律：RDD 是【不可变】（immutable）的。任何转换操作都不会修改原 RDD，而是返回一个新 RDD。这个设计正是容错的基础：数据改不了，但「怎么算出来的」记录还在，随时能重放。\n\n现代开发中直接写 RDD 的场景变少了（多数用 DataFrame），但 RDD 是理解 Spark 执行模型的地基。",
+            "examples": [
+              {
+                "title": "创建 RDD 最简单的方式",
+                "code": "spark = SparkSession.builder.master(\"local[*]\").getOrCreate()\nsc = spark.sparkContext        # RDD API 的入口\n\nrdd = sc.parallelize([1, 2, 3, 4, 5, 6, 7, 8])\nprint(rdd.getNumPartitions())  # 分区数，本机可能是 8\nprint(rdd.count())             # 8\nprint(rdd.reduce(lambda a, b: a + b))  # 36",
+                "note": "parallelize 把一个 Python 列表变成分布式 RDD——学习阶段最方便的造数据方式。"
+              },
+              {
+                "title": "从文件创建 RDD",
+                "code": "lines = sc.textFile(\"logs.txt\")\nprint(lines.count())       # 行数\nprint(lines.first())       # 第一行（只取一个元素，不会全量拉取）",
+                "note": "textFile 的每个元素是文件的一行，按行切分、按块分区。"
+              }
+            ],
+            "key_points": [
+              "RDD = Resilient Distributed Dataset（弹性分布式数据集）",
+              "三大特性：不可变（immutable）、分区（partitioned）、容错（lineage 重算）",
+              "不可变性是容错的基础：数据不可改，但计算过程可重放",
+              "任何转换都返回新 RDD，原 RDD 不变",
+              "RDD 装的是任意对象；DataFrame 是「带 schema 的 RDD」的高级封装"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "试图修改 RDD 里的元素",
+                "why": "RDD 不可变，不存在「原地更新」这种操作。",
+                "fix": "用 map 生成新 RDD：new_rdd = old_rdd.map(lambda x: x * 2)。"
+              },
+              {
+                "mistake": "把 RDD 当 Python 列表用（len()、下标访问）",
+                "why": "RDD 是分布式对象的引用，不是本地集合，Driver 上并没有它的数据。",
+                "fix": "用 rdd.count() 取长度、rdd.take(5) 取前几个元素、rdd.collect() 拉回全部（慎用）。"
+              },
+              {
+                "mistake": "以为分区数无关紧要",
+                "why": "分区太少 → 并行度不足，核用不满；分区太多 → 调度开销变大。",
+                "fix": "经验值：每个分区 100~200MB 数据；local[*] 下分区数别超过核心总数的 2~3 倍。"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Transformation",
+          "slug": "l1-transformation",
+          "description": "map、filter 等惰性算子。",
+          "objective": "能列举常见 Transformation 并说明其惰性特点。",
+          "estimated_minutes": 15,
+          "order_index": 1,
+          "content": {
+            "explanation": "RDD 的操作分两大类，这一课讲第一类：Transformation（转换）。\n\nTransformation =「从一个 RDD 生成另一个 RDD」的操作。特点是【惰性】：调用它时并不立即计算，只是把这一步记在执行计划（DAG）里，返回的是一个「记住了来龙去脉」的新 RDD。\n\n常用 Transformation 速查：\n· map(f)：每个元素一对一变换\n· filter(f)：按条件保留元素\n· flatMap(f)：每个元素变 0~n 个元素并摊平\n· distinct()：去重\n· union(other)：合并两个 RDD\n· intersection(other)：交集\n· groupByKey() / reduceByKey(f)：按键分组 / 聚合\n· sortByKey() / sortBy(f)：排序\n· join(other)：按键连接（要求元素是 (k, v) 对）\n\n这些算子可以像流水线一样链式调用，形成 lineage（血缘链）。在触发执行之前，Spark 看到的是完整流水线，可以整体优化——这正是下一课 Lazy Evaluation 的主题。",
+            "examples": [
+              {
+                "title": "链式 Transformation（此时还什么都没算）",
+                "code": "rdd = sc.parallelize([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])\n\nresult = (rdd\n    .filter(lambda x: x % 2 == 0)      # 留偶数：2,4,6,8,10\n    .map(lambda x: x * x)               # 平方：4,16,36,64,100\n    .filter(lambda x: x > 50))          # 留大于50：64,100\n\nprint(result)  # 打出来的是 RDD 引用，不是数据！\n# 输出形如：PythonRDD[5] at RDD at ...",
+                "note": "三步链完没有任何计算发生——这就是惰性。想看数据需要下一课的 Action。"
+              },
+              {
+                "title": "map vs flatMap 的区别",
+                "code": "rdd = sc.parallelize([\"hello world\", \"hi spark\"])\n\nrdd.map(lambda s: s.split())\n# → [[\"hello\", \"world\"], [\"hi\", \"spark\"]]  两个列表当元素\n\nrdd.flatMap(lambda s: s.split())\n# → [\"hello\", \"world\", \"hi\", \"spark\"]      摊平成一个一个词",
+                "note": "做单词计数必须用 flatMap；map 会得到「列表的列表」。"
+              }
+            ],
+            "key_points": [
+              "Transformation：RDD → RDD，不触发计算（惰性）",
+              "map 一对一 / filter 过滤 / flatMap 一对多并摊平",
+              "reduceByKey 按 key 聚合，效率远高于 groupByKey + 手工聚合",
+              "链式调用形成血缘链（lineage），整体构成 DAG",
+              "返回的只是「计划」，打印 RDD 看不到数据是正常现象"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "写完 transformation 就以为算完了，到处找结果",
+                "why": "惰性执行：没有 Action 就没有计算，数据根本不存在。",
+                "fix": "调试时接一个 Action（collect / take / count）触发执行查看结果。"
+              },
+              {
+                "mistake": "该用 flatMap 时用了 map",
+                "why": "map 保留嵌套结构（split 返回列表，元素就是列表）。",
+                "fix": "想「摊平」就 flatMap；想做 token 化几乎总是 flatMap。"
+              },
+              {
+                "mistake": "用 groupByKey 做聚合",
+                "why": "groupByKey 把同一个 key 的所有值原封不动拉到一台机器，数据倾斜时直接 OOM。",
+                "fix": "求和、计数等聚合优先 reduceByKey / aggregateByKey——先在本地预聚合，再跨节点合并。"
+              },
+              {
+                "mistake": "在 lambda 里读写外部可变变量",
+                "why": "lambda 在 Executor 的独立进程执行，改 Driver 上的变量对 Driver 不可见，而且闭包序列化可能报错。",
+                "fix": "需要汇聚结果用 Action 返回值；需要广播只读大变量用 broadcast。"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Action",
+          "slug": "l1-action",
+          "description": "collect、count 等触发执行的算子。",
+          "objective": "能区分 Action 与 Transformation。",
+          "estimated_minutes": 15,
+          "order_index": 2,
+          "content": {
+            "explanation": "第二类操作：Action（行动）。Action 是「要结果」的操作——它会触发前面攒下的所有 Transformation 真正执行（Spark 术语叫提交一个 Job）。\n\n一句话区分：\n· Transformation 描图纸（返回 RDD）\n· Action 落锤施工（返回非 RDD 的结果，或不返回）\n\n常用 Action 速查：\n· collect()：把全部元素拉回 Driver 成 Python 列表\n· count()：元素总数\n· take(n) / first()：取前 n 个 / 第 1 个\n· reduce(f)：两两聚合出一个值\n· countByValue()：每个取值出现的次数（字典）\n· saveAsTextFile(path)：写到分布式文件系统\n· foreach(f)：对每个元素执行副作用（如写外部库）\n\n每次调用 Action，血缘链就从「纸面计划」变成「真实计算」。同一个 RDD 上调两次 Action，若无缓存，整条链会算两遍——这是新手最常见的性能坑（cache 话题属于后续课程）。",
+            "examples": [
+              {
+                "title": "同一个链条上叠加不同 Action",
+                "code": "rdd = sc.parallelize([1, 2, 3, 4, 5])\n\nevens = rdd.filter(lambda x: x % 2 == 0)\n\nevans_count = evens.count()        # 触发执行 → 2\nprint(evens_count)\n\nevans_sum = evens.reduce(lambda a, b: a + b)  # 再次触发，重新计算！\nprint(evens_sum)                    # 6",
+                "note": "count 和 reduce 各触发一次计算；evens 没缓存，filter 跑了两遍。"
+              },
+              {
+                "title": "安全取数的三件套",
+                "code": "rdd.first()      # 只看第一个元素，开销最小\nrdd.take(5)      # 看 5 个，调试神器\ntop3 = rdd.takeOrdered(3, key=lambda x: -x)  # 最大的 3 个",
+                "note": "调试期用 take 系列代替 collect，既看得到数据又不会拉爆 Driver。"
+              }
+            ],
+            "key_points": [
+              "Action 触发 Job：前面所有 Transformation 在此刻真正执行",
+              "Action 返回的不是 RDD（数值/列表/字典），或写存储",
+              "collect 全量拉回 Driver，仅限小结果",
+              "调试三件套：first / take(n) / takeOrdered",
+              "同一 RDD 多个 Action = 多次重复计算（除非缓存）"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "对大 RDD 直接 collect()",
+                "why": "所有数据涌向 Driver 一个进程，OOM 头号杀手。",
+                "fix": "先 count() 看量级；要样本用 take(n)；要聚合结果先 reduce 再取。"
+              },
+              {
+                "mistake": "分不清 map 是不是 Action",
+                "why": "map 读起来像「执行了」，但它是 Transformation，什么都不会发生。",
+                "fix": "判断口诀：返回 RDD 的是 Transformation，返回结果的才是 Action。"
+              },
+              {
+                "mistake": "对同一 RDD 反复 Action 却奇怪为什么慢",
+                "why": "没有缓存时每次 Action 都重算整条血缘链。",
+                "fix": "复用型中间结果 rdd.cache() 并在首次 Action 后驻留内存（细节在性能课程展开）。"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Lazy Evaluation",
+          "slug": "l1-lazy-evaluation",
+          "description": "理解惰性求值对执行计划优化的意义。",
+          "objective": "能解释 Lazy Evaluation 带来的好处。",
+          "estimated_minutes": 15,
+          "order_index": 3,
+          "content": {
+            "explanation": "Lazy Evaluation（惰性求值）是 Spark 的核心设计：Transformation 只记账不干活，直到 Action 出现才一次性执行整条链。\n\n为什么这么设计？因为「看到全貌才能全局优化」。\n\n好处一：【流水线合并】map→map→filter 三步在执行时融合成一个阶段（Stage）内的连续操作，数据流过一次算完，不落盘、不中断。\n\n好处二：【剪枝】Spark 看到整条链后能砍掉无用工作。经典例子：先 filter 再取前几个元素，Spark 可以只扫描够用的数据就提前结束。\n\n好处三：【只算需要的】如果最终只 take(10)，Spark 不需要把 10 亿行全算完，算够 10 行就收工。\n\n惰性≠不执行，也≠拖延症。它是「先看完整张图纸再施工」的策略，换来的是整体更优的执行计划。调试时需要适应的是：错误经常在「看起来无害的 transformation 行」报出来——因为真正执行发生在后面某个 Action 处。",
+            "examples": [
+              {
+                "title": "剪枝的直观感受",
+                "code": "rdd = sc.parallelize(range(1, 1000001))\n\n# 链条：平方 → 只要能被 999 整除的 → 取前 3 个\nresult = (rdd.map(lambda x: x * x)\n            .filter(lambda x: x % 999 == 0)\n            .take(3))\n\nprint(result)  # [998001, 3992004, 8973009]",
+                "note": "take(3) 触发执行；Spark 逐分区计算、凑够 3 个就停，而不是把 100 万个平方全算出来再过滤。"
+              },
+              {
+                "title": "报错位置的「错位」现象",
+                "code": "bad = sc.parallelize([1, 2, \"three\", 4])\n\ndoubled = bad.map(lambda x: x * 2)   # 这一行不报错\n\n# 报错发生在这里（Action 触发执行时）：\nprint(doubled.collect())\n# ValueError: unsupported operand type(s) for *: 'str' and 'int'",
+                "note": "看到报错在 collect 行不要困惑——出错的真实代码是 map 里的 lambda，只是此刻才执行。"
+              }
+            ],
+            "key_points": [
+              "惰性求值：Transformation 记账，Action 触发一次性执行整链",
+              "好处：流水线融合（少落盘）、计划剪枝（少干活）、按需计算（算够就停）",
+              "本质：看全貌再优化，类似数据库的查询优化器",
+              "报错位置会「错位」到触发执行的 Action 处",
+              "惰性不是不执行，而是选择最佳时机执行"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "以为惰性 = 数据永远不会被计算",
+                "why": "混淆「延后」与「不做」。Action 一来立即全部执行。",
+                "fix": "心智模型：Transformation 攒计划，Action 按下执行键。"
+              },
+              {
+                "mistake": "在 transformation 链中段打印中间结果",
+                "why": "链中任何位置都没有执行，print 自然也看不到数据（还可能把对象带进闭包）。",
+                "fix": "想看中间结果：在链上接 take(5) 单独触发一次查看。"
+              },
+              {
+                "mistake": "看到报错行号在 collect/saveAsTextFile 就在那里找 bug",
+                "why": "错误真正的源头往往在前面某个 lambda 里，Action 行只是引爆点。",
+                "fix": "顺着血缘链回溯检查每个 transformation 的函数。"
+              }
+            ]
+          }
+        },
+        {
+          "title": "RDD 为什么逐渐被 DataFrame 替代",
+          "slug": "l1-why-dataframe-replaces-rdd",
+          "description": "从优化空间看 RDD API 的局限。",
+          "objective": "能说出 DataFrame 相对 RDD 的优势。",
+          "estimated_minutes": 15,
+          "order_index": 4,
+          "content": {
+            "explanation": "既然 RDD 这么核心，为什么日常开发推荐用 DataFrame？关键差异在于：优化器能「看懂」多少你的计算。\n\nRDD 的算子接收任意函数（lambda），对 Spark 来说是不透明的黑盒——它知道你要「对每个元素做点什么」，但不知道具体做什么。于是它无法做聪明的优化：不能重排步骤、不能跳过无用列、只能老老实实按你写的顺序执行你的函数。\n\nDataFrame 是「带 schema 的表」，操作用的是声明式 API：df.filter(\"age > 18\").select(\"name\")。Spark 清楚你要「过滤什么、取哪些列」，Catalyst 优化器可以像数据库一样：谓词下推、列裁剪、合并操作、重排执行。配合 Tungsten 的堆外内存与代码生成，官方对比测试中 DataFrame 版本比 RDD 版本快数倍，且更省内存。\n\n另外开发体验也完全不同：DataFrame 有列名、有类型推断、SQL 直接查；RDD 时代全靠心里记住「元组第几个位置是什么」。\n\n那 RDD 没用了吗？不是。非结构化数据（原始字节流）、需要精细控制物理分布与底层数据时，RDD 仍是正确工具。正确姿势：默认 DataFrame，底层机制靠 RDD 知识理解。",
+            "examples": [
+              {
+                "title": "同一个过滤：黑盒 vs 透明",
+                "code": "# RDD 写法：函数是黑盒，优化器无能为力\nrdd.filter(lambda row: row[2] > 18)  # row[2] 是什么？只有你知道\n\n# DataFrame 写法：意图透明，可被优化\nspark.read.parquet(\"people.parquet\") \\\n     .filter(\"age > 18\") \\\n     .select(\"name\")",
+                "note": "DataFrame 版本只读 name 一列（列裁剪），过滤还能下推到 Parquet 文件内部提前完成。"
+              },
+              {
+                "title": "优化器重排的真实效果（示意）",
+                "code": "# 你写的：join 之后才过滤\norders.join(users, orders.uid == users.id) \\\n      .filter(users.age > 60) \\\n      .select(orders.oid)\n\n# Catalyst 可能改写成：先过滤 users（数据量骤减）\n# → 再 join → 只取需要的两列，I/O 和计算量大幅下降",
+                "note": "谓词下推 + 列裁剪 + 重组 join 顺序，这些 RDD API 想都不敢想。"
+              }
+            ],
+            "key_points": [
+              "RDD 算子 = 黑盒函数，优化器看不懂，无法重排和裁剪",
+              "DataFrame = 声明式 + schema，Catalyst 优化器可像 SQL 引擎一样优化",
+              "常见优化：谓词下推、列裁剪、操作合并、join 重排",
+              "Tungsten：堆外内存 + 全阶段代码生成，进一步提速省内存",
+              "选型默认 DataFrame；非结构化数据与底层控制才用 RDD"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "认为 RDD 被废弃、学了白学",
+                "why": "DataFrame 底层执行模型仍是 RDD 那套（分区、血缘、Task 调度）；非结构化场景仍直接用 RDD。",
+                "fix": "把 RDD 当作理解 Spark 的地基 + 特殊场景的工具箱。"
+              },
+              {
+                "mistake": "DataFrame 里大量使用 UDF，觉得写起来和 RDD 一样",
+                "why": "Python UDF 对 Catalyst 又是黑盒，优化中断，还多一层 Python 进程通信开销。",
+                "fix": "优先用内置函数（pyspark.sql.functions）；实在要 UDF，用 pandas_udf（向量化，快得多）。"
+              },
+              {
+                "mistake": "以为 DataFrame 快是「语法糖」",
+                "why": "快不是来自写法，而是来自优化空间：能被看懂的计划才能被优化。",
+                "fix": "记住因果链：声明式 API → 计划透明 → Catalyst/Tungsten 优化 → 快。"
+              }
+            ]
+          }
+        },
+        {
+          "title": "RDD 小练习",
+          "slug": "l1-rdd-exercise",
+          "description": "用几个 RDD 算子完成一次单词计数。",
+          "objective": "能独立写出 word count 的 RDD 版本。",
+          "estimated_minutes": 20,
+          "order_index": 5,
+          "content": {
+            "explanation": "word count（单词计数）是大数据的「Hello World」。这一课用学过的 RDD 算子完整实现：读文本 → 切词 → 计数 → 排序取 TopN。\n\n解题思路拆解（先想清楚再写代码）：\n\n1. 读文件：sc.textFile 得到「每行一个元素」的 RDD\n2. 切词：一行有多词，一对一的 map 不够，用 flatMap 摊平\n3. 变键值对：词 → (词, 1)，map(lambda w: (w, 1))\n4. 按词聚合：reduceByKey(lambda a, b: a + b) 把相同 key 的计数相加\n5. 排序取 Top：不直接对 (词, 计数) 排——交换成 (计数, 词) 再 takeOrdered\n\n这个练习串起了 Level 1 的全部知识点：parallelize/textFile（RDD 创建）、flatMap/map（Transformation）、reduceByKey（键值转换）、takeOrdered/take（Action）、以及惰性求值——前 4 步都只是记账，最后一步才执行。\n\n做完后试着回答：为什么第 2 步必须 flatMap？第 4 步换成 groupByKey 行不行、差在哪？能讲清楚这两问，Level 1 就真正过关了。",
+            "examples": [
+              {
+                "title": "完整 word count（可运行）",
+                "code": "spark = SparkSession.builder.master(\"local[*]\").appName(\"wordcount\").getOrCreate()\nsc = spark.sparkContext\n\nlines = sc.textFile(\"words.txt\")          # 1. 每行一个元素\nwords = lines.flatMap(lambda line: line.split())  # 2. 摊平成单词\npairs = words.map(lambda w: (w, 1))        # 3. (单词, 1)\ncounts = pairs.reduceByKey(lambda a, b: a + b)    # 4. 按单词求和\n\ntop5 = counts.takeOrdered(5, key=lambda kv: -kv[1])  # 5. 取计数前 5\nfor word, n in top5:\n    print(f\"{word}: {n}\")",
+                "note": "准备 words.txt 写几行英文句子即可；全程只有 takeOrdered 一处触发执行。"
+              },
+              {
+                "title": "进阶：大小写归一 + 去标点",
+                "code": "import re\n\nclean = (lines\n    .flatMap(lambda line: re.findall(r\"[a-z']+\", line.lower()))\n    .map(lambda w: (w, 1))\n    .reduceByKey(lambda a, b: a + b))\n\nprint(clean.takeOrdered(5, key=lambda kv: -kv[1]))",
+                "note": "正则 [a-z']+ 统一小写后取词，Spark/lower/SPARK 会被算成同一个词。"
+              }
+            ],
+            "key_points": [
+              "标准流水线：textFile → flatMap 切词 → map 变 (词,1) → reduceByKey 聚合",
+              "flatMap 摊平、reduceByKey 先本地预聚合再跨节点合并",
+              "takeOrdered(n, key=...) 是安全的 TopN 取法（不必全量排序拉回）",
+              "整条链只在最后一步触发执行——惰性求值的活教材",
+              "TopN 排序技巧：交换 (k,v) 或给 takeOrdered 传 key 函数"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "用 map(line.split()) 切词",
+                "why": "split 返回列表，map 之后元素是「列表」，reduceByKey 会把列表当 key 直接报错。",
+                "fix": "用 flatMap，切出来的词逐个成为独立元素。"
+              },
+              {
+                "mistake": "用 groupByKey 实现 word count",
+                "why": "groupByKey 把同 key 的所有 1 原样搬到一台机器再相加，网络传输量和内存压力远大于 reduceByKey。",
+                "fix": "数值求和场景一律 reduceByKey（map 端先本地合并）。"
+              },
+              {
+                "mistake": "sortByKey 后 collect 取 TopN",
+                "why": "全量排序 + 全量拉回 Driver，数据大时又慢又危险。",
+                "fix": "用 takeOrdered(n, key=lambda kv: -kv[1])，内部按需归并，只回传 n 条。"
+              },
+              {
+                "mistake": "忘做大小写/标点归一化，统计结果碎成渣",
+                "why": "The、the、the. 会被当成三个不同单词。",
+                "fix": "切词前 line.lower() + 正则提取；真实文本处理这是第一步。"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

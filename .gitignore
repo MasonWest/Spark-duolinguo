@@ -1,0 +1,52 @@
+# ===== Python (backend) =====
+backend/.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# ===== Local database (local state, not source) =====
+backend/spark_quest.db
+*.db
+*.sqlite
+*.sqlite3
+
+# ===== Node / Frontend =====
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+# Vite temp config cache
+frontend/vite.config.ts.timestamp-*.mjs
+
+# ===== npm cache (sandbox workaround, project-local) =====
+.npm-cache/
+
+# ===== Local agent / tooling state =====
+.workbuddy/
+
+# ===== Verification screenshots / previews =====
+.phase3-*.png
+dashboard_preview.png
+map_preview.png
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
+# ===== Editor / OS =====
+.vscode/
+.idea/
+*.swp
+*.swo
+Thumbs.db
+.DS_Store
+
+# ===== Env / secrets =====
+.env
+.env.*
+*.local
+
+# ===== Logs =====
+*.log
