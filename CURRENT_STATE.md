@@ -2,7 +2,8 @@
 
 > 最后更新：2026-08-24
 > 代码目录：`E:\MMMason\Spark_dlg\spark-quest-app\`
-> 文档目录（只读）：`E:\MMMason\Spark_dlg\spark_quest\`
+> 代码仓库：`https://github.com/MasonWest/Spark-duolinguo`（分支 `main`）
+> 文档目录（通常只读）：`E:\MMMason\Spark_dlg\spark_quest\`
 
 ## 总体状态
 
