@@ -93,3 +93,52 @@ def lesson_status_map(
 
     scores = {lid: m.score for lid, m in masteries.items()}
     return status, scores
+
+
+def recommend_today_lesson(db: Session) -> Optional[Tuple[Lesson, str]]:
+    """Recommend the "Today Lesson" based on Phase 5 priority:
+    1. Earliest lesson with status 'needs_review'
+    2. Earliest lesson with status 'available'
+    3. None if everything is mastered or all remaining are locked
+    """
+    status_map, _ = lesson_status_map(db)
+    ordered = ordered_lessons(db)
+
+    # 1. Find the earliest "needs_review"
+    for lesson in ordered:
+        if status_map.get(lesson.id) == "needs_review":
+            return lesson, "needs_review"
+
+    # 2. Find the earliest "available"
+    for lesson in ordered:
+        if status_map.get(lesson.id) == "available":
+            return lesson, "available"
+
+    return None
+
+
+def compute_level_status(level: CourseLevel, status_map: Dict[int, str]) -> str:
+    """Dynamically compute Level status:
+    - completed: all lessons are mastered
+    - in_progress: at least one lesson is mastered/needs_review/learning
+    - available: first lesson is available (and not started)
+    - locked: first lesson is locked
+    """
+    lessons = level.lessons
+    if not lessons:
+        return "available"
+
+    statuses = [status_map.get(l.id, "locked") for l in lessons]
+
+    if all(s == "mastered" for s in statuses):
+        return "completed"
+    
+    if any(s in ["mastered", "needs_review"] for s in statuses):
+        return "in_progress"
+
+    # Check status of the first lesson
+    first_status = statuses[0]
+    if first_status == "available":
+        return "available"
+    
+    return "locked"

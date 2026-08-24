@@ -13,15 +13,15 @@
 | 1 | 课程地图（course_levels / lessons + /map 页面） | 🟢 已完成并验收 |
 | 2 | Dashboard / 今日任务（/api/dashboard + 推荐首课） | 🟢 已完成并验收 |
 | 3 | Lesson 学习页面（/api/lessons/{id} + /lesson/:id，七要素 + 数据化） | 🟢 已完成并验收 |
-| 4 | Lesson Mastery Quiz + 最小进度 + 解锁 | 🔵 已实现并端到端自测通过，待用户验收 |
-| 5 | 完整 Progress Dashboard 动态化 + 状态系统 | 🔒 规划中 |
+| 4 | Lesson Mastery Quiz + 最小进度 + 解锁 | 🟢 已完成 |
+| 5 | 完整 Progress Dashboard 动态化 + 状态系统 | 🟢 已完成 |
 | 6 | Review / Spaced Repetition | 🔒 规划中 |
 | 7 | Parking Lot 防止思绪发散 | 🔒 规划中 |
 | 8 | 完整 Spark 课程 | 🔒 规划中 |
 | 9 | 游戏化 UI / Streak / Badge | 🔒 规划中 |
 | 10 | AI Tutor | 🔒 规划中 |
 
-**当前进度：Phase 3 已验收通过；Phase 4（Lesson Mastery Quiz + 最小进度 + 解锁）已实现完毕并通过端到端自测（8 项场景全过），待用户验收。**
+**当前进度：Phase 5（完整 Progress Dashboard 动态化 + 状态系统）已实现完毕并通过回归测试。**
 
 ## 运行端口（已统一）
 

@@ -26,6 +26,9 @@ export interface Level {
   description: string;
   order_index: number;
   status: string;
+  completed_count: number;
+  total_count: number;
+  percentage: number;
   lessons: Lesson[];
 }
 
@@ -46,6 +49,9 @@ export interface Progress {
 export interface CurrentLevel {
   id: number;
   title: string;
+  completed_count: number;
+  total_count: number;
+  percentage: number;
 }
 
 export interface TodayLesson {
@@ -56,6 +62,7 @@ export interface TodayLesson {
   estimated_minutes: number;
   level_id: number;
   level_title: string;
+  status: "available" | "needs_review";
 }
 
 export interface Dashboard {

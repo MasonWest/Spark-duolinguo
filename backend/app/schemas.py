@@ -29,6 +29,9 @@ class LevelOut(BaseModel):
     description: str
     order_index: int
     status: str
+    completed_count: int = 0
+    total_count: int = 0
+    percentage: int = 0
     lessons: List[LessonOut] = []
 
     class Config:
@@ -47,6 +50,9 @@ class ProgressOut(BaseModel):
 class CurrentLevelOut(BaseModel):
     id: int
     title: str
+    completed_count: int = 0
+    total_count: int = 0
+    percentage: int = 0
 
 
 class TodayLessonOut(BaseModel):
@@ -57,6 +63,7 @@ class TodayLessonOut(BaseModel):
     estimated_minutes: int
     level_id: int
     level_title: str
+    status: str = "available"  # available / needs_review
 
 
 class DashboardOut(BaseModel):

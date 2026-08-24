@@ -36,9 +36,40 @@
 
 .level-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
+  margin-bottom: 12px;
+}
+
+.level-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.level-progress-badge {
+  font-size: 12px;
+  background: #dcfce7;
+  color: #166534;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.level-progress-mini {
+  height: 4px;
+  background: #f3f4f6;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.level-progress-mini-fill {
+  height: 100%;
+  background: #10b981;
+  transition: width 0.3s ease;
 }
 
 .level-head h2 {

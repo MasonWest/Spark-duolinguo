@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from ..models import CourseLevel, Lesson
 from ..schemas import LessonOut, LevelOut
-from ..services import lesson_status_map
+from ..services import lesson_status_map, compute_level_status
 
 router = APIRouter(prefix="/api")
 
@@ -45,12 +45,24 @@ def list_levels(db: Session = Depends(get_db)):
     levels = db.scalars(select(CourseLevel).order_by(CourseLevel.order_index)).all()
     result = []
     for level in levels:
+        level_lessons = level.lessons
+        total_count = len(level_lessons)
+        completed_count = sum(1 for l in level_lessons if status_map.get(l.id) == "mastered")
+        percentage = int(round(completed_count / total_count * 100)) if total_count else 0
+        
+        # Calculate dynamic status
+        level_status = compute_level_status(level, status_map)
+
         level_out = LevelOut(
             **{c.name: getattr(level, c.name) for c in CourseLevel.__table__.columns},
+            status=level_status,
+            completed_count=completed_count,
+            total_count=total_count,
+            percentage=percentage,
             lessons=[],
         )
         level_out.lessons = [
-            _to_lesson_out(lesson, status_map, score_map) for lesson in level.lessons
+            _to_lesson_out(lesson, status_map, score_map) for lesson in level_lessons
         ]
         result.append(level_out)
     return result

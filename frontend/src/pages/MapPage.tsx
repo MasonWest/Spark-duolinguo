@@ -56,10 +56,21 @@ export default function MapPage() {
         levels.map((level) => (
           <section key={level.id} className="level-card">
             <div className="level-head">
-              <h2>{level.title}</h2>
+              <div className="level-title-group">
+                <h2>{level.title}</h2>
+                <span className="level-progress-badge">
+                  {level.completed_count} / {level.total_count} 已掌握
+                </span>
+              </div>
               <span className="lesson-count">
                 {level.lessons.length} 个知识点
               </span>
+            </div>
+            <div className="level-progress-mini">
+              <div 
+                className="level-progress-mini-fill" 
+                style={{ width: `${level.percentage}%` }}
+              />
             </div>
             <p className="level-desc">{level.description}</p>
             <ol className="lesson-list">

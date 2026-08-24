@@ -51,7 +51,18 @@ export default function Home() {
       {data?.current_level && (
         <div className="card">
           <h2>📍 当前阶段</h2>
-          <div className="current-level">{data.current_level.title}</div>
+          <div className="current-level-header">
+            <span className="current-level-title">{data.current_level.title}</span>
+            <span className="current-level-count">
+              {data.current_level.completed_count} / {data.current_level.total_count}
+            </span>
+          </div>
+          <div className="progress-bar level-progress">
+            <div
+              className="progress-fill level-fill"
+              style={{ width: `${data.current_level.percentage}%` }}
+            />
+          </div>
         </div>
       )}
 
@@ -60,7 +71,12 @@ export default function Home() {
         <h2>🎯 今日任务</h2>
         {data?.today_lesson ? (
           <>
-            <div className="today-title">{data.today_lesson.title}</div>
+            <div className="today-title">
+              {data.today_lesson.status === "needs_review" && (
+                <span className="status-badge review">需复习</span>
+              )}
+              {data.today_lesson.title}
+            </div>
             <div className="today-meta">
               <span>{data.today_lesson.level_title}</span>
               <span>·</span>
@@ -68,12 +84,20 @@ export default function Home() {
             </div>
             <p className="today-desc">{data.today_lesson.description}</p>
             <Link to={`/lesson/${data.today_lesson.id}`} className="btn-primary">
-              开始学习 →
+              {data.today_lesson.status === "needs_review" ? "继续挑战 (复习测验) →" : "开始学习 →"}
             </Link>
-            <p className="today-hint">学习页面 · Phase 3 已上线</p>
+            <p className="today-hint">
+              {data.today_lesson.status === "needs_review" 
+                ? "建议先温习课程内容，再次尝试测验" 
+                : "点击开始今天的 Spark 探索之旅"}
+            </p>
           </>
         ) : (
-          <span className="status">暂无可推荐的任务</span>
+          <div className="all-completed">
+            <span className="trophy">🏆</span>
+            <p>太棒了！你已经完成了目前所有的课程！</p>
+            <Link to="/map" className="btn-secondary">去课程地图回顾 →</Link>
+          </div>
         )}
       </div>
 

@@ -22,7 +22,7 @@ from ..schemas import (
     ProgressOut,
     TodayLessonOut,
 )
-from ..services import lesson_status_map, ordered_lessons
+from ..services import lesson_status_map, ordered_lessons, recommend_today_lesson
 
 router = APIRouter(prefix="/api")
 
@@ -41,19 +41,19 @@ def get_dashboard(db: Session = Depends(get_db)):
     ordered = ordered_lessons(db)
 
     total = len(ordered)
-    # Minimal progress: a lesson counts as completed once it is mastered.
     completed = sum(1 for lid in status_map if status_map[lid] == "mastered")
     percentage = int(round(completed / total * 100)) if total else 0
 
-    # Today's lesson = first lesson the user has NOT yet mastered (whether it is
-    # freshly "available" or a "needs_review" retry). This keeps the dashboard
-    # pointing at the next actionable lesson instead of going blank after a
-    # sub-80% attempt.
-    today_lesson = next((l for l in ordered if status_map.get(l.id) != "mastered"), None)
+    # Phase 5 refined recommendation:
+    # 1. Earliest needs_review
+    # 2. Earliest available
+    recommendation = recommend_today_lesson(db)
+
     current_level = None
     today_out = None
 
-    if today_lesson is not None:
+    if recommendation is not None:
+        today_lesson, status = recommendation
         level = db.get(CourseLevel, today_lesson.level_id)
         today_out = TodayLessonOut(
             id=today_lesson.id,
@@ -63,8 +63,23 @@ def get_dashboard(db: Session = Depends(get_db)):
             estimated_minutes=today_lesson.estimated_minutes,
             level_id=today_lesson.level_id,
             level_title=level.title if level else "",
+            status=status,
         )
-        current_level = CurrentLevelOut(id=level.id, title=level.title) if level else None
+
+        if level:
+            # Calculate level-specific progress
+            level_lessons = level.lessons
+            lvl_total = len(level_lessons)
+            lvl_completed = sum(1 for l in level_lessons if status_map.get(l.id) == "mastered")
+            lvl_pct = int(round(lvl_completed / lvl_total * 100)) if lvl_total else 0
+
+            current_level = CurrentLevelOut(
+                id=level.id,
+                title=level.title,
+                completed_count=lvl_completed,
+                total_count=lvl_total,
+                percentage=lvl_pct,
+            )
 
     return DashboardOut(
         progress=ProgressOut(completed=completed, total=total, percentage=percentage),
