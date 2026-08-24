@@ -10,7 +10,6 @@ Duolingo 风格的个人 Spark 学习系统（学习约束器）。
 | 后端 | FastAPI + Uvicorn | 9000 |
 | 数据库 | SQLite（SQLAlchemy） | - |
 
-产品文档位于 `E:\MMMason\Spark_dlg\spark_quest\`（与本代码目录相互独立，文档不随代码修改）。
 
 ## 目录结构
 
