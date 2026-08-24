@@ -99,9 +99,14 @@
   border: 1px dashed #e5e7eb;
 }
 
-.lesson-item.passed {
+.lesson-item.mastered {
   background: #ecfdf5;
   border: 1px solid #a7f3d0;
+}
+
+.lesson-item.needs_review {
+  background: #fefce8;
+  border: 1px solid #fde68a;
 }
 
 .lesson-icon {

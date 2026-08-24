@@ -161,20 +161,42 @@ export default function LessonPage() {
         )}
       </section>
 
-      {/* 下一步 */}
+      {/* 下一步 / 测验入口 */}
       <section className="card next-card">
         <h2>🚀 下一步</h2>
-        {data.next_lesson ? (
-          <Link to={`/lesson/${data.next_lesson.id}`} className="btn-primary">
-            下一课：{data.next_lesson.title} →
-          </Link>
-        ) : (
-          <p className="para">🎉 已是当前课程的最后一课！</p>
+
+        {data.status === "locked" && (
+          <p className="para">🔒 需先掌握前一课，才能解锁本课与测验。</p>
         )}
-        <p className="next-hint">Quiz 将在 Phase 4 上线</p>
+
+        {data.status === "mastered" && (
+          <>
+            <p className="para">✅ 本课已掌握（得分 {data.mastery_score ?? 0}%）。</p>
+            {data.next_lesson ? (
+              <Link to={`/lesson/${data.next_lesson.id}`} className="btn-primary">
+                下一课：{data.next_lesson.title} →
+              </Link>
+            ) : (
+              <p className="para">🏆 已是课程最后一课，恭喜通关！</p>
+            )}
+            <Link to={`/lesson/${data.id}/quiz`} className="back-link">
+              复习测验
+            </Link>
+          </>
+        )}
+
+        {(data.status === "available" || data.status === "needs_review") && (
+          <Link to={`/lesson/${data.id}/quiz`} className="btn-primary">
+            {data.status === "needs_review" ? "复习测验（需努力）" : "开始测验"} →
+          </Link>
+        )}
+
+        {data.status !== "mastered" && data.next_lesson && (
+          <p className="next-hint">通过测验（正确率 ≥ 80%）即可解锁下一课</p>
+        )}
       </section>
 
-      <p className="phase">Phase 3 · 学习页面</p>
+      <p className="phase">Phase 4 · 学习页面</p>
     </div>
   );
 }

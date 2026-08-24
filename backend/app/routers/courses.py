@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from ..models import CourseLevel, Lesson
 from ..schemas import LessonOut, LevelOut
-from ..services import first_lesson_id, lesson_status
+from ..services import lesson_status_map
 
 router = APIRouter(prefix="/api")
 
@@ -31,16 +31,17 @@ def get_db() -> Session:
         db.close()
 
 
-def _to_lesson_out(lesson: Lesson, first_id: int) -> LessonOut:
+def _to_lesson_out(lesson: Lesson, status_map: dict, score_map: dict) -> LessonOut:
     return LessonOut(
         **{c.name: getattr(lesson, c.name) for c in Lesson.__table__.columns},
-        status=lesson_status(lesson.id, first_id),
+        status=status_map.get(lesson.id, "locked"),
+        mastery_score=score_map.get(lesson.id),
     )
 
 
 @router.get("/levels", response_model=List[LevelOut])
 def list_levels(db: Session = Depends(get_db)):
-    first_id = first_lesson_id(db)
+    status_map, score_map = lesson_status_map(db)
     levels = db.scalars(select(CourseLevel).order_by(CourseLevel.order_index)).all()
     result = []
     for level in levels:
@@ -49,7 +50,7 @@ def list_levels(db: Session = Depends(get_db)):
             lessons=[],
         )
         level_out.lessons = [
-            _to_lesson_out(lesson, first_id) for lesson in level.lessons
+            _to_lesson_out(lesson, status_map, score_map) for lesson in level.lessons
         ]
         result.append(level_out)
     return result
@@ -60,5 +61,5 @@ def list_lessons(level_id: int, db: Session = Depends(get_db)):
     level = db.get(CourseLevel, level_id)
     if level is None:
         raise HTTPException(status_code=404, detail="Level not found")
-    first_id = first_lesson_id(db)
-    return [_to_lesson_out(lesson, first_id) for lesson in level.lessons]
+    status_map, score_map = lesson_status_map(db)
+    return [_to_lesson_out(lesson, status_map, score_map) for lesson in level.lessons]

@@ -1,0 +1,367 @@
+{
+  "quizzes": [
+    {
+      "lesson_slug": "l0-what-is-spark",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "Spark 最准确的定位是？",
+          "options": ["一个分布式数据库", "一个分布式统一计算引擎", "一种编程语言", "一个云存储服务"],
+          "correct_index": 1,
+          "explanation": "Spark 是大规模数据处理的统一计算引擎，负责“计算”；它既不是数据库也不是编程语言或存储服务。"
+        },
+        {
+          "type": "true_false",
+          "prompt": "PySpark 是 Spark 官方的 Python 接口。",
+          "options": ["正确", "错误"],
+          "correct_index": 0,
+          "explanation": "是的，PySpark 是 Spark 官方的 Python 接口，写程序仍用 Python，只是调用 Spark 的 API。"
+        },
+        {
+          "type": "application",
+          "prompt": "下列哪种场景最适合用 Spark？",
+          "options": ["几百行 Excel 用 pandas 处理", "单机内存装不下的 10 亿行日志统计", "写一个网页表单", "本地备份几个文件"],
+          "correct_index": 1,
+          "explanation": "Spark 的价值在“数据大到单机工具（如 pandas）处理不动”时才明显；几百行数据用 pandas 更快更简单。"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于“内存计算”，正确的是？",
+          "options": ["中间结果默认留在内存，避免每步写磁盘", "Spark 把所有数据永久存入内存", "内存计算让磁盘彻底失效", "只有单机模式才用内存"],
+          "correct_index": 0,
+          "explanation": "Spark 的内存计算指中间结果默认留在内存（内存不够才溢写磁盘），而不是永久存储；数据通常存在外部系统。"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l0-what-problem-spark-solves",
+      "questions": [
+        {
+          "type": "true_false",
+          "prompt": "MapReduce 的每个阶段中间结果必须写入磁盘，这是其性能瓶颈。",
+          "options": ["正确", "错误"],
+          "correct_index": 0,
+          "explanation": "MapReduce 每阶段结束后中间结果必须写磁盘、下一阶段再读回，是其主要性能瓶颈。"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "Spark 相对 MapReduce 的两个关键改进是？",
+          "options": ["内存计算 + DAG 执行引擎", "更大数据集 + 更多节点", "更强 CPU + 更大内存", "更便宜的硬件"],
+          "correct_index": 0,
+          "explanation": "Spark 用“中间结果留内存”和“DAG 执行引擎整体优化”取代了 MapReduce 的逐阶段落盘。"
+        },
+        {
+          "type": "application",
+          "prompt": "下列哪种任务从 Spark 的内存计算获益最大？",
+          "options": ["单步简单过滤", "多步迭代的机器学习训练", "读取一个小文件", "打印一行日志"],
+          "correct_index": 1,
+          "explanation": "迭代次数越多、步骤越多，Spark 的内存优势越明显；单步或 shuffle 主导的任务提升有限。"
+        },
+        {
+          "type": "true_false",
+          "prompt": "Spark 全面取代了 Hadoop（包括 HDFS 存储和 YARN 调度）。",
+          "options": ["正确", "错误"],
+          "correct_index": 1,
+          "explanation": "Spark 取代的是“计算”这一层；很多集群仍用 HDFS 存数据、YARN 调度资源，三者常搭配使用。"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l0-driver-executor",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "关于 Driver，正确的是？",
+          "options": ["真正在每个节点执行 Task 的进程", "运行 main、持有 SparkSession、翻译执行计划并分发 Task", "只负责存储数据", "就是磁盘本身"],
+          "correct_index": 1,
+          "explanation": "Driver 是“大脑”：运行 main、持有 SparkSession、把代码翻译成 DAG、切分并分发 Task、汇总结果。"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "Executor 的职责是？",
+          "options": ["派发任务给 Driver", "在自己负责的数据分区上执行 Task 并返回结果", "编写业务逻辑代码", "管理数据库"],
+          "correct_index": 1,
+          "explanation": "Executor 是“手脚”：接收 Driver 发来的 Task，在本地数据分区上执行，结果返回 Driver 或写存储。"
+        },
+        {
+          "type": "application",
+          "prompt": "下面哪段代码发生在 Driver 端？",
+          "options": ["df.filter(amount > 100) 记录过滤计划", "Executor 执行 filter 的实际计算", "数据分区上的并行计算", "把结果写回存储系统"],
+          "correct_index": 0,
+          "explanation": "所有 Spark API 调用发生在 Driver（只是记账）；真正的数据计算发生在 Executor；count() 的结果才送回 Driver。"
+        },
+        {
+          "type": "true_false",
+          "prompt": "在 Driver 端对大数据做 collect() / toPandas() 可能导致 OOM。",
+          "options": ["正确", "错误"],
+          "correct_index": 0,
+          "explanation": "collect 会把所有 Executor 的数据拉回 Driver 一个进程，数据大时直接把 Driver 内存打爆。"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l0-sparksession",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "SparkSession 的作用是？",
+          "options": ["Spark 2.0+ 的统一应用入口", "一个数据库表", "日志文件", "集群本身"],
+          "correct_index": 0,
+          "explanation": "SparkSession 是 Spark 2.0 起的统一入口，创建它后才能读数据、建 DataFrame、提交计算；内部封装 SparkContext。"
+        },
+        {
+          "type": "application",
+          "prompt": "本地学习模式创建 SparkSession 的标准写法是？",
+          "options": ["SparkSession.builder.master(\"local[*]\").appName(\"...\").getOrCreate()", "spark = open(\"session\")", "new Spark()", "spark.connect()"],
+          "correct_index": 0,
+          "explanation": "标准 builder 模式：master 指定运行位置、appName 起名、getOrCreate 保证幂等；local[*] 用满本机核心。"
+        },
+        {
+          "type": "true_false",
+          "prompt": "一个应用里可以随意每次新建多个 SparkSession 来提升性能。",
+          "options": ["正确", "错误"],
+          "correct_index": 1,
+          "explanation": "创建 session 开销不小，应全应用共享一个，用 getOrCreate() 保证幂等，而不是反复新建。"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "local[*] 中的 * 表示？",
+          "options": ["使用一个核心", "使用本机全部核心", "使用集群全部节点", "随机核心数"],
+          "correct_index": 1,
+          "explanation": "* 表示使用本机全部 CPU 核心，是本地学习与测试的标准写法。"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l0-first-pyspark-program",
+      "questions": [
+        {
+          "type": "application",
+          "prompt": "运行一个 PySpark 程序前，不需要以下哪项？",
+          "options": ["Python 3.8+", "pyspark 包", "Java（JVM）", "独立显卡驱动"],
+          "correct_index": 3,
+          "explanation": "Spark 本体运行在 JVM 上，Java 是硬依赖（Spark 4.x 需 Java 17+），但不需要独立显卡。"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "读 CSV 时想让第一行被当作表头，应加哪个选项？",
+          "options": [".option(\"header\", True)", ".option(\"footer\", True)", ".option(\"first_row\", False)", ".header()"],
+          "correct_index": 0,
+          "explanation": "加 .option(\"header\", True) 才认表头；类型不对再加 .option(\"inferSchema\", True) 让 Spark 自动推断列类型。"
+        },
+        {
+          "type": "true_false",
+          "prompt": "首次运行 Spark 出现大量 INFO 日志，说明程序出错了。",
+          "options": ["正确", "错误"],
+          "correct_index": 1,
+          "explanation": "INFO 级日志是 Spark 启动的正常输出，认准 ERROR / Exception 关键字；想安静可设 logLevel(\"WARN\")。"
+        },
+        {
+          "type": "application",
+          "prompt": "下面哪个是正确的 PySpark 程序骨架？",
+          "options": ["创建 session → read → show/统计 → stop", "stop → read → show", "read → 直接打印任意变量", "install java → run sql"],
+          "correct_index": 0,
+          "explanation": "所有 Spark 程序都是“创建 session → read → show/统计 → stop”这一骨架的变体。"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l1-what-is-rdd",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "RDD 的含义是？",
+          "options": ["Reliable Data Database", "Resilient Distributed Dataset（弹性分布式数据集）", "Rapid Data Driver", "Remote Disk Device"],
+          "correct_index": 1,
+          "explanation": "RDD = Resilient Distributed Dataset，是 Spark 最底层的数据抽象，现代开发多直接用 DataFrame，但底层仍是 RDD。"
+        },
+        {
+          "type": "true_false",
+          "prompt": "RDD 是不可变的（immutable），任何转换都返回一个新的 RDD。",
+          "options": ["正确", "错误"],
+          "correct_index": 0,
+          "explanation": "不可变性是容错的基础：数据改不了，但“怎么算出来的”血缘关系记录还在，随时能重放重算。"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "RDD 的容错主要依赖？",
+          "options": ["数据多副本备份", "血缘关系（lineage）自动重算丢失的分区", "手动重试", "数据库日志"],
+          "correct_index": 1,
+          "explanation": "某个节点挂了，Spark 根据 lineage 自动重算丢失的分区，不需要复制备份。"
+        },
+        {
+          "type": "application",
+          "prompt": "下面哪段能正确创建一个 RDD？",
+          "options": ["sc.parallelize([1, 2, 3])", "rdd = new RDD()", "RDD.create()", "spark.rdd()"],
+          "correct_index": 0,
+          "explanation": "sc.parallelize(列表) 是把 Python 列表变成分布式 RDD 最简单的方式；textFile 则从文件创建。"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l1-transformation",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "关于 Transformation，正确的是？",
+          "options": ["立即触发计算", "惰性，只记录计划并返回新 RDD", "用于取结果", "用于写磁盘"],
+          "correct_index": 1,
+          "explanation": "Transformation 是 RDD→RDD 的操作，惰性：调用时只记账不计算，返回“记住来龙去脉”的新 RDD。"
+        },
+        {
+          "type": "application",
+          "prompt": "想把一行文本拆成单词并摊平，应使用？",
+          "options": ["map(lambda s: s.split())", "flatMap(lambda s: s.split())", "filter(…)", "reduce(…)"],
+          "correct_index": 1,
+          "explanation": "map 会得到“列表的列表”，flatMap 把每个元素变 0~n 个并摊平，单词计数必须用 flatMap。"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "做按键聚合求和，应优先使用？",
+          "options": ["groupByKey", "reduceByKey", "sortByKey", "join"],
+          "correct_index": 1,
+          "explanation": "reduceByKey 先在本地预聚合再跨节点合并，效率远高于 groupByKey（后者把同 key 全量搬到一台机器）。"
+        },
+        {
+          "type": "true_false",
+          "prompt": "写完一串 transformation 后，数据就已经计算完了。",
+          "options": ["正确", "错误"],
+          "correct_index": 1,
+          "explanation": "惰性求值：没有 Action 就没有计算，数据根本还不存在；需 count/collect 等 Action 触发。"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l1-action",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "下列属于 Action 的是？",
+          "options": ["map", "filter", "collect", "flatMap"],
+          "correct_index": 2,
+          "explanation": "Action 触发 Job、返回非 RDD 的结果（或写存储）；map/filter/flatMap 都是 Transformation。"
+        },
+        {
+          "type": "true_false",
+          "prompt": "同一 RDD 上调用两次 Action（无缓存）会重算整条血缘链两次。",
+          "options": ["正确", "错误"],
+          "correct_index": 0,
+          "explanation": "无缓存时每次 Action 都从 Transformation 重新计算；复用型中间结果应 cache()。"
+        },
+        {
+          "type": "application",
+          "prompt": "调试时想查看前 5 个元素又不拉爆 Driver，应使用？",
+          "options": ["collect()", "take(5)", "toPandas()", "countByValue()"],
+          "correct_index": 1,
+          "explanation": "take(n) 只取前 n 个，调试神器；collect() 全量拉回 Driver，大数据易 OOM。"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于 collect()，正确的是？",
+          "options": ["只取第一行", "把全部元素拉回 Driver，大数据易 OOM", "不触发计算", "只在 Executor 执行"],
+          "correct_index": 1,
+          "explanation": "collect 将所有数据涌向 Driver 一个进程，是 OOM 头号杀手；大数据用 take/count/聚合代替。"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l1-lazy-evaluation",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "Lazy Evaluation 的核心好处来自？",
+          "options": ["拖延不执行", "看到完整计算链后整体优化（流水线融合、剪枝）", "减少代码量", "隐藏错误"],
+          "correct_index": 1,
+          "explanation": "“先看完整张图纸再施工”带来整体更优的执行计划：流水线融合、计划剪枝、按需计算。"
+        },
+        {
+          "type": "true_false",
+          "prompt": "惰性求值意味着 Transformation 永远不会执行。",
+          "options": ["正确", "错误"],
+          "correct_index": 1,
+          "explanation": "惰性≠不执行：Action 一来立即一次性执行整条链，只是选择最佳时机。"
+        },
+        {
+          "type": "application",
+          "prompt": "下面哪句最能说明惰性带来的优化？",
+          "options": ["map→map→filter 融合成一个 Stage 内连续操作，不落盘", "每步都写磁盘", "代码更短", "不需要 Driver"],
+          "correct_index": 0,
+          "explanation": "Spark 可把连续的 Transformation 融合成 Stage 内的连续操作，数据流过一次算完，不中断、不落盘。"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "报错位置常“错位”到哪个调用处？",
+          "options": ["出错的 transformation lambda", "触发执行的 Action（如 collect）", "Driver 启动", "导入库"],
+          "correct_index": 1,
+          "explanation": "错误真正的源头常在前面某个 lambda，但此刻才执行，所以报错在 Action 处引爆，要顺血缘链回溯。"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l1-why-dataframe-replaces-rdd",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "DataFrame 相比 RDD 更快的关键原因是？",
+          "options": ["写法更短", "Catalyst 优化器能看懂声明式计划并优化", "Python 更快", "不需要 JVM"],
+          "correct_index": 1,
+          "explanation": "DataFrame 是声明式 + schema，Catalyst 优化器可像 SQL 引擎一样做谓词下推、列裁剪、join 重排，配合 Tungsten 提速省内存。"
+        },
+        {
+          "type": "true_false",
+          "prompt": "RDD 的算子接收任意 lambda，对 Spark 来说是不透明黑盒，难以优化。",
+          "options": ["正确", "错误"],
+          "correct_index": 0,
+          "explanation": "黑盒函数让优化器无法重排步骤、无法跳过无用列；DataFrame 的意图透明，可被优化。"
+        },
+        {
+          "type": "application",
+          "prompt": "下列哪种优化属于 Catalyst 能做、RDD 难做的？",
+          "options": ["谓词下推 + 列裁剪", "逐行 for 循环", "手动 map", "打印日志"],
+          "correct_index": 0,
+          "explanation": "谓词下推（提前过滤）和列裁剪（只读需要的列）是声明式 API 才有的优化，RDD 黑盒函数做不到。"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于 RDD 与 DataFrame 的选型，正确的是？",
+          "options": ["RDD 已被废弃完全不用", "默认 DataFrame，非结构化/底层控制才用 RDD", "永远用 RDD", "DataFrame 不能用 SQL"],
+          "correct_index": 1,
+          "explanation": "正确姿势：默认 DataFrame；非结构化数据、需精细控制物理分布与底层数据时才用 RDD。"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l1-rdd-exercise",
+      "questions": [
+        {
+          "type": "application",
+          "prompt": "标准 word count 流水线的第一步读文件用？",
+          "options": ["sc.textFile(\"words.txt\")", "spark.read()", "rdd.open()", "File(\"words.txt\")"],
+          "correct_index": 0,
+          "explanation": "sc.textFile 得到“每行一个元素”的 RDD，是 word count 的起点。"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "单词计数里把 (词, 1) 按词求和，应使用？",
+          "options": ["groupByKey(lambda a, b: a + b)", "reduceByKey(lambda a, b: a + b)", "sortByKey", "join"],
+          "correct_index": 1,
+          "explanation": "reduceByKey 先本地预聚合再跨节点合并，远优于 groupByKey（后者把同 key 全量搬一台机器再相加）。"
+        },
+        {
+          "type": "true_false",
+          "prompt": "word count 里必须用 flatMap 而不是 map 来切词。",
+          "options": ["正确", "错误"],
+          "correct_index": 0,
+          "explanation": "map 之后元素是“列表”，reduceByKey 会把列表当 key 报错；flatMap 把词逐个摊平成独立元素。"
+        },
+        {
+          "type": "application",
+          "prompt": "取计数前 5 名的安全写法是？",
+          "options": ["counts.takeOrdered(5, key=lambda kv: -kv[1])", "counts.sortByKey().collect()", "counts.collect().sort()", "counts.top(5)"],
+          "correct_index": 0,
+          "explanation": "takeOrdered 内部按需归并、只回传 n 条，不必全量排序拉回 Driver；是安全的 TopN 取法。"
+        }
+      ]
+    }
+  ]
+}

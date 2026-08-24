@@ -3,10 +3,11 @@
 Endpoint:
     GET /api/dashboard -> total progress, current level, today's lesson
 
-Today-lesson recommendation rule (simplest, until Phase 5):
-    find the first "available" lesson (== first lesson in course order).
+Today-lesson recommendation rule (Phase 4 minimal):
+    the first lesson the user has NOT yet mastered (available or needs_review),
+    so the dashboard always points at the next actionable lesson.
 
-No user_progress table is created in Phase 2; "completed" stays 0.
+"completed" counts lessons with status "mastered".
 """
 
 from fastapi import APIRouter, Depends
@@ -21,7 +22,7 @@ from ..schemas import (
     ProgressOut,
     TodayLessonOut,
 )
-from ..services import first_lesson_id
+from ..services import lesson_status_map, ordered_lessons
 
 router = APIRouter(prefix="/api")
 
@@ -36,37 +37,38 @@ def get_db() -> Session:
 
 @router.get("/dashboard", response_model=DashboardOut)
 def get_dashboard(db: Session = Depends(get_db)):
-    total = db.scalar(select(func.count()).select_from(Lesson)) or 0
-    # No real progress system until Phase 5.
-    completed = 0
+    status_map, _ = lesson_status_map(db)
+    ordered = ordered_lessons(db)
+
+    total = len(ordered)
+    # Minimal progress: a lesson counts as completed once it is mastered.
+    completed = sum(1 for lid in status_map if status_map[lid] == "mastered")
     percentage = int(round(completed / total * 100)) if total else 0
 
-    today_id = first_lesson_id(db)
-    today_lesson = None
+    # Today's lesson = first lesson the user has NOT yet mastered (whether it is
+    # freshly "available" or a "needs_review" retry). This keeps the dashboard
+    # pointing at the next actionable lesson instead of going blank after a
+    # sub-80% attempt.
+    today_lesson = next((l for l in ordered if status_map.get(l.id) != "mastered"), None)
     current_level = None
+    today_out = None
 
-    if today_id is not None:
-        lesson = db.get(Lesson, today_id)
-        if lesson is not None:
-            level = db.get(CourseLevel, lesson.level_id)
-            today_lesson = TodayLessonOut(
-                id=lesson.id,
-                title=lesson.title,
-                slug=lesson.slug,
-                description=lesson.description,
-                estimated_minutes=lesson.estimated_minutes,
-                level_id=lesson.level_id,
-                level_title=level.title if level else "",
-            )
-            current_level = CurrentLevelOut(
-                id=level.id, title=level.title
-            ) if level else None
+    if today_lesson is not None:
+        level = db.get(CourseLevel, today_lesson.level_id)
+        today_out = TodayLessonOut(
+            id=today_lesson.id,
+            title=today_lesson.title,
+            slug=today_lesson.slug,
+            description=today_lesson.description,
+            estimated_minutes=today_lesson.estimated_minutes,
+            level_id=today_lesson.level_id,
+            level_title=level.title if level else "",
+        )
+        current_level = CurrentLevelOut(id=level.id, title=level.title) if level else None
 
     return DashboardOut(
-        progress=ProgressOut(
-            completed=completed, total=total, percentage=percentage
-        ),
+        progress=ProgressOut(completed=completed, total=total, percentage=percentage),
         current_level=current_level,
-        today_lesson=today_lesson,
+        today_lesson=today_out,
         streak_days=0,  # Phase 6
     )

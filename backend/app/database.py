@@ -8,7 +8,7 @@ import json
 import logging
 from pathlib import Path
 
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 logger = logging.getLogger("spark_quest")
@@ -32,6 +32,7 @@ class Base(DeclarativeBase):
 
 
 SEED_FILE = Path(__file__).resolve().parent / "course_seed.json"
+QUIZ_SEED_FILE = Path(__file__).resolve().parent / "quiz_seed.json"
 
 
 def check_database_connection() -> bool:
@@ -52,6 +53,7 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _seed_course_data()
+    _seed_quizzes()
 
 
 def _seed_course_data() -> None:
@@ -110,3 +112,53 @@ def _backfill_lesson_content(session: Session, data: dict) -> None:
     if updated:
         session.commit()
         logger.info("Backfilled lesson content for %s lessons.", updated)
+
+
+def _seed_quizzes() -> None:
+    """Insert seed quiz questions from quiz_seed.json, once per lesson.
+
+    Idempotent: a lesson that already has any quiz questions is skipped, so
+    re-running init_db never duplicates questions and never overwrites edited
+    ones.
+    """
+    from .models import Lesson, QuizQuestion
+
+    if not QUIZ_SEED_FILE.exists():
+        return
+
+    data = json.loads(QUIZ_SEED_FILE.read_text(encoding="utf-8"))
+    entries = data.get("quizzes", [])
+
+    with Session(engine) as session:
+        lessons_by_slug = {l.slug: l for l in session.scalars(select(Lesson)).all()}
+        seeded = 0
+        for entry in entries:
+            lesson = lessons_by_slug.get(entry.get("lesson_slug"))
+            if lesson is None:
+                logger.warning("Quiz seed: no lesson for slug %s, skipping.", entry.get("lesson_slug"))
+                continue
+            existing = session.scalar(
+                select(func.count())
+                .select_from(QuizQuestion)
+                .where(QuizQuestion.lesson_id == lesson.id)
+            )
+            if existing:
+                continue
+            for i, q in enumerate(entry.get("questions", [])):
+                session.add(
+                    QuizQuestion(
+                        lesson_id=lesson.id,
+                        type=q.get("type", "single_choice"),
+                        prompt=q.get("prompt", ""),
+                        options=json.dumps(q.get("options", []), ensure_ascii=False),
+                        correct_index=q.get("correct_index", 0),
+                        explanation=q.get("explanation", ""),
+                        order_index=i,
+                    )
+                )
+                seeded += 1
+        if seeded:
+            session.commit()
+            logger.info("Seeded %s quiz questions.", seeded)
+        else:
+            logger.info("Quiz questions already present, skipping seed.")

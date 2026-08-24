@@ -27,7 +27,7 @@ from ..schemas import (
     LessonDetailOut,
     NextLessonOut,
 )
-from ..services import first_lesson_id, lesson_status
+from ..services import compute_lesson_status, mastery_score
 
 router = APIRouter(prefix="/api")
 
@@ -68,8 +68,6 @@ def get_lesson(lesson_id: int, db: Session = Depends(get_db)):
     if lesson is None:
         raise HTTPException(status_code=404, detail="Lesson not found")
 
-    first_id = first_lesson_id(db)
-
     next_lesson: Optional[NextLessonOut] = None
     ordered = _ordered_lessons(db)
     for i, item in enumerate(ordered):
@@ -87,7 +85,8 @@ def get_lesson(lesson_id: int, db: Session = Depends(get_db)):
         description=lesson.description,
         objective=lesson.objective,
         estimated_minutes=lesson.estimated_minutes,
-        status=lesson_status(lesson.id, first_id),
+        status=compute_lesson_status(lesson, db),
+        mastery_score=mastery_score(lesson.id, db),
         content=_parse_content(lesson.content),
         next_lesson=next_lesson,
     )

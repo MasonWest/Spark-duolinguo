@@ -30,7 +30,8 @@ export default function MapPage() {
 
       <div className="legend">
         <span>🔵 可学习</span>
-        <span>🟢 已通过</span>
+        <span>🟢 已掌握</span>
+        <span>🟡 需复习</span>
         <span>🔒 未解锁</span>
       </div>
 
@@ -82,7 +83,7 @@ export default function MapPage() {
           </section>
         ))}
 
-      <p className="phase">Phase 1 · 课程地图</p>
+      <p className="phase">Phase 4 · 课程地图</p>
     </div>
   );
 }
