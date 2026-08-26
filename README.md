@@ -19,15 +19,15 @@ spark-quest-app/
 │   ├── app/
 │   │   ├── main.py            # FastAPI 入口 + 路由注册
 │   │   ├── database.py        # engine / Base / init_db（建表 + 课程播种 + 测验播种 + content 回填）
-│   │   ├── models.py          # ORM 模型：course_levels、lessons、quizzes、lesson_mastery
+│   │   ├── models.py          # ORM 模型：course_levels、lessons、quizzes、lesson_mastery、lesson_notes
 │   │   ├── schemas.py         # Pydantic 响应模型（含 Dashboard / LessonDetail / Quiz）
 │   │   ├── services.py        # 课程共享逻辑（课程顺序、派生 lesson 状态、掌握分）
-│   │   ├── course_seed.json   # 课程种子数据（3 个 Level、11 课）
+│   │   ├── course_seed.json   # 课程种子数据（2 个 Level、11 课）
 │   │   ├── quiz_seed.json     # 测验种子数据（每课 4 题，共 44 题）
 │   │   └── routers/
 │   │       ├── courses.py     # /api/levels、/api/levels/{id}/lessons
 │   │       ├── dashboard.py   # /api/dashboard
-│   │       ├── lessons.py     # /api/lessons/{lesson_id}（Phase 3）
+│   │       ├── lessons.py     # /api/lessons/{lesson_id}（详情 + 笔记 增删查）
 │   │       └── quizzes.py     # /api/lessons/{id}/quiz、/submit（Phase 4）
 │   ├── .venv/                 # Python 虚拟环境
 │   ├── requirements.txt
@@ -40,7 +40,7 @@ spark-quest-app/
 │   │   └── pages/
 │   │       ├── Home.tsx       # 首页 Dashboard
 │   │       ├── MapPage.tsx    # 课程地图（Level → Lesson + 状态）
-│   │       ├── LessonPage.tsx # 学习页面（Phase 3）
+│   │       ├── LessonPage.tsx # 学习页面（学习目标 + 连接卡片 + 笔记区）
 │   │       └── QuizPage.tsx   # 课后测验页面（Phase 4）
 │   ├── index.html
 │   ├── package.json
@@ -86,7 +86,7 @@ npm run dev
 
 - `/`：Dashboard（总进度 + 当前 Level + 🎯今日任务 + 课程地图入口）
 - `/map`：课程地图（Level → Lesson，含 locked / available / mastered / needs_review 状态）
-- `/lesson/:id`：学习页面（标题 / 预计时间 / 学习目标 / 概念解释 / 示例 / 必记 / 常见错误 / 下一课）
+- `/lesson/:id`：学习页面（标题 / 预计时间 / 学习目标 / 上一课回顾 / 概念解释 / 示例 / 必记 / 常见错误 / 本课问题 / 下一课伏笔 / 📝 我的学习笔记）
 - `/lesson/:id/quiz`：课后测验（单选 / 判断 / 简单应用题，提交即时评分 + 每题解析）
 
 ## API 说明
@@ -100,9 +100,14 @@ npm run dev
 | `GET /api/lessons/{lesson_id}` | 单课详情：基础信息 + 解析后的 content + 下一课指针 | 3 |
 | `GET /api/lessons/{lesson_id}/quiz` | 取该课测验题目（不泄露答案，locked 课返回 403） | 4 |
 | `POST /api/lessons/{lesson_id}/quiz/submit` | 提交答案，服务端评分，更新掌握状态并解锁下一课 | 4 |
+| `GET /api/lessons/{lesson_id}/notes` | 取该课全部学习笔记（按创建时间倒序） | 5.x |
+| `POST /api/lessons/{lesson_id}/notes` | 新增一条学习笔记（每次新增、不覆盖历史；空内容 400） | 5.x |
+| `DELETE /api/lessons/{lesson_id}/notes/{note_id}` | 删除单条笔记（跨课误删返回 404 防护） | 5.x |
 
-数据库共 4 张表：`course_levels`、`lessons`、`quizzes`、`lesson_mastery`。
-首次启动自动播种课程（Level 0/1/2、11 课）与每课测验（44 题）；数据库为空时才会播种，不会重复插入。
+数据库共 5 张表：`course_levels`、`lessons`、`quizzes`、`lesson_mastery`、`lesson_notes`。
+首次启动自动建表并播种课程（Level 0/1、11 课）与每课测验（44 题）；数据库为空时才会播种，不会重复插入。
+`lesson_notes` 为学习笔记表（id / lesson_id / content / created_at），由 `init_db` 的 `create_all`
+自动创建，存储本地墙钟时间，单用户本地应用无需 user_id。
 
 **Lesson 状态（由 `lesson_mastery` 实时派生，非占位）：**
 - `locked`：前置课尚未 mastered，未解锁
@@ -117,8 +122,10 @@ npm run dev
 - [x] Phase 0：项目初始化（前后端通信 + SQLite 连接验证）
 - [x] Phase 1：课程地图（course_levels / lessons + /map 页面）
 - [x] Phase 2：首页 Dashboard 与今日任务（/api/dashboard + 推荐首课）
-- [x] Phase 3：学习页面（/api/lessons/{id} + /lesson/:id，七要素 + 数据化）
+- [x] Phase 3：学习页面（/api/lessons/{id} + /lesson/:id，概念解释 + 多要素 + 连接卡片）
 - [x] Phase 4：Lesson Mastery Quiz + 最小进度 + 解锁（测验闭环 + 状态派生 + 解锁）
+- [x] Phase 5.x：Lesson 学习笔记（lesson_notes 表 + 增删查 API + 学习页笔记区）
+- [x] 课程内容教学质量重构：11 课教材按「先人话→为什么需要→心智模型→正式定义→内部发生了什么」重写，每课新增「上一课回顾 / 本课问题 / 下一课伏笔」三块连接卡片，Level 0→Level 1 形成连续课程链
 - [ ] Phase 5：完整 Progress Dashboard 动态化 + 状态系统
 - [ ] Phase 6：复习系统（基于 weak_points 的 Review / Spaced Repetition）
 - [ ] Phase 7：防发散停车场

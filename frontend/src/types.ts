@@ -116,6 +116,15 @@ export interface NextLesson {
   title: string;
 }
 
+// ---- Phase 5.x: 学习笔记（单用户本地，无 user_id） ----
+
+export interface LessonNote {
+  id: number;
+  lesson_id: number;
+  content: string;
+  created_at: string;
+}
+
 export interface LessonDetail {
   id: number;
   level_id: number;

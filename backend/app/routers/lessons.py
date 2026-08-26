@@ -21,11 +21,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
-from ..models import CourseLevel, Lesson
+from ..models import CourseLevel, Lesson, LessonNote
 from ..schemas import (
     LessonContentOut,
     LessonDetailOut,
+    LessonNoteOut,
     NextLessonOut,
+    NoteCreate,
 )
 from ..services import compute_lesson_status, mastery_score
 
@@ -90,3 +92,53 @@ def get_lesson(lesson_id: int, db: Session = Depends(get_db)):
         content=_parse_content(lesson.content),
         next_lesson=next_lesson,
     )
+
+
+# ---- Phase 5.x: 学习笔记（单用户本地，无 user_id） ----
+
+
+def _serialize_note(note: LessonNote) -> LessonNoteOut:
+    return LessonNoteOut(
+        id=note.id,
+        lesson_id=note.lesson_id,
+        content=note.content,
+        created_at=note.created_at.isoformat() if note.created_at else "",
+    )
+
+
+@router.get("/lessons/{lesson_id}/notes", response_model=List[LessonNoteOut])
+def list_notes(lesson_id: int, db: Session = Depends(get_db)):
+    """Return all notes for a lesson, newest first."""
+    if db.get(Lesson, lesson_id) is None:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    notes = db.scalars(
+        select(LessonNote)
+        .where(LessonNote.lesson_id == lesson_id)
+        .order_by(LessonNote.created_at.desc())
+    ).all()
+    return [_serialize_note(n) for n in notes]
+
+
+@router.post("/lessons/{lesson_id}/notes", response_model=LessonNoteOut, status_code=201)
+def create_note(lesson_id: int, body: NoteCreate, db: Session = Depends(get_db)):
+    """Create a new note. Each call appends a new record (never overwrites)."""
+    if db.get(Lesson, lesson_id) is None:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    content = (body.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="笔记内容不能为空")
+    note = LessonNote(lesson_id=lesson_id, content=content)
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return _serialize_note(note)
+
+
+@router.delete("/lessons/{lesson_id}/notes/{note_id}", status_code=204)
+def delete_note(lesson_id: int, note_id: int, db: Session = Depends(get_db)):
+    """Delete a single note. Refuses only when the note belongs to another lesson."""
+    note = db.get(LessonNote, note_id)
+    if note is None or note.lesson_id != lesson_id:
+        raise HTTPException(status_code=404, detail="笔记不存在")
+    db.delete(note)
+    db.commit()

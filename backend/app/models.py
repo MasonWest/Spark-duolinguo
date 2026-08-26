@@ -97,3 +97,24 @@ class LessonMastery(Base):
     attempts: Mapped[int] = mapped_column(default=0)
     last_quiz_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     weak_points: Mapped[str] = mapped_column(Text, default="[]")  # JSON list[int]
+
+
+# ---- Phase 5.x: 学习笔记（单用户本地应用，无需 user_id） ----
+
+
+class LessonNote(Base):
+    """User learning notes attached to a lesson.
+
+    Each save creates a new row (history is never overwritten). Single-user
+    local app, so no user_id. Notes are the learner's own record — not a
+    feedback or comment system.
+    """
+
+    __tablename__ = "lesson_notes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    lesson_id: Mapped[int] = mapped_column(
+        ForeignKey("lessons.id", ondelete="CASCADE"), index=True
+    )
+    content: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now)

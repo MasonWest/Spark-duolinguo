@@ -153,6 +153,20 @@ class NextLessonOut(BaseModel):
     title: str
 
 
+# ---- Phase 5.x: 学习笔记 ----
+
+
+class LessonNoteOut(BaseModel):
+    id: int
+    lesson_id: int
+    content: str
+    created_at: str
+
+
+class NoteCreate(BaseModel):
+    content: str
+
+
 class LessonDetailOut(BaseModel):
     id: int
     level_id: int

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { LessonDetail } from "../types";
+import type { LessonDetail, LessonNote } from "../types";
 import { statusLabel } from "../types";
 import "./LessonPage.css";
 
@@ -10,10 +10,17 @@ export default function LessonPage() {
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
+  // 学习笔记（Phase 5.x）
+  const [notes, setNotes] = useState<LessonNote[]>([]);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
+
   useEffect(() => {
     setData(null);
     setError(null);
     setNotFound(false);
+    setNotes([]);
+    setNoteDraft("");
     fetch(`/api/lessons/${id}`)
       .then((res) => {
         if (res.status === 404) {
@@ -29,6 +36,57 @@ export default function LessonPage() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    fetch(`/api/lessons/${id}/notes`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json() as Promise<LessonNote[]>;
+      })
+      .then(setNotes)
+      .catch(() => {
+        /* 笔记加载失败时静默，不阻塞课程正文 */
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  function saveNote() {
+    const content = noteDraft.trim();
+    if (!content) return;
+    setNoteBusy(true);
+    fetch(`/api/lessons/${id}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json() as Promise<LessonNote>;
+      })
+      .then((note) => {
+        setNotes((prev) => [note, ...prev]);
+        setNoteDraft("");
+      })
+      .catch((e) => alert("保存笔记失败：" + e))
+      .finally(() => setNoteBusy(false));
+  }
+
+  function deleteNote(noteId: number) {
+    fetch(`/api/lessons/${id}/notes/${noteId}`, { method: "DELETE" })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        setNotes((prev) => prev.filter((n) => n.id !== noteId));
+      })
+      .catch((e) => alert("删除笔记失败：" + e));
+  }
+
+  function formatNoteTime(iso: string): string {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
 
   if (notFound) {
     return (
@@ -190,6 +248,52 @@ export default function LessonPage() {
           ))}
         </section>
       ) : null}
+
+      {/* 我的学习笔记 */}
+      <section className="card note-card">
+        <h2>📝 我的学习笔记</h2>
+        <p className="para muted">
+          记录你学习本课时的理解、疑问、心得或最终形成的认知。每次保存都会新增一条记录，不会覆盖历史。
+        </p>
+        <textarea
+          className="note-input"
+          placeholder="写下你的理解、疑问或感悟…"
+          value={noteDraft}
+          onChange={(e) => setNoteDraft(e.target.value)}
+          rows={4}
+        />
+        <div className="note-actions">
+          <button
+            className="btn-primary"
+            onClick={saveNote}
+            disabled={noteBusy || !noteDraft.trim()}
+          >
+            {noteBusy ? "保存中…" : "保存笔记"}
+          </button>
+        </div>
+
+        <div className="note-list">
+          {notes.length === 0 ? (
+            <p className="para muted">（还没有笔记，写下第一条吧）</p>
+          ) : (
+            notes.map((n) => (
+              <div key={n.id} className="note-item">
+                <div className="note-meta">
+                  <span className="note-time">{formatNoteTime(n.created_at)}</span>
+                  <button
+                    className="note-delete"
+                    onClick={() => deleteNote(n.id)}
+                    title="删除这条笔记"
+                  >
+                    删除
+                  </button>
+                </div>
+                <p className="note-content">{n.content}</p>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
 
       {/* 下一步 / 测验入口 */}
       <section className="card next-card">
