@@ -205,6 +205,23 @@
   background: #f0fdf4;
 }
 
+/* ---- 连接块：上一课回顾 / 本课问题 / 下一课伏笔 ---- */
+
+.review-card {
+  border-left: 4px solid #7c3aed;
+  background: #faf5ff;
+}
+
+.problem-card {
+  border-left: 4px solid #f59e0b;
+  background: #fffbeb;
+}
+
+.preview-card {
+  border-left: 4px solid #0891b2;
+  background: #ecfeff;
+}
+
 /* ---- 下一步 ---- */
 
 .next-card {

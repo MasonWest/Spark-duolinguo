@@ -142,6 +142,10 @@ class LessonContentOut(BaseModel):
     examples: List[ExampleOut] = []
     key_points: List[str] = []
     common_mistakes: List[CommonMistakeOut] = []
+    # 连接块（课程内容重构实验新增；均为可选，老课程数据为空字符串）
+    review: str = ""   # 上一课回顾
+    problem: str = ""  # 本课要解决的问题
+    preview: str = ""  # 下一课伏笔
 
 
 class NextLessonOut(BaseModel):

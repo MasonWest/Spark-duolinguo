@@ -91,6 +91,26 @@ export default function LessonPage() {
         <p className="objective-text">{data.objective}</p>
       </section>
 
+      {/* 上一课回顾 */}
+      {c.review ? (
+        <section className="card review-card">
+          <h2>🔗 上一课回顾</h2>
+          {c.review.split(/\n\n+/).map((para, i) => (
+            <p key={i} className="para">{para}</p>
+          ))}
+        </section>
+      ) : null}
+
+      {/* 本课要解决的问题 */}
+      {c.problem ? (
+        <section className="card problem-card">
+          <h2>❓ 本课要解决的问题</h2>
+          {c.problem.split(/\n\n+/).map((para, i) => (
+            <p key={i} className="para">{para}</p>
+          ))}
+        </section>
+      ) : null}
+
       {/* 概念解释 */}
       <section className="card">
         <h2>📖 概念解释</h2>
@@ -160,6 +180,16 @@ export default function LessonPage() {
           ))
         )}
       </section>
+
+      {/* 下一课伏笔 */}
+      {c.preview ? (
+        <section className="card preview-card">
+          <h2>🔭 下一课伏笔</h2>
+          {c.preview.split(/\n\n+/).map((para, i) => (
+            <p key={i} className="para">{para}</p>
+          ))}
+        </section>
+      ) : null}
 
       {/* 下一步 / 测验入口 */}
       <section className="card next-card">

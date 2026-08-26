@@ -105,6 +105,10 @@ export interface LessonContent {
   examples: Example[];
   key_points: string[];
   common_mistakes: CommonMistake[];
+  // 连接块（课程内容重构实验新增；老课程数据可能缺失）
+  review?: string;
+  problem?: string;
+  preview?: string;
 }
 
 export interface NextLesson {

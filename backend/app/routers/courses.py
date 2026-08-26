@@ -54,7 +54,7 @@ def list_levels(db: Session = Depends(get_db)):
         level_status = compute_level_status(level, status_map)
 
         level_out = LevelOut(
-            **{c.name: getattr(level, c.name) for c in CourseLevel.__table__.columns},
+            **{c.name: getattr(level, c.name) for c in CourseLevel.__table__.columns if c.name != "status"},
             status=level_status,
             completed_count=completed_count,
             total_count=total_count,
