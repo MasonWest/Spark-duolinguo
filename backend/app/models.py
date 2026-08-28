@@ -72,6 +72,10 @@ class QuizQuestion(Base):
     correct_index: Mapped[int] = mapped_column(default=0)
     explanation: Mapped[str] = mapped_column(Text, default="")
     order_index: Mapped[int] = mapped_column(default=0)
+    # Phase 6.1: cognitive dimension tag (open vocabulary, e.g.
+    # concept / why / mechanism / apply / comparison / debug). NULL allowed
+    # for legacy rows; backfilled by migrate/backfill scripts.
+    dimension: Mapped[Optional[str]] = mapped_column(nullable=True)
 
 
 class LessonMastery(Base):

@@ -52,6 +52,10 @@ def init_db() -> None:
     from . import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    # Phase 6.1: ensure the `dimension` column exists on existing databases.
+    from . import migrate
+
+    migrate.run_migrations()
     _seed_course_data()
     _seed_quizzes()
 

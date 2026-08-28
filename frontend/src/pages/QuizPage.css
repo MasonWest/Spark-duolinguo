@@ -21,6 +21,14 @@
   padding: 2px 10px;
 }
 
+.quiz-dim {
+  font-size: 12px;
+  color: #7c3aed;
+  background: #f3e8ff;
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
 .quiz-prompt {
   font-size: 16px;
   font-weight: 600;

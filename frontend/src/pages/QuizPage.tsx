@@ -222,6 +222,7 @@ export default function QuizPage() {
           <div className="quiz-q-head">
             <span className="quiz-no">题 {i + 1}</span>
             <span className="quiz-type">{typeLabel(q.type)}</span>
+            {q.dimension && <span className="quiz-dim">{dimLabel(q.dimension)}</span>}
           </div>
           <p className="quiz-prompt">{q.prompt}</p>
           <div className="quiz-options">
@@ -262,4 +263,18 @@ function typeLabel(t: string): string {
   if (t === "true_false") return "判断题";
   if (t === "application") return "应用题";
   return "单选题";
+}
+
+// Phase 6.1: human-readable label for the cognitive-dimension tag.
+const DIM_LABELS: Record<string, string> = {
+  concept: "概念理解",
+  why: "为什么",
+  mechanism: "运行机制",
+  apply: "场景应用",
+  comparison: "对比辨析",
+  debug: "排错调优",
+};
+
+function dimLabel(d: string): string {
+  return DIM_LABELS[d] ?? d;
 }

@@ -149,6 +149,7 @@ export interface QuizQuestion {
   type: QuizType;
   prompt: string;
   options: string[];
+  dimension?: string | null; // Phase 6.1 cognitive-dimension tag
 }
 
 export interface QuizFetch {

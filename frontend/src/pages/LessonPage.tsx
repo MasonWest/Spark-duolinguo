@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { LessonDetail, LessonNote } from "../types";
 import { statusLabel } from "../types";
+import RichText from "../components/RichText";
 import "./LessonPage.css";
 
 export default function LessonPage() {
@@ -143,19 +144,11 @@ export default function LessonPage() {
         <span className="meta-chip status-chip">{statusLabel[data.status]}</span>
       </div>
 
-      {/* 学习目标 */}
-      <section className="card objective-card">
-        <h2>🎯 学习目标</h2>
-        <p className="objective-text">{data.objective}</p>
-      </section>
-
       {/* 上一课回顾 */}
       {c.review ? (
         <section className="card review-card">
           <h2>🔗 上一课回顾</h2>
-          {c.review.split(/\n\n+/).map((para, i) => (
-            <p key={i} className="para">{para}</p>
-          ))}
+          <RichText text={c.review} />
         </section>
       ) : null}
 
@@ -163,9 +156,7 @@ export default function LessonPage() {
       {c.problem ? (
         <section className="card problem-card">
           <h2>❓ 本课要解决的问题</h2>
-          {c.problem.split(/\n\n+/).map((para, i) => (
-            <p key={i} className="para">{para}</p>
-          ))}
+          <RichText text={c.problem} />
         </section>
       ) : null}
 
@@ -173,11 +164,7 @@ export default function LessonPage() {
       <section className="card">
         <h2>📖 概念解释</h2>
         {c.explanation ? (
-          c.explanation.split(/\n\n+/).map((para, i) => (
-            <p key={i} className="para">
-              {para}
-            </p>
-          ))
+          <RichText text={c.explanation} />
         ) : (
           <p className="para muted">（本课暂无解释内容）</p>
         )}
@@ -239,15 +226,11 @@ export default function LessonPage() {
         )}
       </section>
 
-      {/* 下一课伏笔 */}
-      {c.preview ? (
-        <section className="card preview-card">
-          <h2>🔭 下一课伏笔</h2>
-          {c.preview.split(/\n\n+/).map((para, i) => (
-            <p key={i} className="para">{para}</p>
-          ))}
-        </section>
-      ) : null}
+      {/* 学习目标（学完后自我检查） */}
+      <section className="card objective-card">
+        <h2>🎯 学完后，你应该能回答</h2>
+        <p className="objective-text">{data.objective}</p>
+      </section>
 
       {/* 我的学习笔记 */}
       <section className="card note-card">
@@ -294,6 +277,14 @@ export default function LessonPage() {
           )}
         </div>
       </section>
+
+      {/* 下一课伏笔 */}
+      {c.preview ? (
+        <section className="card preview-card">
+          <h2>🔭 下一课伏笔</h2>
+          <RichText text={c.preview} />
+        </section>
+      ) : null}
 
       {/* 下一步 / 测验入口 */}
       <section className="card next-card">

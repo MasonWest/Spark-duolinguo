@@ -14,6 +14,7 @@ next lesson). A sub-80% first attempt is `needs_review` and can be retaken.
 """
 
 import json
+import random
 from datetime import datetime
 from typing import List
 
@@ -52,6 +53,45 @@ def _parse_options(raw: str) -> List[str]:
         return []
 
 
+def _sample_quiz_questions(questions: List[QuizQuestion], n: int = 5) -> List[QuizQuestion]:
+    """Phase 6.1: draw `n` questions, preferring dimension diversity.
+
+    Questions are grouped by their `dimension` tag (NULL -> "uncategorized").
+    We take one from as many distinct dimensions as possible, then fill the
+    remainder from whatever is left. There is NO hard constraint (e.g. we do
+    not require a fixed number of dimensions) — diversity is only preferred
+    when the lesson naturally has variety, so future lessons are never boxed
+    in by the rule.
+    """
+    if len(questions) <= n:
+        return list(questions)
+
+    groups: dict = {}
+    for q in questions:
+        key = (q.dimension or "uncategorized") or "uncategorized"
+        groups.setdefault(key, []).append(q)
+
+    dims = list(groups.keys())
+    random.shuffle(dims)
+
+    picked: List[QuizQuestion] = []
+    for d in dims:
+        if len(picked) >= n:
+            break
+        bucket = list(groups[d])
+        random.shuffle(bucket)
+        picked.append(bucket[0])
+
+    picked_ids = {id(q) for q in picked}
+    remaining = [q for q in questions if id(q) not in picked_ids]
+    random.shuffle(remaining)
+    while len(picked) < n and remaining:
+        picked.append(remaining.pop())
+
+    random.shuffle(picked)
+    return picked
+
+
 @router.get("/lessons/{lesson_id}/quiz", response_model=QuizFetchOut)
 def get_quiz(lesson_id: int, db: Session = Depends(get_db)):
     lesson = db.get(Lesson, lesson_id)
@@ -60,11 +100,14 @@ def get_quiz(lesson_id: int, db: Session = Depends(get_db)):
     if compute_lesson_status(lesson, db) == "locked":
         raise HTTPException(status_code=403, detail="Lesson is locked; master the previous lesson first")
 
-    questions = db.scalars(
+    all_questions = db.scalars(
         select(QuizQuestion)
         .where(QuizQuestion.lesson_id == lesson_id)
         .order_by(QuizQuestion.order_index)
     ).all()
+
+    # Phase 6.1: sample 5 from the bank, preferring dimension diversity.
+    questions = _sample_quiz_questions(all_questions, n=5)
 
     return QuizFetchOut(
         lesson_id=lesson.id,
@@ -75,6 +118,7 @@ def get_quiz(lesson_id: int, db: Session = Depends(get_db)):
                 type=q.type,
                 prompt=q.prompt,
                 options=_parse_options(q.options),
+                dimension=q.dimension,
             )
             for q in questions
         ],
@@ -106,14 +150,20 @@ def submit_quiz(lesson_id: int, payload: QuizSubmitIn, db: Session = Depends(get
                 detail=f"Unknown question_id {ans.question_id} for lesson {lesson_id}",
             )
 
-    total = len(questions)
+    # Phase 6.1: only the 5 questions actually presented (and answered) are
+    # graded. `questions` holds the full bank (10); `payload.answers` lists the
+    # 5 submitted, so we grade exactly those.
+    total = len(payload.answers)
     correct = 0
     weak_points: List[int] = []
     results: List[QuizResultItem] = []
     selected_by_q = {a.question_id: a.selected_index for a in payload.answers}
 
     for q in questions:
-        selected = selected_by_q.get(q.id, -1)  # missing answer counts as wrong
+        selected = selected_by_q.get(q.id)
+        if selected is None:
+            # This question was not part of the presented 5; skip it.
+            continue
         is_correct = selected == q.correct_index
         if is_correct:
             correct += 1

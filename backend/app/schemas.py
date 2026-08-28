@@ -83,6 +83,7 @@ class QuizQuestionOut(BaseModel):
     type: str
     prompt: str
     options: List[str]
+    dimension: Optional[str] = None  # Phase 6.1 cognitive-dimension tag
 
 
 class QuizFetchOut(BaseModel):
