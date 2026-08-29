@@ -1161,6 +1161,1534 @@
           }
         }
       ]
+    },
+    {
+      "title": "Level 3：Spark SQL",
+      "description": "在 Level 2 的 DataFrame 之上，用 SQL 直接查同一批结构化数据：临时视图、SELECT/WHERE/GROUP BY/JOIN/函数，并与 DataFrame API 共用 Catalyst。为 Level 4 执行计划与 Level 6 Join 铺垫。",
+      "order_index": 3,
+      "lessons": [
+        {
+          "title": "Spark SQL 是什么",
+          "slug": "l3-what-is-spark-sql",
+          "description": "理解 Spark SQL 的定位：与 DataFrame API 共享 Catalyst 的两种方言。",
+          "objective": "学完本课，你应该能够：用自己的话解释 Spark SQL 是什么、为什么有了 DataFrame 还要 SQL；说清「SQL 与 API 最终编译成同一套执行计划、性能一致」；并理解 spark.sql() 返回的是惰性 DataFrame，查的「表」本质仍是 DataFrame。",
+          "estimated_minutes": 12,
+          "order_index": 0,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n你已经会用 DataFrame API（select / filter / groupBy）搭管道。但很多数据分析师不写 Python，他们只写 SQL：「SELECT city, sum(amount) FROM sales GROUP BY city」。Spark 的厉害之处在于：它让你用 SQL 也能查同一批数据，而且底层和你的 Python 代码走的是同一套优化器。一句话——同一个引擎，两种点单语言。\n\n【一个直观的心智模型】\n\n把 Spark 想象成一家大工厂，有两个点单窗口：左边窗口你说「中文」（SQL 字符串），右边窗口你说「英文」（DataFrame API）。两个窗口长得不一样，但后厨只有一套——Catalyst 优化器。无论你从哪个窗口下单，厨房都先把订单重新规划一遍（优化），再交给工人（Executor）干。所以「用 SQL」还是「用 API」，对你这种「食材」（DataFrame）来说没区别，区别只是你用哪种语言下单。\n\n⚠️ 比喻的边界（很重要）：\n① SQL 不是另起炉灶的新引擎：它和 DataFrame API 最终都编译成同一套逻辑/物理执行计划（底层还是 RDD 的 Task），性能上没有「谁更快」的说法，差异只在写法。\n② 你用 SQL 查的「表」本质仍是 DataFrame（带 Schema 的货），不是数据库里那种「物理表」——除非你接了 Hive Metastore（本路线不纳入）。没注册成视图的 DataFrame，SQL 根本不认识。\n③ SQL 是黑盒字符串给优化器看：它不像 API 那样能逐步 debug 中间每一步的 DataFrame，排错时你得靠 EXPLAIN（Level 4）和 Spark UI。\n\n【正式的技术定义】\n\nSpark SQL 是 Spark 处理结构化数据（行 + 列 + Schema）的统一模块，提供 SQL 接口与 DataFrame/Dataset API 两种编程抽象，二者共享 Catalyst 优化器与 Tungsten 执行引擎。SQL 通过 SparkSession.sql() 执行，返回的是 DataFrame（惰性）。\n\n【写下代码后，Spark 内部发生了什么】\n\nspark.sql(\"...\") 先把 SQL 文本解析成逻辑计划（Analyzer 补上元数据），交给 Catalyst 做优化（和 DataFrame API 走的是同一个优化器），再切 Task 执行。返回的 DataFrame 和手写 API 返回的，在 Catalyst 眼里是等价的——这是本课最重要的认知。",
+            "examples": [
+              {
+                "title": "用 SQL 查 DataFrame（先注册视图）",
+                "code": "df.createOrReplaceTempView(\"sales\")\nspark.sql(\"SELECT city, sum(amount) FROM sales GROUP BY city\").show()",
+                "note": "必须先把 DataFrame 注册成临时视图，否则 SQL 不认识 sales。"
+              },
+              {
+                "title": "同一件事的两种写法对照",
+                "code": "# API 写法\ndf.groupBy(\"city\").sum(\"amount\").show()\n\n# SQL 写法（等价）\nspark.sql(\"SELECT city, sum(amount) FROM sales GROUP BY city\").show()",
+                "note": "两种写法最终编译成相同执行计划，性能一致。"
+              },
+              {
+                "title": "spark.sql 返回的是 DataFrame（惰性）",
+                "code": "result = spark.sql(\"SELECT * FROM sales WHERE amount > 100\")\nprint(type(result))   # DataFrame\nresult.show()         # 这一步才真正执行",
+                "note": "sql() 返回 DataFrame，可以接着 .filter() / .withColumn() 混用，Action 才执行。"
+              }
+            ],
+            "key_points": [
+              "Spark SQL 提供 SQL 接口；与 DataFrame API 共享 Catalyst 优化器，性能一致",
+              "SQL 不是新引擎，二者最终都编译成同一套执行计划（底层仍是 RDD Task）",
+              "你用 SQL 查的「表」本质是 DataFrame，必须先注册成视图",
+              "spark.sql() 返回 DataFrame（惰性），可和 API 链式混用",
+              "黑盒 SQL 排错要靠 EXPLAIN / Spark UI（Level 4 展开）"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "没注册视图就 spark.sql(\"SELECT .. FROM my_df\")。",
+                "why": "SQL 只认「注册过的名字」，DataFrame 变量名不是表名。",
+                "fix": "先 df.createOrReplaceTempView(\"my_df\")。"
+              },
+              {
+                "mistake": "以为「SQL 比 API 慢/快」。",
+                "why": "最终执行计划相同，差异只在写法。",
+                "fix": "选你顺手的写法，性能差异来自写法本身而非接口。"
+              },
+              {
+                "mistake": "把 spark.sql 的结果当「已执行的数据」。",
+                "why": "返回 DataFrame，惰性。",
+                "fix": "要结果用 show / collect，别以为赋完值数据就到位了。"
+              }
+            ],
+            "review": "在 Level 2 我们用 DataFrame API（select / filter / withColumn / groupBy / write）搭出完整 ETL 管道，已经能用 Spark 完成一次真实的数据处理闭环。\n\n可你可能会问：既然 API 啥都能干，为什么 Spark 还要大张旗鼓地支持 SQL？这一课就来正面回答——Spark SQL 到底多了什么，又和你的 API 代码是什么关系。",
+            "problem": "为什么 Spark 既能写代码又能写 SQL，而且查的是同一批数据？SQL 和 API 到底谁更快？想用 SQL 查一个 DataFrame，第一步到底要做什么？",
+            "preview": "想用 SQL 查 DataFrame，得先让它「变成 SQL 认识的表」——下集讲临时视图，这是 SQL 能跑起来的前提。"
+          }
+        },
+        {
+          "title": "临时视图（Temporary View）",
+          "slug": "l3-temp-views",
+          "description": "createOrReplaceTempView / global temp view：把 DataFrame 挂成 SQL 能认的「表」。",
+          "objective": "学完本课，你应该能够：用 createOrReplaceTempView 把 DataFrame 注册为 session 内临时视图；理解视图不复制数据（零拷贝）、只在 session 有效；并区分它与全局临时视图（global_temp. 前缀）。",
+          "estimated_minutes": 12,
+          "order_index": 1,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\nSQL 世界里，「表」是有名字的。但你的数据是 DataFrame（一个变量），SQL 不认变量名。所以你得给它挂个「名字牌」——告诉 Spark：「这张表叫 sales，就是那个 DataFrame」。挂完牌子，你就能写 SELECT * FROM sales。\n\n【一个直观的心智模型】\n\n临时视图就像你在仓库门口挂的一块临时工牌：牌子上写着「这批货叫 orders」。工人（Executor）和前台（Driver）都认这块牌子去取货。关键点：① 工牌不复制货，只是个名字（零拷贝）；② 工牌只在你这次「营业」（SparkSession）期间有效，打烊（session 结束）牌子就摘；③ global temp view 是把牌子挂在大堂公共布告栏，所有 session 都能看。\n\n⚠️ 比喻的边界（很重要）：\n① 注册视图不搬任何数据，只登记「名字 → DataFrame」的映射（惰性、零拷贝）。\n② 视图只在创建它的 SparkSession 生命周期内有效（global 例外）；session 关了，名字失效，再查就报「表不存在」。\n③ 同名视图会覆盖；视图背后仍是 DataFrame，SQL 对它做的操作最终还是 Transformation / Action。\n④ 视图不是数据库的持久表——重启 session 要重新注册。\n\n【正式的技术定义】\n\ncreateOrReplaceTempView(name) 把 DataFrame 注册为当前 session 内的临时视图（同名覆盖）；createOrReplaceGlobalTempView(name) 注册为跨 session 可见的全局临时视图（需通过 global_temp. 前缀访问）。视图不物化数据，仅记录逻辑映射。\n\n【写下代码后，Spark 内部发生了什么】\n\ncreateOrReplaceTempView 只是往 SparkSession 的 catalog（临时视图登记表）里写一条「名字 → 逻辑计划」的记录，不触发任何计算。真正计算发生在你 spark.sql 查询它、并遇到 Action 时。",
+            "examples": [
+              {
+                "title": "注册临时视图并查询",
+                "code": "df.createOrReplaceTempView(\"sales\")\nspark.sql(\"SELECT city, count(*) FROM sales GROUP BY city\").show()",
+                "note": "名字在 catalog 里；可重复调用 createOrReplace 覆盖同名。"
+              },
+              {
+                "title": "全局临时视图（跨 session）",
+                "code": "df.createOrReplaceGlobalTempView(\"sales\")\nspark.sql(\"SELECT * FROM global_temp.sales LIMIT 5\").show()",
+                "note": "全局视图必须用 global_temp. 前缀访问；适合在多个 session / 作业间共享。"
+              },
+              {
+                "title": "视图不复制数据",
+                "code": "df.createOrReplaceTempView(\"v\")\n# v 和 df 指向同一份逻辑数据，没有任何拷贝\nspark.sql(\"SELECT * FROM v\").explain()  # 看不到「物化」步骤",
+                "note": "视图是逻辑映射，explain 里不会出现独立的物化节点。"
+              }
+            ],
+            "key_points": [
+              "createOrReplaceTempView 注册 session 内临时视图（同名覆盖）",
+              "全局临时视图用 createOrReplaceGlobalTempView，访问需 global_temp. 前缀",
+              "视图不物化数据，只是「名字 → DataFrame」的逻辑映射（零拷贝）",
+              "视图仅在当前 session 有效（global 例外），session 结束即失效",
+              "视图背后仍是 DataFrame，SQL 操作最终编译成 Transformation / Action"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "session 关了再查视图报「表不存在」。",
+                "why": "临时视图绑定 session 生命周期。",
+                "fix": "在查询前确保 session 未停；或改用 global temp view / 持久表。"
+              },
+              {
+                "mistake": "以为注册视图会复制/落盘数据。",
+                "why": "它只是登记名字。",
+                "fix": "理解零拷贝；需要复用计算结果才用 cache / persist。"
+              },
+              {
+                "mistake": "全局视图没加 global_temp. 前缀。",
+                "why": "全局视图必须显式前缀。",
+                "fix": "查询写 SELECT ... FROM global_temp.name。"
+              }
+            ],
+            "review": "上一课我们说：用 SQL 查的「表」本质是 DataFrame，但 SQL 只认名字。\n\n那怎么把 DataFrame 变成 SQL 能认的「表」？注册了之后，它会不会复制一份数据、占双倍内存？关掉程序再打开还能查到吗？这一课把「临时视图」一次说清。",
+            "problem": "怎么把 DataFrame 变成 SQL 能认的「表」？注册视图会不会复制数据？为什么 session 一关视图就失效？全局临时视图又是什么？",
+            "preview": "名字有了，下集就能真正写 SELECT 了——而且你会发现，很多写法和 Level 2 的 select 是「同一道工序的两种菜单」。"
+          }
+        },
+        {
+          "title": "SELECT 基础",
+          "slug": "l3-select-basics",
+          "description": "SELECT 选列、表达式、别名、常量；与 Level 2 select 的对照。",
+          "objective": "学完本课，你应该能够：用 SELECT 挑选 / 重命名列、写表达式与常量列；理解它与 Level 2 df.select 是同一道工序的两种写法；并避开「把 Python 变量拼进 SQL 字符串」的坑。",
+          "estimated_minutes": 12,
+          "order_index": 2,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n在 SQL 里，SELECT 就是「我要哪些列、给它们起什么名、要不要加点计算」。比如 SELECT name, age+1 AS age_next FROM t。它和 Level 2 的 df.select(\"name\", (df.age+1).alias(\"age_next\")) 是同一件事，只是一个用 SQL 写、一个用 API 写。\n\n【一个直观的心智模型】\n\n复用 Level 2 的「净水滤网流水线」：SELECT 调整的是流水线的「出水口」——你只关心矿物质和泥沙，就把其他通道关掉，只让这几列液体流出来。SQL 的 SELECT 和 API 的 select，是同一道滤网的两种「操作说明书」（一个用中文写、一个用英文写）。\n\n⚠️ 比喻的边界（很重要）：\n① spark.sql(\"SELECT ...\") 返回的是 DataFrame，惰性——没遇到 Action 不算。\n② SQL 里列名/别名规则：含空格或特殊字符用反引号 `order amount` 包住；别名用 AS（可省略）。\n③ 表达式如 age+1、price*0.9 与 Column 运算符等价，都进 Catalyst 优化——不是「先算好再传进去」。\n④ 别把 Python 变量直接拼进 SQL 字符串：既不安全（注入）也不利计划缓存；要用参数化或 lit / 子查询。\n\n【正式的技术定义】\n\nSELECT 子句指定输出列，可为列名、表达式（col + 运算）、常量（lit）、别名（AS）。spark.sql 解析后返回新 DataFrame；与 df.select(...) 在 Catalyst 中生成等价逻辑计划。\n\n【写下代码后，Spark 内部发生了什么】\n\nsql() 把 SELECT 文本解析成逻辑计划里的 Project 节点，Catalyst 优化后切 Task 执行；返回 DataFrame 可继续链式 .filter() 等，整条链到 Action 才跑。",
+            "examples": [
+              {
+                "title": "SELECT 选列 + 表达式 + 别名",
+                "code": "spark.sql(\"\"\"\n  SELECT name, age + 1 AS age_next, 'VIP' AS tag\n  FROM people\n\"\"\").show()",
+                "note": "表达式和常量都行；AS 起别名，字符串常量用单引号。"
+              },
+              {
+                "title": "与 Level 2 API 写法对照",
+                "code": "# SQL\nspark.sql(\"SELECT name, age FROM people\")\n# API（等价）\ndf.select(\"name\", \"age\")",
+                "note": "同一道工序两种菜单；选哪样看你顺手。"
+              },
+              {
+                "title": "反引号包特殊列名",
+                "code": "spark.sql(\"SELECT `order amount`, `user-id` FROM orders\").show()",
+                "note": "列名含空格/连字符必须用反引号；API 用 df[\"order amount\"]。"
+              }
+            ],
+            "key_points": [
+              "SELECT 指定输出列：列名 / 表达式 / 常量 / 别名(AS)",
+              "spark.sql 返回 DataFrame（惰性），可继续链式",
+              "SQL 与 Level 2 的 select 是同一计划两种写法，性能一致",
+              "特殊列名用反引号 `col` 包住",
+              "别把 Python 变量直接拼进 SQL 字符串（注入/缓存问题）"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "把 Python 变量 f-string 拼进 SQL：f\"SELECT * FROM t WHERE id={x}\"。",
+                "why": "注入风险、且每次字符串不同导致计划无法缓存。",
+                "fix": "用参数化 / 子查询，或先在 API 侧 filter。"
+              },
+              {
+                "mistake": "忘了 spark.sql 返回 DataFrame 是惰性的。",
+                "why": "赋完值数据没到位。",
+                "fix": "接 Action（show / collect）才执行。"
+              },
+              {
+                "mistake": "含空格列名没加反引号报错。",
+                "why": "SQL 把空格当分隔。",
+                "fix": "用 `col name`。"
+              }
+            ],
+            "review": "上一课我们给 DataFrame 挂了「临时视图」这个名字牌，SQL 现在认识它了。\n\n那怎么用 SQL 真正「选列」？SELECT 怎么写表达式、起别名？它和我们 Level 2 学的 select 到底是什么关系？这一课把 SELECT 基础讲透。",
+            "problem": "怎么用 SQL 真正「选列」？SELECT 怎么写表达式、起别名？它和我们 Level 2 学的 select 到底是什么关系？为什么不该把 Python 变量直接拼进 SQL？",
+            "preview": "选好列之后，下一步自然是「挑行」——WHERE 过滤、「排个序」、「取前几条」，下集讲。"
+          }
+        },
+        {
+          "title": "WHERE / ORDER BY / LIMIT",
+          "slug": "l3-where-order-limit",
+          "description": "SQL 的挑行、排序、截断，与 Level 2 filter/orderBy/limit 对照，含 NULL 三态。",
+          "objective": "学完本课，你应该能够：用 WHERE 过滤行、ORDER BY 排序、LIMIT 取前 N；理解它们与 Level 2 的对应；避开 NULL 三态（IS NULL）与「ORDER BY 必 Shuffle」两个关键认知。",
+          "estimated_minutes": 12,
+          "order_index": 3,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\nSQL 里挑行用 WHERE，排序用 ORDER BY，取前 N 用 LIMIT。它们一一对应 Level 2 的 filter / orderBy / limit。比如 WHERE age>18 等价于 df.filter(df.age>18)；ORDER BY amount DESC 等价于 df.orderBy(F.desc(\"amount\"))。\n\n【一个直观的心智模型】\n\n复用 Level 2：WHERE 是流水线的「物理隔板」（不合格的行拦下）；ORDER BY 是「全校按身高排队领奖」（全局有序）；LIMIT 是「只放前 N 个进场」。SQL 只是把这三道工序用另一种语言描述了一遍。\n\n⚠️ 比喻的边界（很重要）：\n① SQL 里组合条件用 AND / OR / NOT（不是 Python 的 and/or，因为 SQL 是文本语言，没有 Python 运算符）——但效果和 Level 2 的 & | ~ 一样；别把 Python 逻辑词写进 SQL 字符串。\n② NULL 是「三态」：age = NULL 永远为假，判断空要用 IS NULL / IS NOT NULL；这是新手最常踩的坑。\n③ ORDER BY 全局有序必触发一次 Shuffle（所有人重排），大数据下昂贵——Level 5 展开。\n④ LIMIT 是「取前 N」，不是「均匀抽样」；配合 ORDER BY 才是 TopN。\n\n【正式的技术定义】\n\nWHERE 在分组/聚合前过滤行（行级谓词）；ORDER BY 按列排序（ASC/DESC，多列逗号分隔）；LIMIT 截断结果行数。三者均在 SELECT 之后、Action 之前构成逻辑计划节点，由 Catalyst 优化（WHERE 常下推）。\n\n【写下代码后，Spark 内部发生了什么】\n\nWHERE 被 Catalyst 下推（Predicate Pushdown）到读取端尽早过滤；ORDER BY 触发 Shuffle 做全局排序；LIMIT 可在排序后取前 N 或下推到各分区取局部前 N 再合并。",
+            "examples": [
+              {
+                "title": "WHERE 过滤 + AND/OR",
+                "code": "spark.sql(\"\"\"\n  SELECT name, age FROM people\n  WHERE age > 18 AND city = 'BJ'\n\"\"\").show()",
+                "note": "SQL 用 AND/OR/NOT；对应 API 的 & | ~。"
+              },
+              {
+                "title": "NULL 三态：用 IS NULL",
+                "code": "spark.sql(\"SELECT * FROM people WHERE phone IS NULL\").show()\n# 错误：WHERE phone = NULL  -- 永远为假",
+                "note": "判断空必须用 IS NULL / IS NOT NULL；= NULL 是经典坑。"
+              },
+              {
+                "title": "ORDER BY + LIMIT 做 TopN",
+                "code": "spark.sql(\"\"\"\n  SELECT city, sum(amount) AS total\n  FROM sales GROUP BY city\n  ORDER BY total DESC LIMIT 5\n\"\"\").show()",
+                "note": "排序+取前5即 Top5；ORDER BY 触发 Shuffle。"
+              }
+            ],
+            "key_points": [
+              "WHERE 过滤行（对应 filter）；ORDER BY 排序（对应 orderBy）；LIMIT 取前 N（对应 limit）",
+              "SQL 组合条件用 AND/OR/NOT（不是 Python 的 and/or）",
+              "NULL 三态：判断空用 IS NULL / IS NOT NULL，= NULL 永远为假",
+              "ORDER BY 全局有序必触发 Shuffle（Level 5 展开）",
+              "LIMIT 取前 N 非抽样；配合 ORDER BY 即 TopN"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "写 WHERE phone = NULL。",
+                "why": "NULL 不参与 = 比较，结果永远假。",
+                "fix": "用 IS NULL。"
+              },
+              {
+                "mistake": "把 Python 的 and/or 写进 SQL（其实 SQL 里本来就用 AND/OR，但有人误把 DataFrame 的 & 写进 SQL）。",
+                "why": "SQL 文本里只有 AND/OR。",
+                "fix": "SQL 用 AND/OR/NOT；API 用 & | ~。"
+              },
+              {
+                "mistake": "以为 LIMIT 是随机抽样。",
+                "why": "它是「前 N 行」。",
+                "fix": "要抽样用 TABLESAMPLE 或 df.sample()。"
+              }
+            ],
+            "review": "上一课我们用 SELECT 把「要哪些列」讲清了，而且知道它和 Level 2 的 select 是同一道工序。\n\n那怎么用 SQL 真正「挑行」？ORDER BY 怎么排升降序？为什么 ORDER BY 在大表上很贵？NULL 该怎么判断？这一课一次说清。",
+            "problem": "怎么用 SQL 挑行（WHERE）、排序（ORDER BY）、取前几条（LIMIT）？NULL 该怎么判断？为什么 ORDER BY 在大表上很贵、而 LIMIT 不是抽样？",
+            "preview": "选列、挑行、排序都会了。可真实分析少不了「分组汇总」——每城市卖多少。而且 SQL 里有个 WHERE 替代不了的新关键字，下集讲 GROUP BY 与 HAVING。"
+          }
+        },
+        {
+          "title": "GROUP BY 与 HAVING",
+          "slug": "l3-groupby-having",
+          "description": "SQL 分组聚合与 HAVING；复用「水果分拣派对」隐喻，对照 Level 2 groupBy。",
+          "objective": "学完本课，你应该能够：用 GROUP BY 分组并用聚合函数汇总；理解「非分组列不能直接 SELECT」；并分清 HAVING（分组后过滤）与 WHERE（分组前过滤）的顺序坑。",
+          "estimated_minutes": 12,
+          "order_index": 4,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\nGROUP BY 就是「按某个维度把数据分成几堆，在每堆上算一个汇总值」，比如「按城市分组，算每个城市的总销售额」。它对应 Level 2 的 df.groupBy(\"city\").sum(\"amount\")，是数据分析的心脏，也是 SQL 的 GROUP BY。\n\n【一个直观的心智模型】\n\n复用 Level 2 的「水果分拣派对」：每个人抱一箱混杂水果，哨声一响大家按「水果类型」把苹果扔一号桌、橘子扔二号桌（这就是 Shuffle），站定后各桌用秤（sum/avg）算总重量。SQL 的 GROUP BY 喊的就是这道口令，和 API 的 groupBy 是同一场派对。\n\n⚠️ 比喻的边界（很重要）：\n① 聚合后还想过滤（比如「只留总金额>1000 的城市」），必须用 HAVING，不能用 WHERE——WHERE 在分组前过滤、HAVING 在分组后过滤，这是顺序坑。\n② 分组列可直接出现在 SELECT；非分组列不能被 SELECT（除非被聚合），与 Level 2 约束一致。\n③ 同 Level 2：GROUP BY 必触发 Shuffle + Map-side Combine；大表分组是主要成本来源（Level 5）。\n\n【正式的技术定义】\n\nGROUP BY 按一列/多列分组，聚合函数（COUNT/SUM/AVG/MAX/MIN）在每组上计算；HAVING 对分组后的聚合结果再做过滤（WHERE 作用于分组前）。二者生成的逻辑计划节点与 DataFrame API 完全等价。\n\n【写下代码后，Spark 内部发生了什么】\n\nGROUP BY 触发 Shuffle 把同键行汇聚，本地预聚合（Combine）后跨节点合并；HAVING 在聚合结果上过滤，可随聚合一起在节点内完成。",
+            "examples": [
+              {
+                "title": "GROUP BY + 聚合",
+                "code": "spark.sql(\"\"\"\n  SELECT city, sum(amount) AS total, count(*) AS cnt\n  FROM sales GROUP BY city\n\"\"\").show()",
+                "note": "分组键 + 聚合函数；count(*) 算行数。"
+              },
+              {
+                "title": "HAVING 过滤聚合结果",
+                "code": "spark.sql(\"\"\"\n  SELECT city, sum(amount) AS total\n  FROM sales GROUP BY city\n  HAVING sum(amount) > 1000\n\"\"\").show()",
+                "note": "HAVING 在分组后过滤；若用 WHERE sum(amount)>1000 会报「聚合不能用于 WHERE」。"
+              },
+              {
+                "title": "多列分组",
+                "code": "spark.sql(\"SELECT city, product, sum(amount) FROM sales GROUP BY city, product\").show()",
+                "note": "GROUP BY 多列 = API 的 groupBy(\"city\",\"product\")。"
+              }
+            ],
+            "key_points": [
+              "GROUP BY 分组 + 聚合函数（COUNT/SUM/AVG/MAX/MIN）",
+              "分组后过滤用 HAVING，分组前过滤用 WHERE（顺序坑）",
+              "非分组列不能被 SELECT，除非被聚合（同 Level 2 / SQL）",
+              "多列分组 = GROUP BY a, b",
+              "GROUP BY 必触发 Shuffle（Level 5 展开）"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "在 WHERE 里用聚合函数：WHERE sum(amount)>1000。",
+                "why": "WHERE 在分组前执行，看不到聚合值。",
+                "fix": "改用 HAVING。"
+              },
+              {
+                "mistake": "SELECT 非分组列（未被聚合）。",
+                "why": "组内该列多值，不知取哪个。",
+                "fix": "放入聚合或 GROUP BY。"
+              },
+              {
+                "mistake": "混淆 GROUP BY 与 ORDER BY 的作用。",
+                "why": "前者分堆汇总，后者排序。",
+                "fix": "想汇总用 GROUP BY，想排序用 ORDER BY（可在其后）。"
+              }
+            ],
+            "review": "前面我们用 SELECT / WHERE / ORDER BY / LIMIT 完成了「选列、挑行、排序」——都是「描述每行」的操作。\n\n但数据分析的灵魂往往是「汇总」：每个城市卖了多少、每个用户下了几单。这要求我们先按某个维度「分类」，再在每类里算一个值。这就是 GROUP BY + 聚合。这一课，我们把它彻底拿下。",
+            "problem": "如何用 SQL 分组汇总（每城市卖多少）？为什么聚合后过滤要用 HAVING 而不是 WHERE？GROUP BY 背后 Spark 又付出什么代价？",
+            "preview": "一张表会查了。可真实数据是「多张表」——订单表和用户表要连起来。SQL 怎么把两张表按关键字段拼成一张？下集讲 JOIN（先建立直觉，深入在 Level 6）。"
+          }
+        },
+        {
+          "title": "多表关联（JOIN）入门",
+          "slug": "l3-joins-intro",
+          "description": "INNER JOIN 基础与「连接键」直觉，为 Level 6 铺垫（类型/广播/调优留 L6）。",
+          "objective": "学完本课，你应该能够：理解 JOIN 是「按连接键把两表行配对」；写出基本的 INNER JOIN（ON a.key=b.key）；并知道 JOIN 必触发 Shuffle、连接键类型必须一致——深入的各种 JOIN 类型与调优留给 Level 6。",
+          "estimated_minutes": 15,
+          "order_index": 5,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n真实数据很少在一张表里：订单在 orders 表，用户在 users 表，你想「每个用户的订单总额」就得把两表按 user_id 拼起来。JOIN 就是干这个的——按一个「连接键」把两张表的行配对。\n\n【一个直观的心智模型】\n\n想象两张分拣台各抱一摞货（订单摞、用户摞），每摞货上都贴了「user_id」标签。JOIN 就是按 user_id 这个标签，把「同一 user_id 的订单」和「同一 user_id 的用户」并到同一行——像把两个花名册按学号拼成一张总表。本课只讲最基础的 INNER JOIN：两边都有这个键的才留下。\n\n⚠️ 比喻的边界（很重要）：\n① JOIN 必触发 Shuffle：两摞货要按 key 重新分发到同一工人（按 key 重分区），数据在空中飞，代价大。\n② 连接键选错 / 出现重复键，会产生「行数爆炸」（笛卡尔式膨胀）——一个用户有 100 个订单，拼完就多 100 行。这是后续性能与正确性的大坑。\n③ 本课只讲 INNER JOIN 基础语法与「连接键」直觉；LEFT / RIGHT / FULL / CROSS 各种类型、广播 Join、倾斜调优全部留给 Level 6 专门讲，那里才展开。\n\n【正式的技术定义】\n\nJOIN 按连接条件（通常 ON a.key = b.key）把两表的行组合；INNER JOIN 只保留两表都匹配上的行。SQL 通过 spark.sql 执行，返回 DataFrame。连接类型、执行策略（Broadcast / Shuffle）是 Level 6 主题。\n\n【写下代码后，Spark 内部发生了什么】（留白给 Level 6）\n\n本课只需知道：JOIN 通常触发一次 Shuffle（按连接键重分区），把相同 key 的行送到同一节点配对；具体怎么分发、什么时候广播，Level 6 再深挖。",
+            "examples": [
+              {
+                "title": "INNER JOIN 基础",
+                "code": "spark.sql(\"\"\"\n  SELECT u.name, o.amount\n  FROM users u\n  JOIN orders o ON u.user_id = o.user_id\n\"\"\").show()",
+                "note": "ON 指定连接键；给表起别名 u/o 让列引用更短。"
+              },
+              {
+                "title": "JOIN 后再聚合",
+                "code": "spark.sql(\"\"\"\n  SELECT u.name, sum(o.amount) AS total\n  FROM users u JOIN orders o ON u.user_id = o.user_id\n  GROUP BY u.name\n\"\"\").show()",
+                "note": "JOIN 之后照常能 GROUP BY；先拼表再汇总很常见。"
+              },
+              {
+                "title": "连接键必须类型一致",
+                "code": "# 若 users.user_id 是字符串、orders.user_id 是整数，JOIN 会匹配不上\nspark.sql(\"SELECT ... FROM users JOIN orders ON users.user_id = orders.user_id\")",
+                "note": "连接键类型不一致会导致「全部不匹配」，先统一类型（cast）。"
+              }
+            ],
+            "key_points": [
+              "JOIN 按连接键（ON a.key = b.key）把两表行配对",
+              "INNER JOIN 只保留两边都匹配的行（基础类型）",
+              "JOIN 必触发 Shuffle（按 key 重分区），代价大",
+              "连接键类型必须一致，否则匹配不上",
+              "各 JOIN 类型 / 广播 / 倾斜调优留给 Level 6"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "忘了 ON 连接条件，写成 JOIN 无 ON。",
+                "why": "变成 CROSS JOIN（笛卡尔积），行数爆炸。",
+                "fix": "一定写 ON a.key=b.key；Level 6 再讲类型。"
+              },
+              {
+                "mistake": "连接键类型不一致导致全不匹配。",
+                "why": "字符串≠整数。",
+                "fix": "先 cast 成一致类型再 JOIN。"
+              },
+              {
+                "mistake": "以为 JOIN 很便宜。",
+                "why": "必 Shuffle，大表 JOIN 是大成本。",
+                "fix": "记住代价；优化手段在 Level 6。"
+              }
+            ],
+            "review": "上一课我们用 GROUP BY 学会了「单表分组汇总」，SQL 已经能对付一张表的大多数分析。\n\n但真实数据是分散在多张表的——订单、用户、商品各一张。怎么把多张表按关键字段「拼」成一张来分析？JOIN 到底是什么、代价有多大？这一课建立直觉。",
+            "problem": "怎么把多张表按关键字段「拼」成一张来分析？JOIN 到底是什么、代价有多大、连接键要注意什么？各种 JOIN 类型又该怎么选？",
+            "preview": "JOIN 建立了直觉，但「各种 JOIN 类型怎么选、大表怎么不卡死」是 Level 6 的硬仗。下集我们先把「函数」补齐——SQL 内置函数与 UDF，顺便埋个性能伏笔。"
+          }
+        },
+        {
+          "title": "内置函数与 UDF",
+          "slug": "l3-functions-and-udf",
+          "description": "SQL 内置函数与 UDF 的取舍，埋 Level 7 性能伏笔。",
+          "objective": "学完本课，你应该能够：列举常用内置函数（字符串/日期/数学）并知道它们在 F 下；理解 UDF 的用法与「为什么慢」（JVM↔Python 序列化往返、失去 Catalyst 优化）；建立「能不用 UDF 就不用」的原则，为 Level 7 埋线。",
+          "estimated_minutes": 15,
+          "order_index": 6,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\nSQL 里算「字符串截取、日期加减、四舍五入」不用自己写循环——Spark 自带一大堆内置函数（upper、substr、datediff、round…），开箱即用。但偶尔你要的逻辑内置没有，就得自己写函数，这叫 UDF（用户自定义函数）。\n\n【一个直观的心智模型】\n\n内置函数像工厂里现成的标准工具——工人（Executor）闭眼会用，而且 Catalyst 还能提前优化（比如把计算下推、代码生成）。UDF 则像你从外面带了个「私人定制工具」：工人不认识它，得先把数据「打包」送到工具那（序列化到 Python/JVM 边界）跑完再送回来，慢，而且 Catalyst 没法优化它。所以能不用 UDF 就不用。\n\n⚠️ 比喻的边界（很重要）：\n① 内置函数走 Catalyst 原生优化（代码生成 / Tungsten），又快又省；优先用它们。\n② UDF 把数据在 JVM↔Python 之间序列化往返，打破流水线、失去 Catalyst 优化——能不用就不用；真要用，优先 pandas UDF（向量化）也比行级 Python UDF 强得多。\n③ 这一课的「UDF 慢」只是埋个伏笔：为什么慢、怎么选、怎么用广播/向量化救场，是 Level 7 性能优化要系统讲的。\n\n【正式的技术定义】\n\nSpark SQL 内置函数位于 pyspark.sql.functions（F），覆盖字符串/日期/数学/聚合/窗口等。UDF 用 F.udf / pandas_udf 注册自定义逻辑；UDF 以行为单位在 Executor 上调 Python，开销高于原生函数。\n\n【写下代码后，Spark 内部发生了什么】\n\n内置函数被 Catalyst 翻译成物理计划的原生算子（Whole-Stage Codegen）；UDF 则在每个匹配行触发一次跨语言调用（序列化/反序列化），成为流水线瓶颈。",
+            "examples": [
+              {
+                "title": "常用内置函数",
+                "code": "from pyspark.sql import functions as F\nspark.sql(\"\"\"\n  SELECT upper(name) AS name_up,\n         substr(phone,1,3) AS prefix,\n         round(amount,2) AS amt\n  FROM people\n\"\"\").show()",
+                "note": "内置函数直接写；也可在 API 用 F.upper 等，等价。"
+              },
+              {
+                "title": "UDF 的基本写法",
+                "code": "from pyspark.sql import functions as F\ndef score_category(s):\n    return 'high' if s > 90 else 'low'\nscore_udf = F.udf(score_category)\nspark.sql(\"SELECT name, score FROM stu\").withColumn(\n    \"cat\", score_udf(F.col(\"score\"))).show()",
+                "note": "UDF 把 Python 函数包成列表达式；每行触发一次 Python 调用。"
+              },
+              {
+                "title": "优先内置、避免 UDF",
+                "code": "# 不好：用 UDF 做字符串大写\n# 好：直接用 F.upper / SQL upper()\nspark.sql(\"SELECT upper(name) FROM people\").show()",
+                "note": "内置能做的绝不写 UDF。"
+              }
+            ],
+            "key_points": [
+              "内置函数覆盖字符串/日期/数学/聚合，走 Catalyst 原生优化（快）",
+              "UDF 自定义逻辑，但 JVM↔Python 序列化往返、失去优化（慢）",
+              "能不用 UDF 就不用；真要用优先 pandas UDF（向量化）",
+              "内置函数与 API 的 F.* 等价（同一套）",
+              "「UDF 为什么慢」是 Level 7 性能优化的伏笔"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "用 Python 写个函数就当 UDF 直接用在 SQL。",
+                "why": "SQL 不认普通 Python 函数。",
+                "fix": "用 F.udf / pandas_udf 注册。"
+              },
+              {
+                "mistake": "能用内置偏写 UDF。",
+                "why": "慢且失去优化。",
+                "fix": "先查内置函数表，没有再 UDF。"
+              },
+              {
+                "mistake": "在 UDF 里做重计算且逐行调用。",
+                "why": "行级 Python 调用开销巨大。",
+                "fix": "用 pandas_udf 向量化或改写内置。"
+              }
+            ],
+            "review": "上一课我们建立了 JOIN 的直觉——按连接键把多表拼起来。\n\n但 SQL 里要做字符串/日期/数学计算，难道要自己写循环？内置函数有哪些？什么时候非得自己写函数（UDF），而 UDF 又为什么「贵」？这一课补齐「函数」。",
+            "problem": "SQL 里要做字符串/日期/数学计算，难道要自己写循环？内置函数有哪些？什么时候非得自己写函数（UDF），而 UDF 又为什么「贵」？",
+            "preview": "函数和表都会用了。其实除了「把现有 DataFrame 注册成视图」，你还能直接用 SQL 把一份 Parquet/CSV 「当表用」。下集讲 Spark SQL 与表/文件格式（Hive 那条线我们不接）。"
+          }
+        },
+        {
+          "title": "Spark SQL 与表 / 文件格式",
+          "slug": "l3-tables-and-formats",
+          "description": "CREATE TABLE ... USING / LOCATION；明确不接入 Hive Metastore（既定约束）。",
+          "objective": "学完本课，你应该能够：用 CREATE TABLE ... USING parquet LOCATION 把文件直接当表查；理解本路线不接入 Hive Metastore（表是 session 内/文件级）；并说清写出（INSERT OVERWRITE/INTO）与 Level 2 write 的对应关系及小文件坑。",
+          "estimated_minutes": 12,
+          "order_index": 7,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n除了把内存里的 DataFrame 注册成视图，你也能「反过来」——直接告诉 Spark：「这份 Parquet/CSV 文件，就是一张表」，然后就能用 SQL 查它，不用先 read 再注册。相当于给仓库里的货直接贴了张标准货架标签。\n\n【一个直观的心智模型】\n\n之前是「先收货（read）再挂牌（createOrReplaceTempView）」；这课是「直接给货架贴标签（CREATE TABLE ... USING parquet / 或 read 后注册）」——殊途同归，都是让 SQL 能按名字找到那批货。区别只是你从「文件」还是从「已读入的 DataFrame」出发。\n\n⚠️ 比喻的边界（很重要）：\n① 本路线明确不接入 Hive Metastore（既有约束）：所以这里的「表」要么是 session 内的临时视图，要么是「文件级」的表（CREATE TABLE 指向路径），不是跨集群永久的 Hive 表。要永久表得接 Hive，本路线不做。\n② 写出的小文件问题：partitionBy 落盘每 Task 一个文件，易产生海量小文件——这是性能坑，接 Level 2 write + Level 7。\n③ SaveMode（overwrite/append/error/ignore）与 Level 2 write 完全一致，SQL 里用 INSERT OVERWRITE / INSERT INTO 对应。\n\n【正式的技术定义】\n\nSpark SQL 可将文件（Parquet/CSV/JSON）注册为表（CREATE TABLE ... USING format LOCATION path，或 DataFrame 注册视图）；读取即按格式解析。Hive 集成（enableHiveSupport）不在本路线范围。写出用 INSERT INTO / INSERT OVERWRITE TABLE。\n\n【写下代码后，Spark 内部发生了什么】\n\nCREATE TABLE ... LOCATION 只是把「路径+格式」记进 catalog，不移动数据；查询时按格式读取，Catalyst 正常优化（谓词下推等）。",
+            "examples": [
+              {
+                "title": "直接把 Parquet 当表（CREATE TABLE）",
+                "code": "spark.sql(\"\"\"\n  CREATE TABLE IF NOT EXISTS sales\n  USING parquet\n  LOCATION '/data/sales'\n\"\"\")\nspark.sql(\"SELECT city, sum(amount) FROM sales GROUP BY city\").show()",
+                "note": "不接 Hive 也能用；表指向路径，查询时按需读。"
+              },
+              {
+                "title": "读文件后注册视图（等价路径）",
+                "code": "df = spark.read.parquet(\"/data/sales\")\ndf.createOrReplaceTempView(\"sales\")\nspark.sql(\"SELECT * FROM sales LIMIT 5\").show()",
+                "note": "从 DataFrame 出发的等价做法。"
+              },
+              {
+                "title": "写出：INSERT OVERWRITE",
+                "code": "spark.sql(\"\"\"\n  INSERT OVERWRITE TABLE result\n  SELECT city, sum(amount) FROM sales GROUP BY city\n\"\"\")",
+                "note": "对应 API 的 mode(\"overwrite\").write；错误/追加用 INSERT INTO。"
+              }
+            ],
+            "key_points": [
+              "可直接把 Parquet/CSV/JSON 注册为表（CREATE TABLE ... USING ... LOCATION）",
+              "本路线不接入 Hive Metastore：表是 session 内 / 文件级，非永久 Hive 表",
+              "读出写出的 SaveMode 与 Level 2 write 一致（INSERT OVERWRITE / INTO）",
+              "小文件问题（partitionBy 每 Task 一文件）是性能坑，接 Level 2 + Level 7",
+              "注册表/视图都只是登记，不移动数据"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "以为 CREATE TABLE 会移动/拷贝数据。",
+                "why": "它只登记路径+格式。",
+                "fix": "理解零拷贝，数据仍在原路径。"
+              },
+              {
+                "mistake": "期待「永久表」跨 session 存在（没接 Hive）。",
+                "why": "没 enableHiveSupport。",
+                "fix": "本路线用临时视图或文件级表；不要假设持久。"
+              },
+              {
+                "mistake": "partitionBy 写出产生海量小文件。",
+                "why": "每 Task 一文件。",
+                "fix": "后续合并小文件/调分区数，属 Level 7。"
+              }
+            ],
+            "review": "上一课我们讲清了内置函数与 UDF——SQL 的计算能力。\n\n除了把已读入的 DataFrame 注册成视图，能不能直接把一份文件「当表」用 SQL 查？Spark SQL 的「表」和数据库的表是一回事吗？写出又怎么写？这一课补齐「表与文件格式」。",
+            "problem": "除了把已读入的 DataFrame 注册成视图，能不能直接把一份文件「当表」用 SQL 查？Spark SQL 的「表」和数据库的表是一回事吗？写出又对应 API 的什么？",
+            "preview": "所有零件齐了：视图、SELECT/WHERE/GROUP BY/JOIN/函数、文件即表。下集用一次完整分析把它们串起来——读 CSV、注册、多步 SQL、写出。"
+          }
+        },
+        {
+          "title": "Spark SQL 综合练习",
+          "slug": "l3-comprehensive",
+          "description": "用 SQL 走完一次完整分析：读 CSV → 注册 → 多步 SQL → 写出。",
+          "objective": "学完本课，你应该能够：独立把 Level 3 所学的「读入 / 注册视图 / WHERE / GROUP BY+HAVING / ORDER BY / 写出」串成一次完整的 SQL 分析任务，并随时说清「spark.sql 返回 DataFrame（惰性）」「哪一步是 Action」「HAVING 与 WHERE 的区别」。",
+          "estimated_minutes": 20,
+          "order_index": 8,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n这一课给你一个「用 SQL 做分析」的迷你任务，把 Level 3 全部零件揉进实战：读 CSV → 注册视图 → 多步 SQL（过滤/聚合/可能 JOIN）→ 写出 Parquet。它逼你把「这条 SQL 在 Catalyst 眼里和等价 DataFrame 代码是同一件事」「哪一步是 Action」想清楚，是这一章的收束。\n\n输入 orders.csv（user_id, city, amount, ts），目标：\n1) 读入并确认 Schema；\n2) 注册为视图 orders；\n3) 过滤 amount>0；\n4) 按 city 聚合总销售额，只留 total>1000（HAVING）；\n5) 按 total 降序，写出 Parquet（按 city 分区）。\n\n【一个直观的心智模型】\n\n把这次分析想成「在仓库里跑一趟拣货流水线」：读 CSV 是「收货上架」，注册视图是「给这批货挂个工牌名字」，WHERE 是「流水线入口的筛子」，GROUP BY+HAVING 是「按城市分拣并只留大单」，ORDER BY 是「按金额重新排队」，最后的写出是「装车发货」——只有装车这一步（Action）货才真的离开仓库，前面全是「计划这张单怎么跑」。\n\n⚠️ 比喻的边界（很重要）：\n\n① 这里的「写出 Parquet」是落盘 Action，和 Level 2 的 df.write 等价；别以为 SQL 的 INSERT OVERWRITE 不算 Action——它照样触发一次完整作业。\n② 自测题里的「HAVING 与 WHERE 区别」是高频考点：WHERE 在分组前过滤单行，HAVING 在分组后过滤聚合结果，二者位置不能互换。\n③ spark.sql 返回的始终是惰性 DataFrame，哪怕你写的是「SELECT ...」，没接 Action（show / 写出）就不会真正算。\n\n【正式的技术定义】\n\n一次完整的 Spark SQL 分析 = read（创建 DataFrame）→ createOrReplaceTempView（注册 session 内视图）→ 一系列 SELECT（WHERE / GROUP BY / HAVING / ORDER BY，均为 Transformation）→ 写出（INSERT OVERWRITE TABLE / write，为 Action）。所有 SELECT 节点在 Catalyst 中被编译为逻辑计划，直到 Action 出现才物化执行。\n\n【写下代码后，Spark 内部发生了什么】\n\n整条 SQL 被 Catalyst 编译成逻辑计划（Project / Filter / Aggregate / Sort / Write），除了最后的 Write（Action）会真正执行，前面都是惰性节点；GROUP BY 与 ORDER BY 各触发一次 Shuffle。由于 SQL 与 DataFrame API 共享 Catalyst，这条 SQL 和等价 API 代码的物理执行计划是一致的。",
+            "examples": [
+              {
+                "title": "完整可运行分析",
+                "code": "df = spark.read.option(\"header\",True).option(\"inferSchema\",True).csv(\"orders.csv\")\ndf.createOrReplaceTempView(\"orders\")\n\n# 先看结果\nspark.sql(\"\"\"\n  SELECT city, sum(amount) AS total\n  FROM orders\n  WHERE amount > 0\n  GROUP BY city\n  HAVING sum(amount) > 1000\n  ORDER BY total DESC\n\"\"\").show()\n\n# 验证无误后写出\nspark.sql(\"\"\"\n  INSERT OVERWRITE TABLE result\n  SELECT city, sum(amount) AS total\n  FROM orders WHERE amount > 0\n  GROUP BY city HAVING sum(amount) > 1000\n\"\"\")",
+                "note": "先 show 验证再写出；spark.sql 返回 DataFrame，写出才是 Action。"
+              },
+              {
+                "title": "SQL 与 API 混合也没问题",
+                "code": "result = spark.sql(\"SELECT city, sum(amount) AS total FROM orders GROUP BY city\")\nresult.filter(result.total > 1000).orderBy(result.total.desc()).show()",
+                "note": "sql() 返回 DataFrame，可继续接 API 的 filter / orderBy。"
+              }
+            ],
+            "key_points": [
+              "迷你分析链路：read → 注册视图 → WHERE → GROUP BY+HAVING → ORDER BY → 写出",
+              "spark.sql 返回 DataFrame（惰性），写出才是 Action",
+              "SQL 与 API 可混用，Catalyst 统一优化",
+              "写盘前先用 show 验证",
+              "HAVING 分组后过滤 vs WHERE 分组前过滤"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "忘了注册视图就 SELECT FROM orders。",
+                "why": "SQL 只认注册名。",
+                "fix": "先 createOrReplaceTempView。"
+              },
+              {
+                "mistake": "聚合后过滤写在 WHERE。",
+                "why": "报错。",
+                "fix": "用 HAVING。"
+              },
+              {
+                "mistake": "写出前不验证直接落盘。",
+                "why": "脏数据落盘。",
+                "fix": "先 show。"
+              }
+            ],
+            "review": "从「Spark SQL 是什么」到「视图、SELECT/WHERE/GROUP BY/JOIN/函数、文件即表」，Level 3 的零件都齐了。\n\n现在，是时候把这些零散的知识点串成一次完整的「动手体验」——读一份真实数据，注册、过滤聚合、写出。这一课不是「再做几道题」，而是「恭喜你，把这一章真正收个尾」。",
+            "problem": "能不能不靠提示，独立用 SQL 走完一次真实分析：读 CSV、注册、过滤聚合、排序写出？更重要的是，在写的过程中你能随时回答：spark.sql 返回什么、哪步是 Action、HAVING 和 WHERE 差在哪？这正是检验你是否真正串起 Level 3 的标准。",
+            "preview": "恭喜你走完了 Level 3——你现在能用 SQL 或 API 查同一批数据了。但一个更深的问题浮现：「我写的这些，Spark 到底怎么执行、怎么优化？」 那是 Level 4（执行计划）的主场。去测验检验自己吧。🏁"
+          }
+        }
+      ]
+    },
+    {
+      "title": "Level 4：执行计划",
+      "description": "教读者「怎么看懂 Spark 是怎么算的」——从代码到执行计划的映射，以及 Catalyst 在背后做了哪些等价优化。覆盖为什么看计划、逻辑/物理四段、explain 三档、读节点、Catalyst 规则、WholeStageCodegen、窄宽依赖、Job/Stage/Task 层级与综合读图。为 Level 5（分区/Shuffle 调优）→ Level 6（Join）→ Level 7（性能调优）铺垫，本身不抢跑调优。",
+      "order_index": 4,
+      "lessons": [
+        {
+          "title": "为什么该看执行计划",
+          "slug": "l4-why-explain",
+          "description": "建立「执行计划是诊断性能第一视角」的直觉；代码写对 ≠ 跑得快。",
+          "objective": "学完本课，你应该能够：用自己的话解释为什么「代码写对 ≠ 跑得快」；建立「执行计划是诊断性能的第一视角」的直觉；说清执行计划描述的是「打算怎么算」而非「真实耗时」；并理解为什么从 Level 0-3 一路写代码，却从不曾真正「看见」Spark 内部怎么算。",
+          "estimated_minutes": 12,
+          "order_index": 0,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n你已经能写 DataFrame / SQL 跑出正确结果了。但「结果对」和「跑得快」是两件事。比如同样一段聚合，写得好 Spark 只读需要的列、尽早过滤；写得不好它老老实实扫描全表、搬运全部字段。问题来了：你怎么知道它实际是怎么算的？答案就是「执行计划」——它是 Spark 在动手前，把你的代码翻译成的「施工说明书」。\n\n【一个直观的心智模型】\n\n把执行计划想成开车时的「导航路线单」。你只说了目的地（一段代码），但真正上路要走哪条路、过几个高架、在哪里并线，是导航（Catalyst 优化大脑）替你算好的「最终路线单」。不懂看路线单，你就永远不知道为什么这次「堵在高速上」（慢），只能干等。执行计划就是 Catalyst 给你的那张单。\n\n⚠️ 比喻的边界（很重要）：\n① 执行计划看不出「运行时」的真实耗时与数据倾斜——那些是 Job 跑起来后的指标（Stage 实跑时间、shuffle 字节数），属于 Level 5/L7 的运行时观测。计划只描述「打算怎么算」。\n② 计划是「静态蓝图」，不是「已经跑过一遍」。同一段代码今天和明天计划可能一样，但真实耗时天差地别（数据量、集群状态不同）。\n③ 看计划不会让代码变快，它只是「诊断工具」——看见问题，再决定要不要改写（调优是 Level 5 之后的事）。\n\n【正式的技术定义】\n\n执行计划（Execution Plan）是 Spark 把用户代码（Transformation/Action）经过 Catalyst 优化后生成的逻辑/物理算子树，描述了「数据从哪读、经过哪些算子、怎么在节点间重分布、最终怎么输出」。可通过 `explain()` 查看。它是理解性能、排查「为什么这么慢」的第一手视角。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写完一段 DataFrame 代码时，Spark 还没算——它只是把你的意图登记成未优化的逻辑计划。当你调用 `explain()`，Spark 会把「经过 Catalyst 四阶段（解析→分析→优化→物理化）」之后的算子树打印出来，但**不会真正执行**数据计算。也就是说，`explain()` 是「在动手前先给你看一眼施工单」，是诊断而非执行。",
+            "examples": [
+              {
+                "title": "为什么结果对但可能很慢",
+                "code": "df = spark.read.parquet('sales')\nresult = df.groupBy('city').sum('amount')\nresult.explain()   # 看计划，但不真正算",
+                "note": "explain() 只打印计划，不触发执行；你想验证「它怎么算的」而不是「结果是什么」时，用它。"
+              },
+              {
+                "title": "计划揭示「读多少」",
+                "code": "# 即使你只选两列，要看计划里 Scan 是否做了列裁剪\ndf.select('city', 'amount').filter(df.amount > 0).explain()",
+                "note": "计划里如果 Scan 仍读全列，说明没下推/裁剪，可能白白读了大量不需要的字段。"
+              },
+              {
+                "title": "对比「看起来一样」的两段代码",
+                "code": "# 写法 A\ndf.filter(df.amount > 0).groupBy('city').count()\n# 写法 B\ndf.groupBy('city').count()\n# 两者的计划可能不同——B 没过滤，扫描/计算量更大",
+                "note": "用 explain 对照两段代码的计划，能直观看出「写法差异」如何变成「计算量差异」。"
+              }
+            ],
+            "key_points": [
+              "「代码写对 ≠ 跑得快」：结果正确不保证性能合理",
+              "执行计划是「Spark 打算怎么算」的施工单，是诊断性能的第一视角",
+              "explain() 只打印计划、不触发执行（惰性窥视）",
+              "计划描述静态蓝图，看不出运行时真实耗时与数据倾斜",
+              "真正调优（改写法/调分区）是 Level 5 之后的事，本课只学会「看」"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "以为「结果对了就不需要看计划」。",
+                "why": "结果对不代表性能好，慢查询可能一直潜伏。",
+                "fix": "养成对复杂查询先 explain 看一眼的习惯。"
+              },
+              {
+                "mistake": "把 explain 的输出当成「已经跑过、耗时就是这些」。",
+                "why": "计划里行数/字节是「估计」，不是实测。",
+                "fix": "真实耗时看 Spark UI 的 Stage 实跑，计划只管「打算怎么算」。"
+              },
+              {
+                "mistake": "看到计划有 Exchange（Shuffle）就觉得「写错了」。",
+                "why": "Shuffle 在很多聚合/排序里是正常且必要的。",
+                "fix": "区分「必要 Shuffle」和「本可避免的冗余 Shuffle」，后者才是优化点（Level 5）。"
+              }
+            ],
+            "review": "从 Level 0 到 Level 3，你已经能用 DataFrame API 和 SQL 写出正确的分析。你也知道 Catalyst 会在背后做优化（谓词下推、列裁剪），但那些优化对你来说是「黑盒」——你从没真正看见过。",
+            "problem": "为什么「代码能跑出正确结果」不等于「代码跑得快」？当你怀疑一段聚合特别慢时，第一件该做的事是什么？怎么「看见」Spark 内部到底打算怎么算？",
+            "preview": "下集我们正式拆开执行计划的「四段结构」——逻辑计划和物理计划到底差在哪，为什么一个叫「想做什么」、一个叫「怎么用 Spark 算子做」。"
+          }
+        },
+        {
+          "title": "逻辑计划 vs 物理计划",
+          "slug": "l4-logical-vs-physical",
+          "description": "区分 Logical（想做什么）与 Physical（怎么用 Spark 算子做）；理解四段 Parsed→Analyzed→Optimized→Physical。",
+          "objective": "学完本课，你应该能够：区分 Logical Plan（「想做什么」）与 Physical Plan（「怎么用 Spark 算子做」）；说出四段 Parsed → Analyzed → Optimized → Physical 各自做了什么；理解 Analyzed 才做类型/表存在性检查（很多报错在这）、Optimized 做等价改写、Physical 才绑定具体实现（如 HashAgg vs SortAgg）。",
+          "estimated_minutes": 13,
+          "order_index": 1,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n执行计划不是「一张图」，而是「几张渐进的图」。最开始是「你想干什么」（逻辑计划），到最后是「具体用哪套零件、哪条流水线干」（物理计划）。中间 Catalyst 不断把模糊的意图变成可执行、且更省的方案。理解这四段，你才算真正「读得懂」计划。\n\n【一个直观的心智模型】\n\n把 Logical Plan 想成「设计师的概念图」——只画「要造一栋带阳台的两层楼」，不规定用什么砖、怎么吊装。Physical Plan 想成「施工队拿到的施工图」——明确用哪种塔吊、混凝土标号、工序顺序。Catalyst 就是那个既画概念图、又出施工图、还在中间做「等价省料」改的总工程师。四段就是：草图（Parsed）→ 审图盖章确认能建（Analyzed）→ 优化改图（Optimized）→ 最终施工图（Physical）。\n\n⚠️ 比喻的边界（很重要）：\n① Analyzed 阶段才做「类型检查 / 表是否存在 / 列是否存在」——你很多 `AnalysisException`（「表不存在」「列不存在」「类型不匹配」）就在这爆出来，而不是在写代码时。这是「fail-fast 推迟到分析阶段」的体现。\n② Optimized 做的是「等价改写」：结果不变，但更省（下推、裁剪、常量折叠）。它不是凭空变快，是聪明地少干活。\n③ Physical 才绑定具体实现：同一个聚合，可能选 HashAggregate 或 SortAggregate；同一个 join，可能选 broadcast 或 sort-merge——但这些「策略选择」是 Physical 阶段，且受后续 Level 5/6 的调优参数影响。\n\n【正式的技术定义】\n\n执行计划分四段：① Parsed Logical Plan（语法解析后的初始逻辑树）；② Analyzed Logical Plan（经 Catalog 解析元数据、校验类型/表/列合法性）；③ Optimized Logical Plan（Catalyst 规则做等价重写，如谓词下推、列裁剪）；④ Physical Plan（选择具体算子实现与执行策略，生成可执行的算子树）。逻辑计划描述「做什么」，物理计划描述「怎么做」。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.groupBy('city').sum('amount')` 时，Spark 先生成 Parsed 树（未经校验）。Analyzer 接手，去 Catalog 查 `city/amount` 列是否存在、类型是否匹配——这里最容易抛错。接着 Optimizer 套用规则把「先全表扫描再分组」改写成「扫描时只取需要的列」。最后 Planner 选具体物理算子（如 HashAggregate）输出 Physical Plan。你调用 `explain(True)` 就能看到这四段全貌。",
+            "examples": [
+              {
+                "title": "触发 Analyzed 报错（表不存在）",
+                "code": "spark.sql('SELECT * FROM not_exist_table').explain()\n# 抛 AnalysisException: Table or view not found",
+                "note": "报错发生在 Analyzed 阶段，不是写代码时——这就是「fail-fast 推迟」。"
+              },
+              {
+                "title": "看四段：explain(True)",
+                "code": "df.groupBy('city').sum('amount').explain(True)\n# 输出 Parsed / Analyzed / Optimized / Physical 四段",
+                "note": "explain(True) ≡ explain('extended')，一次看全四段；默认 explain() 只看 Physical。"
+              },
+              {
+                "title": "Optimized 的等价改写",
+                "code": "# 列裁剪：你只选 city，优化器让 Scan 只读 city 一列\ndf.select('city').filter(df.amount > 0).explain(True)",
+                "note": "在 Optimized 段能看到 Project/Filter 被下推、列被裁剪，逻辑上「读更少」。"
+              }
+            ],
+            "key_points": [
+              "逻辑计划 = 想做什么；物理计划 = 怎么用 Spark 算子做",
+              "四段：Parsed（解析）→ Analyzed（校验元数据/类型）→ Optimized（等价改写）→ Physical（绑定具体实现）",
+              "报错（表/列/类型不存在）多在 Analyzed 阶段爆出（fail-fast 推迟）",
+              "Optimized 做等价改写（下推/裁剪/常量折叠），结果不变只更省",
+              "Physical 才选具体算子（HashAgg vs SortAgg、join 策略等）"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "以为写完代码时就会报「列不存在」。",
+                "why": "校验推迟到 Analyzed。",
+                "fix": "真正触发执行或 explain 时才暴露，所以别以为「没报错=没问题」。"
+              },
+              {
+                "mistake": "混淆 Logical 与 Physical，说「计划就是最终怎么跑」。",
+                "why": "Logical 还没绑定实现。",
+                "fix": "区分「做什么」（逻辑）与「怎么做」（物理），优化看逻辑段、调优看物理段。"
+              },
+              {
+                "mistake": "看到 Optimized 和 Physical 不一样就以为出 bug。",
+                "why": "二者本就该不同（一个是等价改写、一个是具体实现）。",
+                "fix": "理解这是正常演进，不是错误。"
+              }
+            ],
+            "review": "上一课我们建立了「执行计划是诊断性能第一视角」的直觉，也知道 explain() 能把它打印出来。但打印出来那一大坨，到底是什么？",
+            "problem": "为什么执行计划要分「逻辑」和「物理」？Parsed/Analyzed/Optimized/Physical 四段各自干啥？为什么很多「表不存在」的报错要等运行/ explain 才爆出来？",
+            "preview": "知道了四段长什么样，下集就学怎么把这张「施工单」真正调出来——explain() / explain(True) / explain(mode=\"formatted\") 三者到底差在哪。"
+          }
+        },
+        {
+          "title": "explain() 怎么用",
+          "slug": "l4-explain-api",
+          "description": "掌握 explain() / explain(True) / explain(mode=\"formatted\") 区别与输出结构。",
+          "objective": "学完本课，你应该能够：说清 explain() / explain(True) / explain(mode=\"formatted\") 的区别与输出结构；理解 explain() 本身不触发执行（是惰性窥视）；知道 mode=\"formatted\" 需 Spark 2.3+，explain(True) 等价于 extended。",
+          "estimated_minutes": 11,
+          "order_index": 2,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n执行计划要「调出来」才能看，调它的扳机就是 `explain()`。但它有三个「档位」：简版（默认）、全四段版（True）、树状可读版（formatted）。就像你要查一张施工单，可以只要「最终施工图」（简版），要「从草图到施工图全过程」（True），或要「缩进排好、一眼看清层级」的精装版（formatted）。\n\n【一个直观的心智模型】\n\n把 explain 想成「向工厂要施工排程单」：\n- 默认 `explain()` = 只给你最终施工图（Physical Plan），最常用、最聚焦。\n- `explain(True)` = 把草图、审图、优化图、施工图四张全给你（extended）。\n- `explain(mode=\"formatted\")` = 给一张「缩进树状、节点层级一目了然」的精装施工图，适合人眼扫读。\n\n⚠️ 比喻的边界（很重要）：\n① `explain()` 本身**不触发执行**——它只是「窥视」 Catalyst 已经规划好的计划，数据不会真正算。所以它便宜、安全，可以随便看。\n② `mode=\"formatted\"` 需要 Spark 2.3+（老版本没有这个模式）；现代 Spark 都支持。\n③ `explain(True)` 就是 `explain(\"extended\")` 的快捷写法，二者等价；它多打出的 Parsed/Analyzed/Optimized 三段是「规划过程」，不是「额外干活」。\n\n【正式的技术定义】\n\n`DataFrame.explain()` 打印执行计划。`explain()`（无参）默认打印 Physical Plan；`explain(True)` 或 `explain(\"extended\")` 打印 Parsed/Analyzed/Optimized/Physical 四段；`explain(\"formatted\")` 以缩进树状结构打印（Spark 2.3+），更易读。它是诊断 API，不触发 Action。\n\n【写下代码后，Spark 内部发生了什么】\n\n你调用 `df.explain()`，Spark 走完 Catalyst 的分析与优化（但不会去读数据、不会起 Task），然后把「规划结果」打印到控制台。因为没遇到真正的 Action（如 show/count/write），整条数据流水线不会执行——这正是它「安全可反复看」的原因。",
+            "examples": [
+              {
+                "title": "默认简版（仅 Physical）",
+                "code": "df.groupBy('city').count().explain()\n# 输出一段 Physical Plan（带 *(N) 融合标记）",
+                "note": "默认只看最终物理计划，最快聚焦「怎么跑」。"
+              },
+              {
+                "title": "全四段",
+                "code": "df.groupBy('city').count().explain(True)\n# 含 Parsed / Analyzed / Optimized / Physical",
+                "note": "explain(True) ≡ explain('extended')；想看 Catalyst 怎么做优化的用这个。"
+              },
+              {
+                "title": "树状可读版",
+                "code": "df.groupBy('city').count().explain(mode='formatted')\n# 缩进树状，层级清晰",
+                "note": "formatted 适合人眼扫读；Spark 2.3+ 才支持。"
+              }
+            ],
+            "key_points": [
+              "explain() 默认只打印 Physical Plan",
+              "explain(True) ≡ explain('extended')，打印四段全貌",
+              "explain(mode='formatted') 缩进树状、易读，需 Spark 2.3+",
+              "explain() 不触发执行，是惰性「窥视」，可安全反复看",
+              "真正执行要 show/count/write 等 Action"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "调了 explain 还以为「数据算了一遍」。",
+                "why": "explain 不触发 Action。",
+                "fix": "记住它只打印计划；要结果用 show/count。"
+              },
+              {
+                "mistake": "在老 Spark（<2.3）用 mode='formatted' 报错。",
+                "why": "该模式 2.3 才引入。",
+                "fix": "老版本用 explain(True) 看四段即可。"
+              },
+              {
+                "mistake": "只看默认 explain() 就以为「没优化」。",
+                "why": "默认不显示 Optimized 段，优化痕迹看不到。",
+                "fix": "想看 Catalyst 优化了什么，用 explain(True)。"
+              }
+            ],
+            "review": "上一课我们拆开了「逻辑计划 vs 物理计划」的四段结构，知道 Analyzed 才校验、Optimized 才改写。可那四段到底怎么「调出来」看？",
+            "problem": "explain() 默认给你什么？想看完整四段该用哪个档位？树状易读版怎么调？为什么 explain 不会让你的数据真的算一遍？",
+            "preview": "调出了计划，下集就学怎么「读」它——Scan / Filter / Project / Aggregate / Exchange 这些节点分别是什么，尤其认出 Exchange 这个「必 Shuffle」的信号。"
+          }
+        },
+        {
+          "title": "怎么读执行计划文本",
+          "slug": "l4-read-plan",
+          "description": "识别 Scan/Filter/Project/Aggregate/Exchange；尤其认出 Exchange = Shuffle 信号。",
+          "objective": "学完本课，你应该能够：识别 Scan / Filter / Project / Aggregate / Exchange 节点；尤其认出 Exchange = Shuffle 信号；理解 *(N) 是 Stage 内算子融合标记；并知道计划里的行数/字节是「估计」非真实。",
+          "estimated_minutes": 14,
+          "order_index": 3,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n计划打印出来是一棵「算子树」，每个节点是一个工序。你得学会认这几个常客：哪里进货（Scan）、哪里筛（Filter）、哪里选列（Project）、哪里汇总（Aggregate）、哪里「货在空中飞」（Exchange）。读懂这棵「工厂车间布局图」，你就知道数据走了哪些弯路。\n\n【一个直观的心智模型】\n\n把计划当成「工厂车间布局图」：\n- Scan = 进货口（从文件/表读数据）\n- Filter = 入口筛（拦下不合格行）\n- Project = 选列（只挑要的字段装箱）\n- Aggregate = 水果分拣派对（按 key 分组汇总，复用 L2）\n- Exchange = 货在空中飞（复用 L2/L3 的 Shuffle 信号）——**这就是最该警惕的节点**\n\n⚠️ 比喻的边界（很重要）：\n① Exchange 节点 = 必 Shuffle：数据要序列化、走网络、反序列化，重新按 key 分布。它是性能成本的主要来源之一，看到它就心里有数「这里要花钱」。\n② `*(N)` 是 Stage 内算子融合标记（WholeStageCodegen，下节课讲），表示相邻 N 个算子被融合成一个 Java 方法——不是「第 N 阶段」。\n③ 计划里的行数 / 字节是 Catalyst 的「**估计**」，不是实测；真实量要看 Spark UI 的 Stage 指标。别拿计划数字当真相。\n\n【正式的技术定义】\n\n执行计划由算子节点组成：Scan（数据源读取）、Filter（行过滤）、Project（列投影/表达式）、Aggregate（分组聚合）、Exchange（按 key 重分布 = Shuffle）、Sort（排序）等。`*(N)` 前缀表示 WholeStageCodegen 融合的算子数。Exchange 是宽依赖/Stage 边界的物理信号；计划中的统计量是优化器估计值。\n\n【写下代码后，Spark 内部发生了什么】\n\n当你 print 出计划，每个缩进层级是一个算子在「等上游喂数据」。Spark 从最底层的 Scan 开始读，向上经过 Filter/Project 做本地处理，遇到 Exchange 就把数据按 key 洗牌到别的节点，再向上 Aggregate。读懂这棵树，你就能指着一个 Exchange 说「这里是 Shuffle，是潜在瓶颈」。",
+            "examples": [
+              {
+                "title": "认出 Exchange（Shuffle）",
+                "code": "df.groupBy('city').count().explain()\n# 计划里会出现 Exchange 节点（groupBy 必 Shuffle）",
+                "note": "任何 groupBy/distinct/orderBy/join 都会引入 Exchange，认准它就是认准 Shuffle。"
+              },
+              {
+                "title": "认出 Scan / Filter / Project",
+                "code": "df.select('city').filter(df.amount > 0).explain()\n# Scan -> Filter -> Project 链路清晰",
+                "note": "三者顺序体现「先读、再筛、最后选列」的本地流水线。"
+              },
+              {
+                "title": "计划里的估计 vs 真实",
+                "code": "df.groupBy('city').count().explain()\n# 节点旁标注的 sizeInBytes/rows 是估计值",
+                "note": "别把估计行数当真实；真实数据量看 Spark UI 的 Stage 指标（Level 5）。"
+              }
+            ],
+            "key_points": [
+              "Scan=进货口，Filter=入口筛，Project=选列，Aggregate=分组汇总，Exchange=Shuffle",
+              "Exchange 节点 = 必 Shuffle（序列化+网络+反序列化开销），是性能重点信号",
+              "*(N) 是 Stage 内算子融合标记（WholeStageCodegen），不是阶段编号",
+              "计划里的行数/字节是「估计」值，非真实，真实看 Spark UI",
+              "读懂算子树 = 能指出「数据走了哪些弯路、哪里 Shuffle」"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "把 *(N) 当成「第 N 个 Stage」。",
+                "why": "它是融合算子数标记。",
+                "fix": "Stage 由 Exchange 切分，不是 *(N)。"
+              },
+              {
+                "mistake": "看到计划里「行数很大」就恐慌。",
+                "why": "那是估计值，可能严重偏离真实。",
+                "fix": "真实数据量看运行时 Stage 指标。"
+              },
+              {
+                "mistake": "以为没有 Exchange 就一定快。",
+                "why": "没有 Shuffle 不代表没别的瓶颈（扫描量、倾斜）。",
+                "fix": "Exchange 是重点但非唯一，综合看。"
+              }
+            ],
+            "review": "上一课我们学会了三个 explain 档位，能把计划调出来。可面对那一坨缩进文本，第一眼还是懵——到底看哪里？",
+            "problem": "计划文本里 Scan/Filter/Project/Aggregate/Exchange 各代表什么？为什么 Exchange 是最该警惕的节点？*(N) 和计划里的「行数」到底是什么意思？",
+            "preview": "认出了 Exchange（Shuffle），下集就讲 Catalyst 在 Optimized 段到底做了哪些「等价省工」的改写——谓词下推、列裁剪、常量折叠都是啥。"
+          }
+        },
+        {
+          "title": "Catalyst 优化规则",
+          "slug": "l4-catalyst-rules",
+          "description": "理解 Optimized 阶段的等价改写：谓词下推、列裁剪、常量折叠、null 传播。",
+          "objective": "学完本课，你应该能够：理解 Optimized 阶段的等价改写——谓词下推、列裁剪、常量折叠、null 传播；明白优化是「等价」的（结果不变只更省）；知道优化器非神仙（UDF/复杂嵌套下推不了），且下推能否发生取决于数据源（Parquet 能，csv 有限）。",
+          "estimated_minutes": 14,
+          "order_index": 4,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\nCatalyst 在 Optimized 段干的事，本质就是「等价省工」——在不改变结果的前提下，让 Spark 少读、少算、少搬。你不用手动优化，它就自动帮你做了。读懂这几条规则，你看计划时才知道「它为什么这么聪明」。\n\n【一个直观的心智模型】\n\n把 Catalyst 总工想想成做「等价省工」改写：\n- 谓词下推 = 把末端的滤网**瞬移到河口**（复用 L2 select-filter 边界「开天眼」）：本来读完所有列再筛，改成「读的时候就只让合格行进来」。\n- 列裁剪 = 只搬清单上列的箱子：你没选的列，压根不读。\n- 常量折叠 = 先算好 `1+1=2`：编译期能定的值，不拖到运行时算。\n\n⚠️ 比喻的边界（很重要）：\n① 优化是「等价」的：结果和没优化完全一致，只是更省。它不是魔法，不改语义。\n② 优化器非神仙：遇到 UDF（L3 讲的「外聘手艺人」）或复杂嵌套，它「看不懂」内部逻辑，下推/裁剪就失效——所以能不用 UDF 就不用（也呼应 L3 的 L7 伏笔）。\n③ 下推能否真正发生，**取决于数据源**：Parquet 这类列式存储能配合做列裁剪/谓词下推；普通 csv 做不到按列跳过，下推收益有限。\n\n【正式的技术定义】\n\nCatalyst 优化规则是作用于 Analyzed Logical Plan 的一组等价变换，常见包括：Predicate Pushdown（谓词下推，把过滤推到读取端）、Column Pruning（列裁剪，去掉不需要的列）、Constant Folding（常量折叠）、Null Propagation（null 传播）、算子合并等。它们在 Optimized 段输出更精简的等价逻辑计划，降低后续物理执行成本。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.select('city').filter(df.amount>0)`，Catalyst 在 Optimized 段会把 Filter 下推到 Scan 之前、把 Project 的列裁剪合并进 Scan——最终物理计划「读数据时就已经只取 city、只留 amount>0 的行」。你没写任何优化代码，全部是 Catalyst 自动完成的等价改写。",
+            "examples": [
+              {
+                "title": "谓词下推",
+                "code": "df.filter(df.amount > 0).select('city').explain(True)\n# Optimized 段可见 Filter 被下推到 Scan 附近",
+                "note": "即使你先写 filter 后写 select，优化器也会重排，让过滤尽早发生。"
+              },
+              {
+                "title": "列裁剪",
+                "code": "df.select('city', 'amount').filter(df.amount > 0).explain(True)\n# 未选的列不会进入 Scan",
+                "note": "你没选的列，优化器在 Scan 就裁掉，少读少搬。"
+              },
+              {
+                "title": "常量折叠",
+                "code": "from pyspark.sql import functions as F\ndf.withColumn('x', F.lit(1) + F.lit(1)).explain(True)\n# 1+1 在优化期折叠为 2",
+                "note": "编译期能定的表达式被提前算好，不占运行时。"
+              }
+            ],
+            "key_points": [
+              "优化是「等价改写」，结果不变只更省",
+              "谓词下推：过滤尽早发生（复用 L2「开天眼」）",
+              "列裁剪：没选的列不读",
+              "常量折叠：编译期能定的值提前算好",
+              "UDF/复杂嵌套下推不了；下推收益看数据源（Parquet 强、csv 弱）"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "以为「写 filter 顺序」决定性能。",
+                "why": "Catalyst 会重排，顺序不影响最终计划。",
+                "fix": "按可读性写，优化交给 Catalyst。"
+              },
+              {
+                "mistake": "以为所有数据源下推都一样。",
+                "why": "csv 不能按列跳过。",
+                "fix": "重读场景优先 Parquet，下推收益最大。"
+              },
+              {
+                "mistake": "在 UDF 里做过滤指望被下推。",
+                "why": "Catalyst 看不懂 UDF 内部。",
+                "fix": "能用内置函数/SQL 表达的就别用 UDF（呼应 L3）。"
+              }
+            ],
+            "review": "上两课我们认出了计划里的 Scan/Filter/Project/Exchange，也知道 Optimized 段会做改写。但具体改了什么？为什么同样的代码计划总「更聪明」？",
+            "problem": "Catalyst 在 Optimized 段做了哪些等价省工的改写？谓词下推、列裁剪、常量折叠分别是什么？为什么 UDF 会「骗不过」优化器？",
+            "preview": "知道了优化器会融合算子、提前算常量，下集就讲 WholeStageCodegen——相邻算子怎么被「焊成一台机器」，以及 Tungsten 这个紧凑零件标准。"
+          }
+        },
+        {
+          "title": "WholeStageCodegen 与 Tungsten",
+          "slug": "l4-wholestage-codegen",
+          "description": "理解相邻算子融合成单个 Java 方法；*(N) 标记含义；codegen 不是全融合。",
+          "objective": "学完本课，你应该能够：理解相邻算子融合成单个 Java 方法，避免逐算子虚函数/中间对象开销；说清 *(N) 标记含义；知道 codegen 不是全融合（Exchange 边界会打断）、某些表达式不支持会回退；内存/堆外细节留 L7。",
+          "estimated_minutes": 13,
+          "order_index": 5,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n普通流水线每道工序都是独立工位：上一道算完，打包成对象交给下一道，下一道再拆包——中间反复「打包/拆包」和函数调用有开销。Spark 有个绝活：把相邻几道工序「焊成一台一体化机器」，一次开机连续加工，省掉中间所有交接损耗。这就是 WholeStageCodegen。\n\n【一个直观的心智模型】\n\n- 普通流水线：每工位单独开关、逐件交接（每次交接都有虚函数调用 overhead、产生中间对象）。\n- WholeStageCodegen：把相邻工位「焊成一体化机器」，一次开机连加工，中间不拆不包。\n- Tungsten = 这套机器的「紧凑零件标准」（复用 L2 的 Tungsten 边界：底层二进制紧凑布局，省内存、Cache 友好）。\n\n⚠️ 比喻的边界（很重要）：\n① codegen **不是全融合**：遇到 Exchange（Shuffle）边界，融合必然被打断——因为数据要跨节点重分布，无法在同一个本地机器方法里连续跑。Exchange 是 Stage 边界，也是融合的「断点」。\n② 某些复杂表达式 / 不支持的算子会导致回退（fallback）到逐算子解释执行，融合标记消失。\n③ 内存布局、堆外、编码字节级细节是 Level 7 性能调优的内容，本课只把 Tungsten 当「紧凑零件标准」复用，不深挖。\n\n【正式的技术定义】\n\nWholeStageCodegen（全阶段代码生成）是 Tungsten 执行引擎的特性：将同一个 Stage 内相邻的多个算子（如 Scan+Filter+Project+Aggregate）编译成一个手写的 Java 方法，消除逐算子虚函数调用与中间对象分配，数据以二进制行格式在算子间流转。计划中以 `*(N)` 标记融合的算子数。Exchange 会切断融合。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.select('city').filter(df.amount>0).groupBy('city').count()`，若这些算子在同一 Stage 内（无 Exchange 隔断），Spark 会把它们生成一个 `*(4)` 的融合方法：数据从 Scan 出来直接在同一个方法里被过滤、投影、聚合，全程不拆成对象。一旦中间出现 Exchange（如 groupBy 的 Shuffle），融合在此断开，后面的算子另起一段。",
+            "examples": [
+              {
+                "title": "看 *(N) 融合标记",
+                "code": "df.select('city').filter(df.amount > 0).explain()\n# 节点前缀 *(2) 表示两个算子融合",
+                "note": "*(N) 即 WholeStageCodegen 融合的算子数，越大说明本地融合越充分。"
+              },
+              {
+                "title": "Exchange 打断融合",
+                "code": "df.groupBy('city').count().explain()\n# groupBy 的 Exchange 之后，融合重新从 1 计数",
+                "note": "Shuffle 边界必然切断融合，这是性能与 Stage 划分的关键。"
+              },
+              {
+                "title": "Tungsten 二进制布局（概念）",
+                "code": "# Tungsten 用紧凑二进制行格式，而非 Java 对象\ndf.filter(df.amount > 0).explain()",
+                "note": "本课只把 Tungsten 当「紧凑零件标准」；堆外/编码细节留 Level 7。"
+              }
+            ],
+            "key_points": [
+              "WholeStageCodegen：相邻算子融合成单个 Java 方法，省虚函数/中间对象开销",
+              "*(N) 标记 = 融合的算子数",
+              "Exchange（Shuffle）边界必然打断融合，是 Stage 边界也是融合断点",
+              "部分复杂表达式不支持会回退到解释执行",
+              "Tungsten = 紧凑二进制零件标准；内存细节留 Level 7"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "看到 *(1) 以为「没优化」。",
+                "why": "单算子本身也可能 codegen，只是没融合邻居。",
+                "fix": "看是否受 Exchange 隔断，而非看数字大小。"
+              },
+              {
+                "mistake": "以为所有算子都能无限融合。",
+                "why": "Exchange 必断、部分表达式回退。",
+                "fix": "理解融合有边界。"
+              },
+              {
+                "mistake": "把 Tungsten 当本课深挖对象。",
+                "why": "内存/堆外是 L7 内容。",
+                "fix": "本课只复用「紧凑零件标准」口径。"
+              }
+            ],
+            "review": "上一课我们讲了 Catalyst 的等价改写（下推/裁剪/折叠）。但光「少读少算」还不够快——Spark 还有一层执行层的加速，藏在计划里的 *(N) 标记里。",
+            "problem": "计划里的 *(N) 是什么？为什么相邻算子能被「焊成一台机器」？为什么 Shuffle 会打断这种融合？Tungsten 又是什么角色？",
+            "preview": "知道了融合与 Stage 边界，下集就讲「窄依赖 vs 宽依赖」——为什么某些算子在一个 Stage 内、某些必须切开，根源就在依赖类型。"
+          }
+        },
+        {
+          "title": "窄依赖 vs 宽依赖",
+          "slug": "l4-dependency-narrow-wide",
+          "description": "区分 Narrow（无 Shuffle）与 Wide（跨分区重排，必 Shuffle）；理解这是 Stage 边界根源。",
+          "objective": "学完本课，你应该能够：区分 Narrow（父→子 1对1/多对1，无 Shuffle）与 Wide（跨分区重排，必 Shuffle）；理解这是 Stage 边界根源；知道窄依赖失败只重算局部分区（恢复便宜）、宽依赖失败要重算整个上游重排（贵）；map/filter/select 窄，groupBy/join/orderBy/distinct 宽。",
+          "estimated_minutes": 13,
+          "order_index": 6,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\nRDD 把数据切成很多分区。一个算子处理完，数据怎么流向子算子，决定了「要不要跨节点搬运」。如果子分区只依赖父分区里「同一小撮」，那搬运在车间内部搞定；如果子分区要「凑齐所有节点上同 key 的数据」，那就得把货运到空中重排。前者便宜，后者贵——这就是窄/宽依赖。\n\n【一个直观的心智模型】\n\n- 窄依赖 = 车间内部传递：上游一摞货直接交给同车间的同一个工人，不搬出车间（无 Shuffle）。\n- 宽依赖 = 把货空运到别车间按 key 重排（复用 L2/L3 的 Shuffle=空中飞货）：每个子分区要等「所有上游分区里同 key 的货」到齐。\n- **宽依赖即 Stage 的「断点」**——这正是上一课说的 Exchange 打断融合的根源。\n\n⚠️ 比喻的边界（很重要）：\n① 窄依赖失败，只需重算那个**局部**分区，恢复便宜（血缘短、数据就在本地）。\n② 宽依赖失败，要重算**整个上游重排**——因为下游依赖「全局按 key 汇聚」，上游任何分区丢了都得整体重算，贵。\n③ map/filter/select 是窄；groupBy/join/orderBy/distinct 是宽（其中 groupBy 的「部分聚合」是窄+宽两阶段：本地先聚合是窄，跨节点合并是宽）。\n\n【正式的技术定义】\n\n依赖描述子 RDD 分区对父 RDD 分区的依赖关系。Narrow Dependency（窄依赖）：子分区只依赖父的有限个（通常 1 个或同节点）分区，如 map/filter/select，无 Shuffle。Wide Dependency（宽依赖 / Shuffle Dependency）：子分区依赖父的**所有**分区中同 key 的数据，需跨节点重分布，如 groupBy/join/orderBy/distinct。宽依赖是 Stage 边界与容错成本的分水岭。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.filter(...).select(...)`（窄），Spark 能在同一个 Stage 内把这几个算子融合连续执行，任何分区失败只在本地重算。你写 `df.groupBy('city').count()`（宽），Spark 必须在 Shuffle 处切一刀分成两个 Stage：Stage1 本地预聚合（窄），Stage2 跨节点合并（宽）。宽依赖这刀，就是 Exchange 节点、也是融合断点。",
+            "examples": [
+              {
+                "title": "窄依赖（无 Exchange）",
+                "code": "df.filter(df.amount > 0).select('city').explain()\n# 无 Exchange，整段在同一 Stage",
+                "note": "map/filter/select 都是窄，不产生 Shuffle。"
+              },
+              {
+                "title": "宽依赖（有 Exchange）",
+                "code": "df.groupBy('city').count().explain()\n# 出现 Exchange，Stage 在此切开",
+                "note": "groupBy 必宽，是 Stage 边界。"
+              },
+              {
+                "title": "容错成本差异",
+                "code": "# 窄：某分区丢只重算该分区\n# 宽：上游全重排，代价大\ndf.join(other, 'id').explain()   # join 也是宽依赖",
+                "note": "宽依赖失败恢复贵，这是设计容错与调优时要记牢的。"
+              }
+            ],
+            "key_points": [
+              "窄依赖：子分区只依赖父局部分区，无 Shuffle（map/filter/select）",
+              "宽依赖：子分区依赖父全部分区同 key 数据，必 Shuffle（groupBy/join/orderBy/distinct）",
+              "宽依赖即 Stage 断点（也是 Exchange / 融合断点）",
+              "窄失败只重算局部分区（便宜）；宽失败重算整个上游重排（贵）",
+              "groupBy 部分聚合是窄+宽两阶段"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "以为「有算子就有 Stage 切换」。",
+                "why": "只有宽依赖（Exchange）才切 Stage。",
+                "fix": "窄算子在同一 Stage 融合。"
+              },
+              {
+                "mistake": "把 join 当窄依赖。",
+                "why": "join 按 key 重分布，是宽。",
+                "fix": "记住 join/聚合/排序/去重都是宽。"
+              },
+              {
+                "mistake": "以为宽依赖能「避免失败」。",
+                "why": "它只是必要，但恢复成本高。",
+                "fix": "理解宽依赖的容错代价，调优时尽量减少不必要宽依赖。"
+              }
+            ],
+            "review": "上一课我们看计划里的 *(N) 融合，发现 Shuffle 会打断融合、切出 Stage。可为什么会切？根源在「依赖类型」——有些算子天生在一个 Stage 内，有些必须跨 Stage。",
+            "problem": "窄依赖和宽依赖到底差在哪？为什么宽依赖必然是 Stage 的「断点」？失败恢复时二者成本差多少？哪些算子是宽、哪些是窄？",
+            "preview": "知道了依赖决定 Stage 边界，下集就把 Job / Stage / Task 三层模型一次讲清——一次 Action 怎么变成一个 Job、怎么按宽依赖切 Stage、怎么按分区切 Task 并行。"
+          }
+        },
+        {
+          "title": "Job / Stage / Task 层级",
+          "slug": "l4-job-stage-task",
+          "description": "建立「一次 Action=一个 Job；Job 按宽依赖切 Stage；每 Stage 按分区数切 Task 并行」层级模型。",
+          "objective": "学完本课，你应该能够：建立「一次 Action=一个 Job；Job 按宽依赖切 Stage；每 Stage 按分区数切 Task 并行」的层级模型；理解 Task 数=该 Stage 分区数，Stage 数=宽依赖数+1，Job 内 Stage 顺序执行、Stage 内 Task 并行；并行度调优留 L5。",
+          "estimated_minutes": 13,
+          "order_index": 7,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\nSpark 跑一次，不是「一个整体」在动，而是分了三层：你下一个执行命令（Action）叫一次「出货指令」（Job）；这个指令里被 Shuffle 切成几段连续工序（Stage）；每段工序又因为数据被分了很多分区，分给很多工人各干一份（Task）。理解这三层，你看 Spark UI 才不会迷路。\n\n【一个直观的心智模型】\n\n- Job = 接到「出货指令」（一次 Action，如 `count()`/`show()`/`write`）。\n- Stage = 中间几个「不跨车间的连续工序段」，被 Exchange（宽依赖）切开。\n- Task = 每车间分到的一摞活（每个分区一个 Task，Executor 工人并行干）。\n层级：**Job ⊃ Stage ⊃ Task**。\n\n⚠️ 比喻的边界（很重要）：\n① Task 数 = 该 Stage 的分区数（即并行度）；分区越多 Task 越多，但太多反而调度开销大——并行度调优是 Level 5 的内容。\n② Stage 数 = 宽依赖数 + 1：每多一次 Shuffle 就多切一个 Stage。\n③ Job 内 Stage **顺序**执行（前一个 Stage 的 Shuffle 输出是后一个的输入），但**单个 Stage 内 Task 并行**（多个 Executor 同时干各自分区）。这是「宏观串行、微观并行」。\n\n【正式的技术定义】\n\nSpark 执行层级：一个 Action 触发一个 Job；Job 的 DAG 按宽依赖（Shuffle）切分为多个 Stage（Stage 数 = 宽依赖数 + 1）；每个 Stage 按输出 RDD 的分区数切分为多个 Task（每分区一个），由 Executor 并行执行。Task 是最小执行单元。Job/Stage/Task 是理解 Spark UI 与性能调度的核心模型。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.groupBy('city').count().show()`：`show()` 是 Action → 触发 1 个 Job。这个 Job 里 groupBy 产生 1 次宽依赖 → 切成 2 个 Stage（Stage0：本地读+预聚合；Stage1：跨节点合并+输出）。假设数据有 200 分区 → 每个 Stage 约 200 个 Task，由集群 Executor 并行执行。你在 Spark UI 看到的，就是这棵 Job→Stage→Task 的树。",
+            "examples": [
+              {
+                "title": "一次 Action = 一个 Job",
+                "code": "df.groupBy('city').count().show()   # 触发 1 个 Job",
+                "note": "每遇到一个 Action（show/count/write）就起一个 Job；Transformation 不触发。"
+              },
+              {
+                "title": "宽依赖数 → Stage 数",
+                "code": "# groupBy 一次 Shuffle → 2 个 Stage\ndf.groupBy('city').count().explain()",
+                "note": "计划里 Exchange 的个数 + 1 = Stage 数。"
+              },
+              {
+                "title": "分区数 → Task 数",
+                "code": "df = spark.read.parquet('sales').repartition(200)\ndf.groupBy('city').count().show()\n# 每 Stage 约 200 个 Task",
+                "note": "Task 数由该 Stage 分区数决定，即并行度（调优留 L5）。"
+              }
+            ],
+            "key_points": [
+              "一次 Action = 一个 Job；Job ⊃ Stage ⊃ Task",
+              "Stage 数 = 宽依赖数 + 1（每多一次 Shuffle 多切一个）",
+              "Task 数 = 该 Stage 分区数（并行度）",
+              "Job 内 Stage 顺序执行；单 Stage 内 Task 并行（宏观串行、微观并行）",
+              "并行度/分区数调优留 Level 5"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "以为一个 DataFrame 程序 = 一个 Job。",
+                "why": "几个 Action 就几个 Job。",
+                "fix": "数 Action 数 = Job 数。"
+              },
+              {
+                "mistake": "以为 Stage 内也并行出多个 Stage。",
+                "why": "Stage 间是顺序的，只有 Task 层并行。",
+                "fix": "区分「Stage 顺序」与「Task 并行」。"
+              },
+              {
+                "mistake": "把 Task 数当固定值。",
+                "why": "它等于分区数，可配置。",
+                "fix": "想调并行度改分区数（Level 5）。"
+              }
+            ],
+            "review": "上一课我们讲了窄/宽依赖，知道宽依赖会把执行切成 Stage。可「Stage」之上、「Stage」之内，Spark 还分了几层？一次点击到底发生了什么？",
+            "problem": "Job / Stage / Task 三层到底怎么对应？为什么一次 Action 是一个 Job？Stage 为什么按宽依赖切、Task 为什么按分区切？它们谁串行、谁并行？",
+            "preview": "学完三层模型，下集做综合练习——给你一段真实代码，你能独立读出它的计划、数出 Stage、认出 Shuffle、指出至少一处 Catalyst 优化。"
+          }
+        },
+        {
+          "title": "综合练习",
+          "slug": "l4-comprehensive",
+          "description": "给一段真实代码，能读/写出其 explain() 输出，数 Stage、认 Shuffle、指出至少一处 Catalyst 优化。",
+          "objective": "学完本课，你应该能够：给一段真实代码，独立读/写出其 explain() 输出，数 Stage、认 Shuffle、指出至少一处 Catalyst 优化；理解计划相同 ≠ 运行时性能相同（倾斜/分区数影响，L5/L7）；综合只验证「读得懂」，不要求调优。",
+          "estimated_minutes": 18,
+          "order_index": 8,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n这是 Level 4 的收束：给你一段真实代码，让你像读「施工排程单」一样，把前面所有工位串成一张完整图——先找 Exchange（断点/Shuffle），再数 Stage，最后找 *(N) 融合与下推标记。它逼你把「看计划」从「看得懂单个节点」升级到「看得懂整张图」。\n\n示例任务：读一段 Parquet，过滤 amount>0，按 city 聚合总销售额，输出。\n目标：独立写出/读出它的 explain() 输出，并指出：① 有几处 Exchange（Shuffle）；② 分成几个 Stage；③ 至少一处 Catalyst 优化（下推/裁剪/融合）。\n\n【一个直观的心智模型】\n\n把这次练习想成「把前面所有工位串成一张完整排程单」：\n1. 先找 **Exchange**（断点 / Shuffle）——它是 Stage 的分界线，也是性能重点信号。\n2. 再数 **Stage**（Exchange 数 + 1）。\n3. 最后找 ***(N)** 融合标记与下推/裁剪痕迹——看 Catalyst 帮你省了什么。\n\n⚠️ 比喻的边界（很重要）：\n① 计划相同 ≠ 运行时性能相同：同样一份计划，数据倾斜、分区数不同，真实耗时天差地别（Level 5/L7 才展开）。\n② 本课综合**只验证「读得懂」**——能指认 Shuffle、数出 Stage、找出优化点，就达标；不要求你改写调优。\n③ `explain()` 不触发执行，所以这套「读图」练习随时可做、零成本。\n\n【正式的技术定义】\n\n综合练习 = 对一段真实 Spark 代码，完整应用 Level 4 所学：调用 `explain()` 得到物理计划；识别 Scan/Filter/Project/Aggregate/Exchange 节点；据 Exchange 数判定 Stage 数；据 *(N) 与 Optimized 段判定 WholeStageCodegen 融合与 Catalyst 优化（谓词下推/列裁剪/常量折叠）。输出一份「读图报告」。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `spark.read.parquet('sales').filter(df.amount>0).groupBy('city').sum('amount').explain(True)`：Spark 先生成四段计划；你读 Optimized 段看到 Filter 下推、列裁剪；读 Physical 段看到一处 Exchange（groupBy 的 Shuffle）切出 2 个 Stage，且 Stage 内 *(N) 融合。整条分析，你没执行任何数据，纯粹「读图」。",
+            "examples": [
+              {
+                "title": "完整读图练习",
+                "code": "df = spark.read.parquet('sales')\ndf.filter(df.amount > 0).groupBy('city').sum('amount').explain(True)\n# 读图：1 处 Exchange → 2 Stage；Optimized 段有 Filter 下推 + 列裁剪",
+                "note": "独立指认 Shuffle、Stage 数、至少一处优化，即达标。"
+              },
+              {
+                "title": "对照不同写法的计划",
+                "code": "# 写法 A：先 filter 后 groupBy\n# 写法 B：直接 groupBy\n# 用 explain(True) 对比二者 Optimized 段是否一致",
+                "note": "Catalyst 会重排，两种写法可能得到相同优化计划——这正是「读图」的价值。"
+              },
+              {
+                "title": "只验证读懂，不调优",
+                "code": "# 目标不是改快，而是说清「它打算怎么算」\ndf.groupBy('city').count().explain()",
+                "note": "综合练习只验收「读得懂」，调优留给 Level 5/L7。"
+              }
+            ],
+            "key_points": [
+              "读图三步：找 Exchange（Shuffle）→ 数 Stage（Exchange+1）→ 找 *(N) 融合与下推/裁剪",
+              "能指认 Shuffle、数出 Stage、找出至少一处 Catalyst 优化即达标",
+              "计划相同 ≠ 运行时性能相同（倾斜/分区数影响，L5/L7）",
+              "综合只验证「读得懂」，不要求调优",
+              "explain() 不触发执行，读图练习零成本"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "综合练习里急着「改代码调快」。",
+                "why": "本课只验收读得懂。",
+                "fix": "先把图读准，调优是 L5/L7。"
+              },
+              {
+                "mistake": "数 Stage 时漏算「初始 Stage」。",
+                "why": "Stage 数 = Exchange 数 + 1。",
+                "fix": "从 1 开始加。"
+              },
+              {
+                "mistake": "把估计行数当真实性能。",
+                "why": "计划数字是估计。",
+                "fix": "真实耗时看 Spark UI（L5）。"
+              }
+            ],
+            "review": "从「为什么看计划」到「逻辑/物理四段」、「explain 三档」、「读节点」、「Catalyst 规则」、「codegen」、「窄宽依赖」、「Job/Stage/Task」，Level 4 的零件都齐了。",
+            "problem": "能不能不靠提示，独立给一段真实代码读出它的 explain() 输出——数出 Stage、认出 Shuffle、指出至少一处 Catalyst 优化？更重要的是，你能否清晰说出「它打算怎么算」？这正是检验你是否真正串起 Level 4 的标准。",
+            "preview": "恭喜你走完 Level 4——你现在能「看见」Spark 内部怎么算、怎么优化。但一个更深的问题浮现：「怎么让它真的算得更快？」那是 Level 5（分区/Shuffle 调优）的主场。去测验检验自己吧。🏁"
+          }
+        }
+      ]
+    },
+    {
+      "title": "Level 5：分区与 Shuffle",
+      "description": "教读者「数据在 Spark 里是怎么被切分、又在什么情况下被搬来搬去（Shuffle）的」——把 Level 4 埋下的 Exchange 节点 / 宽依赖伏笔，落到分区（Partition）与 Shuffle 代价的物理层面。覆盖分区是什么、分区数即并行度、Shuffle 定义、Shuffle 为什么贵、窄宽依赖在分区层面的含义、触发 Shuffle 的操作、reduceByKey 为何比 groupByKey 省、repartition 与 coalesce 区别、综合。为 Level 6（Join 深类型/broadcast/调优）→ Level 7（性能调优：Tungsten 内存/堆外/调优参数）铺垫，本身不抢跑调优。",
+      "order_index": 5,
+      "lessons": [
+        {
+          "title": "分区是什么",
+          "slug": "l5-what-is-partition",
+          "description": "理解「数据按分区（partition）切分并分布到 Executor」；分区是 Spark 并行计算的最小数据单元，一个分区由一个 Task 处理。",
+          "objective": "学完本课，你应该能够：用自己的话解释分区（Partition）是什么；说清「分区是 Spark 并行计算的最小数据单元，一个分区由一个 Task 处理」；理解分区是逻辑切分（由 partitioner/输入切片决定）而非把文件物理劈开；知道分区数影响并行度但不影响结果正确性；并厘清 HDFS block 与分区不是 1:1。",
+          "estimated_minutes": 12,
+          "order_index": 0,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n你已经知道 Spark 把活分给很多工人（Executor）并行干。可「分给工人」是按什么切的？答案是分区（Partition）。就像仓库里那一大堆货被分成 N 个托盘，每个托盘交给一个工人搬。分区就是 Spark 并行计算的最小数据单元——一个分区，由一个 Task 处理。\n\n【一个直观的心智模型】\n\n把分区想成「大仓库里的货被分成的 N 个托盘」。每个托盘（分区）是一份独立的数据切片，交给一个工人（Executor）去搬、去算。Task 数 = 托盘数，托盘越多能同时开工的工人越多。复用 L4 的「Task = 每分区一份活」和 L0 的「Executor = 工人」：托盘就是分给工人的那摞活。\n\n⚠️ 比喻的边界（很重要）：\n① 分区是逻辑切分，由 partitioner（如 HashPartitioner）或输入切片决定，并不是把文件在磁盘上物理劈成几块；同一文件的不同分区可能仍属同一文件的不同字节区间。\n② 分区数影响并行度，不影响结果正确性——切 2 份还是 200 份，算出来的答案一样，只是快慢不同。\n③ HDFS block 与分区不是 1:1：Spark 默认按 block 数给初始分区，但 repartition / 不同输入格式会改变它，别把「block 数」当成「分区数」。\n\n【正式的技术定义】\n\nPartition（分区）是 RDD / DataFrame 底层数据的逻辑切片，是 Spark 并行计算的最小数据单元。一个分区由一个 Task 在一个 Executor 上处理。分区数决定并行 Task 数（理论并行度）。分区方案由 partitioner（如 HashPartitioner）或输入格式（如 HDFS 切片）决定。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df = spark.read.parquet('sales')`，Spark 先按文件物理布局（block / 文件数）算出初始分区数——假设 128 个。当你调用 `df.count()`（Action），Spark 为这 128 个分区各起一个 Task，分派给集群 Executor 并行处理。每个 Task 只搬自己那份分区数据去算，互不重叠。你看到的并行度，本质就是分区数。",
+            "examples": [
+              {
+                "title": "查看当前分区数",
+                "code": "df = spark.read.parquet('sales')\nprint(df.rdd.getNumPartitions())\n# 输出初始分区数（如 128）",
+                "note": "getNumPartitions 直接看真实分区数；初始值通常来自输入文件的 block 数。"
+              },
+              {
+                "title": "分区是逻辑切分，不是物理劈文件",
+                "code": "# 同一份数据，不同读取方式分区数可能不同\ndf1 = spark.read.parquet('sales')\ndf2 = spark.read.csv('sales.csv')\nprint(df1.rdd.getNumPartitions(), df2.rdd.getNumPartitions())",
+                "note": "分区来自「怎么读」，不是「文件被切成几块」；别和 HDFS block 混为一谈。"
+              },
+              {
+                "title": "分区数决定 Task 数",
+                "code": "df = spark.read.parquet('sales').repartition(200)\ndf.count()   # 200 个分区 → 约 200 个 Task 并行",
+                "note": "repartition(200) 显式把分区数改成 200，Action 时就有约 200 个 Task 并行。"
+              }
+            ],
+            "key_points": [
+              "分区是 Spark 并行计算的最小数据单元，一个分区由一个 Task 处理",
+              "分区数 = 并行 Task 数 = 理论并行度（复用 L4 Job/Stage/Task）",
+              "分区是逻辑切分（由 partitioner/输入切片决定），不是把文件物理劈开",
+              "分区数影响性能，不影响结果正确性",
+              "HDFS block 与分区非 1:1，别混为一谈"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "以为分区是把文件在磁盘上物理劈成几块。",
+                "why": "分区是逻辑切片，由 partitioner/输入格式决定，文件在磁盘上没被切。",
+                "fix": "记住分区是「怎么读/怎么分配」的视图，不是磁盘切割。"
+              },
+              {
+                "mistake": "以为「分区越多越快」。",
+                "why": "太多分区带来调度与小块开销，反而慢。",
+                "fix": "并行度调优是 Level 7 的内容，本课先建立「分区 = 并行度」的概念。"
+              },
+              {
+                "mistake": "把 HDFS block 数直接当成分区数。",
+                "why": "不同输入格式/算子会改变分区数。",
+                "fix": "用 getNumPartitions() 看真实分区数，别拍脑袋。"
+              }
+            ],
+            "review": "从 Level 0 你就知道 Spark 把活分给很多工人（Executor）并行干；Level 4 你还学到「Task 数 = 该 Stage 的分区数」。可「分区」到底是什么，我们一直没正面讲。",
+            "problem": "数据在 Spark 里到底按什么切分、分给工人？为什么「一个分区一个 Task」？分区数和结果正确性有关系吗？",
+            "preview": "下集我们建立「分区数 = 并行度」的量化直觉，看分区太少或太多分别会怎样。"
+          }
+        },
+        {
+          "title": "分区数与并行度",
+          "slug": "l5-partition-count-parallelism",
+          "description": "建立「分区数 = 并行 Task 数 = 理论并行度」；分区太少→Executor 闲置/长任务，太多→调度与小块开销。",
+          "objective": "学完本课，你应该能够：建立「分区数 = 并行 Task 数 = 理论并行度」的等式；说清分区太少会让 Executor 闲置或单任务过长、分区太多会带来调度与小文件开销；理解本课只讲「多少都影响性能」的原理级内容，不给出最优分区数经验公式或 spark.sql.shuffle.partitions 调优值（留 Level 7）。",
+          "estimated_minutes": 12,
+          "order_index": 1,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n分区数不是随便定的数字，它直接决定了「能有几个人同时干活」。分区太少，工人（Executor）闲着没事做、或者一个人扛巨量数据干到天黑；分区太多，光是派活、收活的管理开销就把时间吃掉，还可能产生海量小文件。所以「多少都影响性能」——关键在平衡。\n\n【一个直观的心智模型】\n\n把分区数想成「派工单上写的 N 个托盘」——它等于同时能开工的工人上限。托盘太少：有的工人闲着、有的托盘巨大干到崩溃；托盘太多：光是「点名、发单、收工」的管理动作就比正活还多。复用 Executor=工人、托盘=分区的口径。\n\n⚠️ 比喻的边界（很重要）：\n① 本课只讲「分区数影响性能」的原理，不给你一个万能最优值——最优分区数取决于数据量、集群核数、单条记录大小，是 Level 7 调优的主题。\n② 默认分区数有来源（如读文件按 block、shuffle 按 spark.sql.shuffle.partitions 默认 200），但这些默认值未必适合你的数据，本课点到为止。\n③ 分区数与「结果正确性」无关，只与「快慢」有关；别为了「算对」去纠结分区数。\n\n【正式的技术定义】\n\n并行度（Parallelism）指同时执行的 Task 数量，在 Spark 中等于该 Stage 的分区数。分区过少 → 集群算力未被充分利用（Executor 闲置）或单个 Task 处理数据过大（长尾任务、易 OOM）；分区过多 → 任务调度、任务启动、小文件（每个 Task 一个输出文件）等固定开销累积。合理的分区数是性能调优的核心杠杆之一。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.repartition(2).count()`：Spark 把数据重排成 2 个分区，Action 时只起 2 个 Task——若集群有 100 个核，98 个核全程闲着。反过来 `df.repartition(10000).count()`：起 10000 个 Task，绝大多数 Task 只处理几 KB 数据，但调度 10000 次任务的开销可能超过计算本身。两种极端都慢。",
+            "examples": [
+              {
+                "title": "分区太少，资源闲置",
+                "code": "df = spark.read.parquet('sales').repartition(2)\ndf.count()   # 仅 2 个 Task，百核集群 98 核闲置",
+                "note": "分区数远低于核数时，并行度上不去，算力浪费。"
+              },
+              {
+                "title": "分区太多，调度开销爆炸",
+                "code": "df = spark.read.parquet('sales').repartition(10000)\ndf.count()   # 1 万个 Task，多数只处理几 KB",
+                "note": "海量小 Task 的调度/启动开销可能超过计算本身，且易产生小文件。"
+              },
+              {
+                "title": "看 shuffle 默认分区数来源",
+                "code": "print(spark.conf.get('spark.sql.shuffle.partitions'))\n# 默认 200，是 shuffle 后分区的默认值（非最优保证）",
+                "note": "shuffle 类操作默认按这个值定分区数；它只是默认值，调优留 Level 7。"
+              }
+            ],
+            "key_points": [
+              "分区数 = 并行 Task 数 = 理论并行度",
+              "分区太少 → Executor 闲置 / 单 Task 过大（长尾、OOM 风险）",
+              "分区太多 → 调度与小文件开销累积",
+              "最优分区数取决于数据量/核数/记录大小，本课不给药（留 L7）",
+              "分区数只影响性能，不影响结果正确性"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "以为「分区越多越并行、越快」。",
+                "why": "海量小 Task 的调度开销会反噬。",
+                "fix": "理解分区数是平衡杠杆，不是越大越好（L7 才定量）。"
+              },
+              {
+                "mistake": "现在就去调 spark.sql.shuffle.partitions 到「最优」。",
+                "why": "没有放之四海皆准的最优值，需结合数据。",
+                "fix": "本课只建原理直觉，具体调优参数留 Level 7。"
+              },
+              {
+                "mistake": "以为分区数影响答案对错。",
+                "why": "分区只切数据分布，不改变计算结果。",
+                "fix": "分区数 = 性能旋钮，不是正确性旋钮。"
+              }
+            ],
+            "review": "上一课我们说「一个分区一个 Task」，分区数 = 并行度。可这个数字定多少才对？随便定会不会有事？",
+            "problem": "为什么「分区数 = 并行度」？分区太少或太多分别会带来什么性能问题？有没有一个万能最优值？",
+            "preview": "知道了「切几份」影响快慢，下集就讲 Spark 里最贵的那件事——Shuffle：数据是怎么被「搬来搬去」的。"
+          }
+        },
+        {
+          "title": "Shuffle 是什么",
+          "slug": "l5-what-is-shuffle",
+          "description": "理解 Shuffle = 跨节点按 key 重新分布数据；是宽依赖的物化，也是「为什么某些操作特别慢」的根源。",
+          "objective": "学完本课，你应该能够：用自己的话解释 Shuffle 是什么——跨节点按 key 重新分布数据；理解 Shuffle 是宽依赖的物化，也是「为什么某些操作特别慢」的根源；知道 Shuffle 不是「错误」而是宽依赖的必然代价；并复用 Level 2/3/4 的「货在空中飞」隐喻正式命名它。",
+          "estimated_minutes": 12,
+          "order_index": 2,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n前面讲的分区，数据都在各自工人手里就地算。可一旦某个操作需要「把所有工人手里『同 key』的数据凑到一起」，事情就麻烦了——每个人手里的货得跨节点飞到别人工位上重新归拢。这个「跨节点、按 key 重排数据」的过程，就叫 Shuffle。\n\n【一个直观的心智模型】\n\n复用 Level 2/3/4 的「货在空中飞」：平常数据安静躺在各工人（Executor）手里；一旦遇到 groupBy / join / orderBy，就像吹了声哨，所有工人把「同 key 的货」抛到空中，按 key 重新落到对应工人的新托盘上。空中飞货 = Shuffle = 数据离开原车间、按 key 重排。复用 Stage=不跨车间的连续工序段：Shuffle 就是把货搬出车间这道动作。\n\n⚠️ 比喻的边界（很重要）：\n① Shuffle 不是「错误」，而是宽依赖（Wide Dependency）的必然代价——只要计算需要「全局按 key 汇聚」，它就必须发生，躲不掉（除非本就无需汇聚）。\n② 本课只正式定义它；它「贵在哪」下节课拆，具体调优（buffer/压缩/分区数）留 Level 7。\n③ Shuffle 发生时数据跨网络，意味着 Driver 端依然不抱数据——是 Executor 之间互传，不是回 Driver 中转。\n\n【正式的技术定义】\n\nShuffle 是 Spark 在执行宽依赖算子时，将各分区数据按 key 重新哈希/排序并跨节点传输、再在目标节点重新分区的物理过程。它是宽依赖（如 groupBy / join / orderBy / distinct）的物化，对应执行计划里的 Exchange 节点。Shuffle 是 Spark 作业中最昂贵的操作之一。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.groupBy('city').count()` 触发 Action：Stage 0 在本地读数据并做预聚合（窄），到 Shuffle 边界，Spark 把每个分区的记录按 `city` 哈希，序列化后经网络发到持有目标分区的 Executor，目标端反序列化、归并、再进入 Stage 1 做最终聚合。这一「序列化→网络→反序列化→重排」就是 Shuffle 的全貌。",
+            "examples": [
+              {
+                "title": "Shuffle 在计划里叫 Exchange",
+                "code": "df.groupBy('city').count().explain()\n# 计划中出现 Exchange 节点 = Shuffle 信号",
+                "note": "Exchange 就是 Shuffle 的物理信号，复用 L4 的读法。"
+              },
+              {
+                "title": "为什么需要 Shuffle",
+                "code": "# 要按 city 聚合，必须先让『同 city』的记录到同一个工人手里\ndf.groupBy('city').sum('amount')",
+                "note": "全局按 key 汇聚无法在本地完成，必须跨节点重排。"
+              },
+              {
+                "title": "Shuffle 切出 Stage",
+                "code": "df.groupBy('city').count().explain()\n# 一个 Exchange → 两个 Stage（本地预聚合 / 跨节点合并）",
+                "note": "Shuffle 处切开 Stage，呼应 L4 的宽依赖=Stage 断点。"
+              }
+            ],
+            "key_points": [
+              "Shuffle = 跨节点按 key 重新分布数据",
+              "Shuffle 是宽依赖的物化，对应执行计划里的 Exchange 节点",
+              "Shuffle 是「某些操作特别慢」的根源之一",
+              "Shuffle 不是错误，是宽依赖的必然代价（躲不掉）",
+              "数据是 Executor 之间互传，不经 Driver 中转"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "看到 Exchange（Shuffle）就觉得「代码写错了」。",
+                "why": "很多聚合/排序/关联本就需要全局按 key 汇聚。",
+                "fix": "区分「必要 Shuffle」与「本可避免的冗余 Shuffle」，后者才是优化点（L7）。"
+              },
+              {
+                "mistake": "以为 Shuffle 数据会先回 Driver 再分发。",
+                "why": "是 Executor 之间直接互传。",
+                "fix": "Driver 不抱数据，Shuffle 在 Executor 间完成。"
+              },
+              {
+                "mistake": "以为本课就要学会「消除 Shuffle」。",
+                "why": "本课只定义 Shuffle，代价与调优在后续。",
+                "fix": "先认清它是什么，代价拆解留 L5 下节课、调优留 L7。"
+              }
+            ],
+            "review": "上一课我们讲了「分区」和「分区数 = 并行度」。可光把数据切好分下去，计算并不总是能就地完成——有些操作必须把货搬来搬去。",
+            "problem": "Shuffle 到底是什么？为什么 groupBy / join / orderBy 会触发它？它是不是一种「错误」？",
+            "preview": "知道了 Shuffle 是「空中飞货」，下集就拆开它到底贵在哪几个环节——为什么一次跨节点搬运能拖垮整段作业。"
+          }
+        },
+        {
+          "title": "Shuffle 为什么贵",
+          "slug": "l5-shuffle-cost",
+          "description": "拆解 Shuffle 代价环节：磁盘 spill、跨网络传输、序列化/反序列化、map 端排序、reduce 端拉取。",
+          "objective": "学完本课，你应该能够：拆解 Shuffle 的代价环节——磁盘 spill、跨网络传输、序列化/反序列化、map 端排序、reduce 端拉取；理解每个环节都花钱；并知道本课只讲「贵在哪」的原理，不给出 spark.shuffle.file.buffer / compression 等具体参数（留 Level 7），也不要求你会调。",
+          "estimated_minutes": 13,
+          "order_index": 3,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\nShuffle 之所以是性能杀手，是因为它不是「把货从 A 桌挪到 B 桌」那么轻松——它要先装箱（序列化）、装车发运（走网络）、卸货分拣（排序/聚合）。每一道都是实打实的开销。理解这笔账，你就懂为什么能不 Shuffle 就不 Shuffle。\n\n【一个直观的心智模型】\n\n把一次 Shuffle 想成「一次空中运输」：\n- 装箱：把每件货打成标准包裹（序列化）；\n- 装车发运：包裹走网线飞到目标工人（跨网络传输）；\n- 卸货分拣：目标端拆包（反序列化）、按 key 排序、归并聚合。\n复用「空中飞货」隐喻：飞这一趟，光油费（网络）+ 打包人工（序列化）+ 卸货分拣（排序聚合）就不少。\n\n⚠️ 比喻的边界（很重要）：\n① 本课只讲「贵在哪几个环节」，不给你 spark.shuffle.file.buffer / compression 等具体调优参数——那是 Level 7 的事。\n② 当内存放不下中间结果，Spark 会把数据 spill 到磁盘，磁盘 I/O 比内存慢几个数量级，进一步放大代价。\n③ 网络传输受带宽与节点间距离限制；数据倾斜时某些 key 的货特别多，「空中运输」会严重不均衡（倾斜调优留 L7）。\n\n【正式的技术定义】\n\nShuffle 的代价来自多个环节：map 端按 key 分区并常做排序/combine、序列化后写磁盘/网络；数据跨节点传输；reduce 端通过网络拉取（fetch）自己负责的分区、反序列化、归并排序后交付后续算子。任一环节（磁盘 spill、网络、序列化、排序、拉取）在大数据量下都可能是瓶颈。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.groupBy('city').count()`：map 端先把记录按 city 分区、本地排序/combine，序列化成块写入；reduce 端发起 fetch 拉取属于自己 key 的块，跨网络传输，反序列化后在本地归并排序，得到每 city 的计数。整条链路「排序+序列化+网络+反序列化+排序」一个不落，这就是 Shuffle 的贵。",
+            "examples": [
+              {
+                "title": "序列化 + 网络 + 反序列化",
+                "code": "df.groupBy('city').sum('amount').explain()\n# Exchange 背后 = 序列化→网络→反序列化→重排",
+                "note": "看到 Exchange 就想到这一串跨节点开销。"
+              },
+              {
+                "title": "内存不够会 spill 到磁盘",
+                "code": "# 单分区数据过大时，map/reduce 端都会 spill 到磁盘\n# 磁盘 I/O 远慢于内存，代价进一步放大",
+                "note": "spill 是 Shuffle 贵的重要放大器（调优留 L7）。"
+              },
+              {
+                "title": "数据倾斜让运输不均",
+                "code": "# 某个 city 记录极多 → 该 key 的 Shuffle 块远超其他\n# 单节点被压垮，整体被拖慢（倾斜留 L7）",
+                "note": "倾斜时「空中运输」严重不均衡，是运行时典型瓶颈。"
+              }
+            ],
+            "key_points": [
+              "Shuffle 代价环节：序列化 → 网络传输 → 反序列化 → 排序/聚合",
+              "map 端常做分区+排序+combine，reduce 端 fetch+归并",
+              "内存不足会 spill 到磁盘，I/O 慢几个数量级",
+              "网络传输受带宽/距离限制，是分布式固有成本",
+              "数据倾斜会放大 Shuffle 代价（调优留 L7）"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "以为 Shuffle 只是「内存里挪一下数据」。",
+                "why": "它涉及序列化、跨网络、排序、可能 spill 磁盘。",
+                "fix": "记住 Shuffle 是多环节重活，不是零成本内存操作。"
+              },
+              {
+                "mistake": "本课就去调 spark.shuffle.file.buffer 等参数。",
+                "why": "具体调优参数留 Level 7。",
+                "fix": "本课只建立「贵在哪」的原理直觉。"
+              },
+              {
+                "mistake": "以为所有 key 的 Shuffle 一样快。",
+                "why": "倾斜时少数 key 极慢，拖垮整体。",
+                "fix": "理解倾斜是运行时问题，识别与调优留 L7。"
+              }
+            ],
+            "review": "上一课我们正式命名了 Shuffle——宽依赖的物化、空中飞货。可为什么大家都说它「贵」？贵在哪？",
+            "problem": "Shuffle 到底贵在哪几个环节？为什么「序列化+网络+排序」这一串这么花钱？spill 和倾斜又怎么放大代价？",
+            "preview": "拆完代价，下集把 Level 4 的窄/宽依赖落回到分区层面——为什么有些算子能就地算、有些必须空中飞货。"
+          }
+        },
+        {
+          "title": "窄/宽依赖在分区层面的含义",
+          "slug": "l5-narrow-wide-partition",
+          "description": "把 L4 的窄/宽依赖定义落到分区：窄依赖父分区只映射一个子分区（无需重排），宽依赖父分区数据发往多个子分区（必 Shuffle）；理解「Stage 边界 = Shuffle 发生的切口」。",
+          "objective": "学完本课，你应该能够：把 Level 4 的窄/宽依赖定义落到分区层面——窄依赖父分区只映射一个子分区（无需重排），宽依赖父分区数据发往多个子分区（必 Shuffle）；理解「Stage 边界 = Shuffle 发生的切口」；知道 L5 不重讲窄宽定义（L4 已讲），重点在「分区如何被重新分配」+「为什么宽依赖处必切 Stage」。",
+          "estimated_minutes": 13,
+          "order_index": 4,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n窄依赖和宽依赖，落到分区上就是一句话：子分区需要的货，是「老老实实待在原地、只从一个父分区来」，还是「必须从所有父分区按 key 空运到别处拼起来」。前者不动窝，后者必飞货。这就是同一件事的两个说法。\n\n【一个直观的心智模型】\n\n- 窄依赖 = 一个托盘（父分区）直接交给一个工人（子分区），不拆不飞（复用「车间内部传递」）。\n- 宽依赖 = 一个托盘的货按 key 拆开，分别空运到不同工人的新托盘（复用「空中飞货」+ Stage=连续不跨车间工序段）。\n所以宽依赖处就是 Stage 的切口：飞货一出车间，这道连续工序段就结束了。\n\n⚠️ 比喻的边界（很重要）：\n① L5 不重讲窄宽「定义」（L4 已讲），本课重点在「分区怎么被重新分配」——窄：子分区只依赖父的局部分区；宽：子分区依赖父全部分区中同 key 数据。\n② 宽依赖处必切 Stage，是因为子分区要等「所有上游同 key 货到齐」才能算，天然跨节点，无法留在同一段连续工序里。\n③ 并行度调优（怎么定分区数最优）留 Level 7，本课只讲依赖类型如何决定数据流向与 Stage 边界。\n\n【正式的技术定义】\n\n在分区层面：Narrow Dependency 中每个子分区只由有限个（通常 1 个或同节点）父分区计算得到，无需跨节点重排；Wide Dependency 中每个子分区依赖所有父分区中同 key 的数据，必须跨节点重分布（Shuffle）。宽依赖处即 Stage 边界，也是融合（WholeStageCodegen）的断点。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.filter(...).select(...)`（窄）：Spark 在同一 Stage 内把这几个算子融合，各分区就地连续处理，无跨节点移动。你写 `df.groupBy('city').count()`（宽）：Stage 0 本地预聚合后，在 Shuffle 处把数据按 city 重分布到新分区，切出 Stage 1 做跨节点合并。分区层面的「重分配」就是 Stage 划分的物理依据。",
+            "examples": [
+              {
+                "title": "窄依赖：分区就地处理",
+                "code": "df.filter(df.amount > 0).select('city').explain()\n# 无 Exchange，整段同一 Stage，分区不跨节点",
+                "note": "窄依赖中父→子分区是局部分配，无重排。"
+              },
+              {
+                "title": "宽依赖：分区被重分配",
+                "code": "df.groupBy('city').count().explain()\n# Exchange 处分区按 city 重分布到新分区，切 Stage",
+                "note": "宽依赖中父分区数据发往多个子分区，必 Shuffle。"
+              },
+              {
+                "title": "依赖类型决定 Stage 边界",
+                "code": "# 每多一次宽依赖（Exchange），多切一个 Stage\ndf.groupBy('city').count().explain()",
+                "note": "Stage 边界 = Shuffle 切口，根子在依赖类型。"
+              }
+            ],
+            "key_points": [
+              "窄依赖：子分区只依赖父局部分区，无需重排（车间内部）",
+              "宽依赖：子分区依赖父全部分区同 key 数据，必 Shuffle（空中飞货）",
+              "宽依赖处 = Stage 边界 = 融合断点",
+              "L5 重点在「分区如何被重分配」，窄宽定义 L4 已讲",
+              "并行度调优留 Level 7，本课只看依赖决定数据流向"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "以为「算子多就切 Stage」。",
+                "why": "只有宽依赖（Exchange）才切 Stage。",
+                "fix": "窄算子在同一 Stage 融合，看 Exchange 而非算子数。"
+              },
+              {
+                "mistake": "在 L5 重讲窄宽定义。",
+                "why": "L4 已讲定义，L5 只延展到分区物化。",
+                "fix": "聚焦「分区怎么被重新分配」与 Stage 切口。"
+              },
+              {
+                "mistake": "以为窄依赖也会跨节点。",
+                "why": "窄依赖父→子分区是局部分配。",
+                "fix": "只有宽依赖才触发跨节点重分布。"
+              }
+            ],
+            "review": "Level 4 我们讲了窄依赖/宽依赖的定义，以及「宽依赖是 Stage 断点」。可「断点」在分区层面到底长什么样？",
+            "problem": "窄/宽依赖落到分区上分别意味着什么？为什么说「Stage 边界 = Shuffle 发生的切口」？分区是怎么被重新分配的？",
+            "preview": "知道了依赖决定流向，下集就列一张清单——到底哪些操作会触发 Shuffle，哪些「可能」触发。"
+          }
+        },
+        {
+          "title": "哪些操作会触发 Shuffle",
+          "slug": "l5-shuffle-trigger-operators",
+          "description": "列举触发 Shuffle 的常见算子（groupBy / reduceByKey / aggregateByKey / join / distinct / repartition / orderBy / sort 等），区分「一定 Shuffle」与「可能 Shuffle」。",
+          "objective": "学完本课，你应该能够：列举触发 Shuffle 的常见算子（groupBy / reduceByKey / aggregateByKey / join / distinct / repartition / orderBy / sort 等）；区分「一定 Shuffle」与「可能 Shuffle」；知道 join 只点出「是宽依赖、会 Shuffle」，深类型（broadcast/sort-merge 怎么选）留 Level 6；不展开各 join 策略优劣。",
+          "estimated_minutes": 13,
+          "order_index": 5,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n既然 Shuffle 这么贵，你至少得认得出「哪些工序会叫空中货运」。就像仓库里有张清单，列着哪些动作必然要搬货、哪些动作可能要搬。认全这张清单，你写代码时才能下意识避开不必要的飞货。\n\n【一个直观的心智模型】\n\n把触发 Shuffle 的算子想成「会叫空中货运的那些工序清单」：groupBy 分拣、join 拼桌、distinct 去重、orderBy 重排、repartition 推倒重排——这些都是「需要全局按 key / 全局有序 / 全局重分布」的动作，必然或可能叫飞货。复用「空中飞货」与「水果分拣派对 = groupBy 聚合」。\n\n⚠️ 比喻的边界（很重要）：\n① 区分「一定 Shuffle」与「可能 Shuffle」：groupBy / distinct / orderBy / sort / join / repartition 通常一定 Shuffle；而像 `union`（同 schema 简单拼接）一般不 Shuffle；某些 `reduceByKey` 在已按相同 key 分区时仍可能仍需跨节点合并（取决于上游分区）。\n② join 只点出「是宽依赖、会 Shuffle」；broadcast / sort-merge / shuffle-hash 怎么选、什么时候 broadcast，是 Level 6 的深类型，本课不展开。\n③ 不要背死「某算子必 Shuffle」——要看它是否需要「全局按 key 汇聚 / 全局有序」，那是 Shuffle 的真正判据。\n\n【正式的技术定义】\n\n触发 Shuffle 的算子通常需要跨分区按 key 重分布或全局排序：groupBy / groupByKey / reduceByKey / aggregateByKey（按 key）、join / cogroup（按 key 对齐）、distinct / dropDuplicates（按整行或列去重需重排）、orderBy / sort / sortWithinPartitions（全局有序需重排）、repartition（强制重分布）。是否实际 Shuffle 取决于上游是否已是目标分区分布。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.orderBy('city')`：因需要全局有序，Spark 在 Shuffle 处把数据按排序键重分布到新分区并排序，切出 Stage。你写 `dfA.join(dfB, 'id')`：两表按 id 重分布（Shuffle）后对齐拼桌。你写 `df.union(other)`（同 schema）：仅拼接分区、不重排，通常无 Shuffle——印证「是否需全局重分布」才是判据。",
+            "examples": [
+              {
+                "title": "一定 Shuffle 的算子",
+                "code": "df.groupBy('city').count()\ndf.orderBy('city')\ndf.distinct()\n# 都需全局按 key/有序重分布 → 必 Shuffle",
+                "note": "groupBy / orderBy / distinct 是 Shuffle 常客。"
+              },
+              {
+                "title": "join 也 Shuffle",
+                "code": "dfA.join(dfB, 'id').explain()\n# 两表按 id 重分布 → Exchange（Shuffle）",
+                "note": "join 是宽依赖；策略深类型留 Level 6。"
+              },
+              {
+                "title": "可能不 Shuffle：union",
+                "code": "df.union(other).explain()\n# 同 schema 简单拼接分区，通常无 Exchange",
+                "note": "是否 Shuffle 看「是否需全局重分布」，不是看算子名。"
+              }
+            ],
+            "key_points": [
+              "一定/通常 Shuffle：groupBy / distinct / orderBy / sort / join / repartition",
+              "reduceByKey / aggregateByKey 按 key，通常需跨节点合并",
+              "union（同 schema 拼接）通常不 Shuffle",
+              "判据是「是否需全局按 key 汇聚/全局有序」，而非算子名",
+              "join 深类型（broadcast 等）留 Level 6，本课只点「会 Shuffle」"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "以为「记住某算子必 Shuffle」就够。",
+                "why": "是否真 Shuffle 取决于上游分区分布。",
+                "fix": "抓住判据：是否需要全局按 key 汇聚/有序。"
+              },
+              {
+                "mistake": "在 L5 展开 join 策略优劣。",
+                "why": "broadcast/sort-merge 选择是 Level 6。",
+                "fix": "本课只点 join 是宽依赖、会 Shuffle。"
+              },
+              {
+                "mistake": "以为 union 也 Shuffle。",
+                "why": "同 schema union 只是拼接分区。",
+                "fix": "union 通常无 Shuffle，别一刀切。"
+              }
+            ],
+            "review": "上一课我们把窄/宽依赖落到了分区层面，知道宽依赖必飞货。可落到具体算子上，到底哪些动作会触发飞货？",
+            "problem": "哪些算子会触发 Shuffle？怎么区分「一定 Shuffle」和「可能 Shuffle」？判断 Shuffle 的真正判据是什么？",
+            "preview": "列完触发清单，下集讲一个经典优化原理——为什么 reduceByKey 比 groupByKey 省那么多 Shuffle。"
+          }
+        },
+        {
+          "title": "reduceByKey vs groupByKey",
+          "slug": "l5-reducebykey-vs-groupbykey",
+          "description": "经典 Shuffle 优化原理：reduceByKey 在 map 端先做本地 combine（同 key 先聚合），大幅减少跨网络传输量；groupByKey 不做 combine，所有 value 原样 Shuffle。",
+          "objective": "学完本课，你应该能够：说清 reduceByKey 与 groupByKey 的核心差异——reduceByKey 在 map 端先做本地 combine（同 key 先聚合），大幅减少跨网络传输量；groupByKey 不做 combine，所有 value 原样 Shuffle；理解 combine 要求聚合函数可交换可结合；并知道本课只讲原理级「为什么 reduceByKey 更省 Shuffle」，不写「设 partitioner / 调 shuffle.partitions 到最优」的 tuning 代码（留 Level 7）。",
+          "estimated_minutes": 14,
+          "order_index": 6,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n同样是把同 key 的货凑一起，做法不同，空中运费天差地别。一种做法是：每个工人先把自家的同 key 货捆成小包（本地先聚合），再只把小包空运去中央汇总；另一种是：把每件散货原样空运，到中央再慢慢捆。前者飞货量小得多——这就是 reduceByKey 比 groupByKey 省的根本原因。\n\n【一个直观的心智模型】\n\n- reduceByKey = 先在各自车间把同类项捆成小包（map-side combine），再只空运小包到中央汇总（复用「空中飞货」+ 水果分拣派对：每个人扔之前先本地预聚合，只扔两个大袋）。\n- groupByKey = 把每件散货都原样空运（不捆），到中央再分组——空中飞的全是未聚合的原始 value，运力浪费。\n\n⚠️ 比喻的边界（很重要）：\n① combine 有前提：聚合函数必须是可交换、可结合的（如 sum/ min/ max），否则本地先聚合会算错；groupBy 的「分组后随便处理」没有这个限制。\n② 本课只讲「为什么 reduceByKey 更省 Shuffle」的原理，不写「设自定义 partitioner / 调 spark.sql.shuffle.partitions 到最优」的 tuning 代码——那是 Level 7。\n③ 即便省了 Shuffle 量，reduceByKey 仍有一次 Shuffle（只是传输量小）；它优化的是「传输体积」，不是「消除 Shuffle」。\n\n【正式的技术定义】\n\nreduceByKey 在 map 端对每个分区内的同 key 记录先做本地聚合（combine），再 Shuffle 传输已聚合的部分结果，reduce 端合并得到最终值，因此跨网络传输的数据量远小于原始记录数。groupByKey 不做 map 端 combine，直接将每个 key 的全部 value 原样 Shuffle 到 reduce 端再分组，传输量 = 原始 value 总数，网络代价高。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `rdd.map(...).reduceByKey(_ + _)`：每个 Executor 先在本地把同 key 的 value 相加成部分和，Shuffle 时只传这些部分和（例如每分区每 key 一个和），reduce 端加总。你写 `rdd.map(...).groupByKey()`：每个 value 原样序列化飞到目标 Executor，目标端收齐所有 value 再处理——同样数据量，空中飞货量可能是前者的几十倍。",
+            "examples": [
+              {
+                "title": "reduceByKey：先本地 combine",
+                "code": "words = rdd.map(lambda w: (w, 1))\nwords.reduceByKey(lambda a, b: a + b).collect()\n# 每分区先本地求和，再 Shuffle 部分和",
+                "note": "map 端 combine 大幅减少空中飞货量。"
+              },
+              {
+                "title": "groupByKey：原样 Shuffle",
+                "code": "words.groupByKey().mapValues(sum).collect()\n# 所有 value 原样飞到目标端再分组求和",
+                "note": "无 combine，传输量 = 原始 value 总数，贵。"
+              },
+              {
+                "title": "combine 的前提",
+                "code": "# sum/min/max 可交换可结合，能本地 combine\n# 若聚合依赖全局顺序（如求中位数），不能简单 combine",
+                "note": "只有可交换可结合的聚合才能 map 端预聚合。"
+              }
+            ],
+            "key_points": [
+              "reduceByKey：map 端先本地 combine，再 Shuffle 部分和（传输量小）",
+              "groupByKey：不 combine，所有 value 原样 Shuffle（传输量大）",
+              "combine 要求聚合函数可交换、可结合（sum/min/max）",
+              "reduceByKey 优化的是「Shuffle 传输体积」，不是消除 Shuffle",
+              "tuning 代码（partitioner/分区数）留 Level 7，本课只讲原理"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "以为 reduceByKey 不 Shuffle。",
+                "why": "它仍有一次 Shuffle，只是传输量小。",
+                "fix": "理解它优化体积，不消除 Shuffle。"
+              },
+              {
+                "mistake": "对任何聚合都用 groupByKey。",
+                "why": "原样 Shuffle 传输量最大。",
+                "fix": "可换的聚合优先 reduceByKey / aggregateByKey。"
+              },
+              {
+                "mistake": "以为所有聚合都能 map 端 combine。",
+                "why": "依赖全局顺序的聚合不可结合。",
+                "fix": "只有可交换可结合的聚合能本地预聚合。"
+              }
+            ],
+            "review": "上一课我们列了触发 Shuffle 的算子清单，groupBy / reduceByKey 都在列。可同样要按 key 聚合，写法不同，空中运费差很多。",
+            "problem": "为什么 reduceByKey 比 groupByKey 省 Shuffle？map 端 combine 是什么？为什么不是所有聚合都能本地预聚合？",
+            "preview": "懂了「怎么让飞货更省」，下集讲怎么主动控制分区数——repartition 与 coalesce 有什么区别。"
+          }
+        },
+        {
+          "title": "repartition vs coalesce",
+          "slug": "l5-repartition-coalesce",
+          "description": "掌握控制分区数的两个手段：repartition（一定触发 Shuffle，增减分区都可）vs coalesce（减少分区走窄依赖合并、不触发 Shuffle，但不能增分区）。",
+          "objective": "学完本课，你应该能够：掌握控制分区数的两个手段——repartition（一定触发 Shuffle、增/减分区都行）与 coalesce（减少分区走窄依赖合并、不触发 Shuffle，但不能增分区）；理解「想减分区又不想白付 Shuffle 就选 coalesce」；知道 coalesce 增分区无效（需 repartition）、coalesce 跨节点合并仍可能移动数据（shuffle=False 仅合并同节点）；并行度/性能调优留 Level 7。",
+          "estimated_minutes": 13,
+          "order_index": 7,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n想调整分区数（托盘数）有两个扳手：一个粗暴——把所有托盘推倒重排，必叫空中货运；一个温柔——把相邻的托盘就地并拢，不拆不飞。前者能增能减但必付 Shuffle；后者只能减、但免费。选哪个，看你是要「加托盘」还是「减托盘」。\n\n【一个直观的心智模型】\n\n- repartition = 把所有托盘推倒重排（必空中飞货）：能增能减，但每次都付一次 Shuffle。\n- coalesce = 把相邻托盘就地并拢（不拆不飞，窄合并）：只能减不能增，且不触发 Shuffle。\n复用「空中飞货」与「托盘 = 分区」：想减托盘又不想白付飞货，就选 coalesce。\n\n⚠️ 比喻的边界（很重要）：\n① coalesce 不能增分区——它只做「合并」，没有数据可凭空多出托盘；要增分区必须 repartition。\n② coalesce 默认 shuffle=False，只在同节点内合并相邻分区；若跨节点合并仍可能移动数据，想要强制不跨节点可传 shuffle=False 并依赖同节点布局（通常无需显式）。\n③ 并行度/性能调优（选多少分区最优）留 Level 7；本课只讲两个手段的「触发 Shuffle 与否」与「能否增减」。\n\n【正式的技术定义】\n\nrepartition(n) 通过对数据做 hash 重分布把分区数改为 n，**一定触发 Shuffle**，可增可减。coalesce(n) 通过合并现有分区减少分区数（n < 当前），默认走窄依赖合并、**不触发 Shuffle**，但只能减少不能增加；若想跨节点均匀合并可传 shuffle=True（那就变 Shuffle）。二者都返回新 DataFrame，原 DataFrame 不变（不可变语义）。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.repartition(200)`：Spark 按 key 哈希把数据重分布到 200 个分区，一次 Shuffle，分区数变 200（增或减都行）。你写 `df.coalesce(2)`：Spark 把相邻分区合并成 2 个，不跨节点重排、无 Shuffle，分区数从多降到 2（只能减）。你写 `df.coalesce(500)`（当前只有 10 个分区）则无效——不能凭空增多。",
+            "examples": [
+              {
+                "title": "repartition：必 Shuffle，能增能减",
+                "code": "df.repartition(200).explain()\n# 出现 Exchange，分区数改为 200（增或减都触发 Shuffle）",
+                "note": "repartition 任何方向都付一次 Shuffle。"
+              },
+              {
+                "title": "coalesce：不 Shuffle，只能减",
+                "code": "df.coalesce(2).explain()\n# 无 Exchange，相邻分区合并，分区数降到 2",
+                "note": "想减分区又不想白付 Shuffle，选 coalesce。"
+              },
+              {
+                "title": "coalesce 不能增分区",
+                "code": "df.coalesce(500)  # 当前仅 10 分区 → 无效，不会变多\n# 要增分区必须用 repartition(500)",
+                "note": "coalesce 只合并、不创造新分区。"
+              }
+            ],
+            "key_points": [
+              "repartition：一定触发 Shuffle，可增可减分区",
+              "coalesce：默认不 Shuffle（窄合并），只能减少分区",
+              "想减分区又不想白付 Shuffle → 选 coalesce",
+              "coalesce 不能增分区，要增必须 repartition",
+              "coalesce 跨节点合并仍可能移动数据；调优留 L7"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "用 coalesce 想增加分区数。",
+                "why": "coalesce 只合并，不能凭空增多。",
+                "fix": "增分区用 repartition。"
+              },
+              {
+                "mistake": "减分区也一律用 repartition。",
+                "why": "白付一次不必要的 Shuffle。",
+                "fix": "纯减分区优先 coalesce（免 Shuffle）。"
+              },
+              {
+                "mistake": "以为 coalesce 永远零移动。",
+                "why": "跨节点合并仍可能移动数据。",
+                "fix": "理解 shuffle=False 主要是同节点合并，并非绝对零移动。"
+              }
+            ],
+            "review": "前面几课我们建立了「分区数 = 并行度」「Shuffle 很贵」。那能不能主动控制分区数，又尽量少付 Shuffle？",
+            "problem": "repartition 和 coalesce 有什么区别？为什么减分区优先用 coalesce？为什么说 coalesce 不能增分区？",
+            "preview": "学完两个控制分区的扳手，下集做综合练习——给你一段真实代码，指出哪些操作触发 Shuffle、数出 Stage、估计并行度。"
+          }
+        },
+        {
+          "title": "综合练习",
+          "slug": "l5-comprehensive",
+          "description": "给一段真实代码，能指出哪些操作触发 Shuffle、数出 Stage、估计分区/并行度，并能用「reduceByKey 优于 groupByKey」原理指出可优化点（仅原理，不写 tuning）。",
+          "objective": "学完本课，你应该能够：给一段真实代码，独立指出哪些操作触发 Shuffle、数出 Stage、估计分区/并行度，并能用「reduceByKey 优于 groupByKey」原理指出可优化点（仅原理，不写 tuning）；理解综合只验证「看得懂分区与 Shuffle、能识别触发点」，不要求给出调优参数或最优分区数（留 Level 7）；理解计划相同 ≠ 运行时性能相同（倾斜留 Level 7）。",
+          "estimated_minutes": 18,
+          "order_index": 8,
+          "prerequisites": "",
+          "content": {
+            "explanation": "【先用人话理解】\n\n这是 Level 5 的收束：给你一段真实代码，让你像看「运输排程单」一样，把前面所有道具串成一张完整图——先找空中飞货（Shuffle），再数托盘（分区/并行度），最后找「能本地先捆包」的机会（combine）。它逼你把「看分区与 Shuffle」从「看得懂单个概念」升级到「看得懂整段作业」。\n\n示例任务：读一份日志，按城市分组统计错误数，按数量降序取前 10。\n目标：独立指出 ① 哪几步触发 Shuffle（groupBy / orderBy）；② 分成几个 Stage（Shuffle 数 + 1）；③ 并行度约等于多少（看分区数）；④ 能否用 reduceByKey 类思路减少飞货。\n\n【一个直观的心智模型】\n\n把这次练习想成「把前面道具串成一张运输排程单」：\n1. 先找 **空中飞货（Shuffle）**——groupBy / orderBy / join 等，它们是性能重点信号。\n2. 再数 **托盘（分区 / 并行度）**——分区数 = Task 数 = 理论并行度。\n3. 最后找 **可本地捆包的机会（combine）**——能用 reduceByKey 就不用 groupByKey。\n\n⚠️ 比喻的边界（很重要）：\n① 计划相同 ≠ 运行时性能相同：同样一份计划，数据倾斜、分区数不同，真实耗时天差地别（Level 7 才展开）。\n② 本课综合**只验证「看得懂」**——能指认 Shuffle、数出 Stage、估计并行度、指出 reduceByKey 优化点，就达标；不要求你写 tuning 代码或给最优分区数。\n③ explain() 不触发执行，所以这套「读图」练习随时可做、零成本。\n\n【正式的技术定义】\n\n综合练习 = 对一段真实 Spark 代码，完整应用 Level 5 所学：识别触发 Shuffle 的算子（groupBy / orderBy / join / distinct / repartition）；据 Shuffle 数判定 Stage 数（Shuffle 数 + 1）；据分区数估计并行度（Task 数）；并据「map 端 combine」原理判断能否用 reduceByKey 类算子替代 groupByKey 以减少传输。输出一份「分区与 Shuffle 读图报告」。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `logs.groupBy('city').count().orderBy(F.desc('count')).limit(10).explain(True)`：Spark 先生成计划；你读出 groupBy 处一处 Exchange（Shuffle，切出 Stage）、orderBy 处又一处 Exchange（再切 Stage），共 2 次 Shuffle → 3 个 Stage；并发现 groupBy 用 reduceByKey 式本地预聚合（combine）已省传输；limit 不 Shuffle。整段分析零执行，纯粹「读图」。",
+            "examples": [
+              {
+                "title": "完整读图练习",
+                "code": "logs.groupBy('city').count() \\\n     .orderBy(F.desc('count')).limit(10).explain(True)\n# 读图：groupBy + orderBy 两处 Exchange → 3 Stage；limit 不 Shuffle",
+                "note": "独立指认 Shuffle、Stage 数、并行度、combine 机会即达标。"
+              },
+              {
+                "title": "指出可优化点（原理）",
+                "code": "# 若看到 groupByKey 后 sum，可改为 reduceByKey 减少飞货\nrdd.map(lambda w: (w, 1)).reduceByKey(lambda a, b: a + b)",
+                "note": "只点原理：map 端 combine 更省 Shuffle；不写 tuning 代码。"
+              },
+              {
+                "title": "只验证读懂，不调优",
+                "code": "# 目标不是改快，而是说清「它怎么切、怎么飞、并行多少」\nlogs.groupBy('city').count().explain()",
+                "note": "综合练习只验收「看得懂分区与 Shuffle」，调优留 L7。"
+              }
+            ],
+            "key_points": [
+              "读图三步：找 Shuffle（空中飞货）→ 数 Stage（Shuffle+1）→ 估计并行度（分区数）",
+              "能指认 Shuffle、数出 Stage、估计并行度、指出 reduceByKey 优化点即达标",
+              "计划相同 ≠ 运行时性能相同（倾斜/分区数影响，L7）",
+              "综合只验证「看得懂」，不要求调优或给最优分区数",
+              "explain() 不触发执行，读图练习零成本"
+            ],
+            "common_mistakes": [
+              {
+                "mistake": "综合练习里急着「改代码调快」。",
+                "why": "本课只验收读得懂。",
+                "fix": "先把图读准，调优是 L7。"
+              },
+              {
+                "mistake": "数 Stage 时漏算「初始 Stage」。",
+                "why": "Stage 数 = Shuffle 数 + 1。",
+                "fix": "从 1 开始加。"
+              },
+              {
+                "mistake": "以为看 plan 就能定性能。",
+                "why": "计划是静态，倾斜/分区数是运行时因素。",
+                "fix": "真实性能看 Spark UI（L7）。"
+              }
+            ],
+            "review": "从「分区是什么」「分区数=并行度」「Shuffle 定义与代价」「窄宽在分区层面」「触发算子」「reduceByKey vs groupByKey」「repartition vs coalesce」，Level 5 的零件都齐了。",
+            "problem": "能不能不靠提示，独立给一段真实代码读出它的 Shuffle、Stage、并行度，并指出 reduceByKey 比 groupByKey 省的优化点？这正是检验你是否真正串起 Level 5 的标准。",
+            "preview": "恭喜走完 Level 5——你现在能「看见」数据怎么被切分、怎么被搬来搬去、哪里最贵。但「怎么让它真的算得更快」的定量调优，是 Level 6（Join 深类型/broadcast）→ Level 7（性能调优）的主场。去测验检验自己吧。🏁"
+          }
+        }
+      ]
     }
   ]
 }

@@ -18,7 +18,7 @@
 | 6a | Quiz Bank 扩充（每课扩至 10 题 + 多样性抽题；L0/L1/L2 全完成） | 🟢 已完成（Phase 6.1 + 6.2） |
 | 6b | Review / Spaced Repetition（间隔重复） | 🔒 规划中（待你设计新机制，未启动） |
 | 7 | Parking Lot 防止思绪发散 | 🔒 规划中 |
-| 8 | 完整 Spark 课程（Level 2 DataFrame 核心已落地；Level 3-7 规划中） | 🟡 部分完成 |
+| 8 | 完整 Spark 课程（Level 2/3/4/5 已落地：DataFrame 核心 / Spark SQL / 执行计划 / 分区与 Shuffle；Level 6-7 规划中） | 🟡 部分完成 |
 | 9 | 游戏化 UI / Streak / Badge | 🔒 规划中 |
 | 10 | AI Tutor | 🔒 规划中 |
 | Notes | Lesson 学习笔记（lesson_notes 表 + 笔记 API + 前端接入） | 🟢 已完成（V1.0 基线） |
@@ -157,6 +157,12 @@ lesson_notes (id, lesson_id FK→lessons.id ON DELETE CASCADE, content,
   1. RDD 是什么 · 2. Transformation · 3. Action · 4. Lazy Evaluation · 5. RDD 为什么逐渐被 DataFrame 替代 · 6. RDD 小练习
 - **Level 2：DataFrame 核心**（10 课，2026-08-27 新增，见下方 Phase 8 记录）
   1. DataFrame 是什么 · 2. 创建 DataFrame · 3. Schema 与数据类型 · 4. 检视数据 · 5. select/filter/where · 6. withColumn 与 Column 表达式 · 7. 排序/去重/常用操作 · 8. groupBy 与聚合 · 9. 数据写出 · 10. DataFrame 综合练习
+- **Level 3：Spark SQL**（9 课，2026-08-28 新增，见下方 Level 3 实现记录）
+  1. Spark SQL 是什么 · 2. 临时视图（Temporary View）· 3. SELECT 基础 · 4. WHERE / ORDER BY / LIMIT · 5. GROUP BY 与 HAVING · 6. 多表关联（JOIN）入门 · 7. 内置函数与 UDF · 8. Spark SQL 与表 / 文件格式 · 9. Spark SQL 综合练习
+- **Level 4：执行计划**（9 课，2026-08-28 新增，见下方 Level 4 实现记录）
+  1. 为什么该看执行计划 · 2. 逻辑计划 vs 物理计划 · 3. explain() 怎么用 · 4. 怎么读执行计划文本 · 5. Catalyst 优化规则 · 6. WholeStageCodegen 与 Tungsten · 7. 窄依赖 vs 宽依赖 · 8. Job / Stage / Task 层级 · 9. 综合练习
+- **Level 5：分区与 Shuffle**（9 课，2026-08-28 新增，见下方 Level 5 实现记录）
+  1. 分区是什么 · 2. 分区数与并行度 · 3. Shuffle 是什么 · 4. Shuffle 为什么贵 · 5. 窄/宽依赖在分区层面的含义 · 6. 哪些操作会触发 Shuffle · 7. reduceByKey vs groupByKey · 8. repartition vs coalesce · 9. 综合练习
 
 每课 `content` 字段结构（Phase 3 引入，JSON 文本）：
 ```json
@@ -175,9 +181,9 @@ lesson_notes (id, lesson_id FK→lessons.id ON DELETE CASCADE, content,
 
 title / objective / estimated_minutes 仍为独立列；课程文本**不硬编码在 React 组件**。
 
-当前数据量：`course_levels = 3`，`lessons = 21`，全部 lesson.content 已回填（Level 2 新增 10 课）。
+当前数据量：`course_levels = 6`，`lessons = 48`，全部 lesson.content 已回填（Level 2 新增 10 课、Level 3 新增 9 课、Level 4 新增 9 课、Level 5 新增 9 课）。
 
-> ✅ 全部 21 课均已补齐 Quiz 题库（每课 10 题，共 210 题）；Level 2 课程测试接口正常返回题目，且抽题已按维度多样性生效。
+> ✅ 全部 48 课均已补齐 Quiz 题库（每课 10 题，共 480 题）；Level 2/3/4/5 课程测试接口正常返回题目，且抽题已按维度多样性生效。
 
 ### 尚未引入的表（按文档规划，随对应 Phase 引入）
 
@@ -247,8 +253,8 @@ spark-quest-app/
 │   │   ├── models.py          # ORM：CourseLevel、Lesson、QuizQuestion、LessonMastery
 │   │   ├── schemas.py         # Pydantic 响应模型（含 Phase 4 Quiz*/QuizResult*、LessonOut 增 status/mastery_score）
 │   │   ├── services.py        # 共享逻辑：ordered_lessons / compute_lesson_status / mastery_score / lesson_status_map（真实派生）
-│   │   ├── course_seed.json   # 种子数据（含 11 课的结构化 content）
-│   │   ├── quiz_seed.json     # 题库种子（21 课 × 10 题 = 210 题，按 lesson_slug；Phase 6.1/6.2 扩充）
+│   │   ├── course_seed.json   # 种子数据（含 48 课的结构化 content：L0-L5）
+│   │   ├── quiz_seed.json     # 题库种子（48 课 × 10 题 = 480 题，按 lesson_slug；Phase 6.1/6.2 + Level 3/4/5 扩充）
 │   │   └── routers/
 │   │       ├── courses.py     # /api/levels、/api/levels/{id}/lessons
 │   │       ├── dashboard.py   # /api/dashboard（Phase 4：completed=mastered 数，今日课=首个未 mastered）
@@ -364,7 +370,100 @@ spark-quest-app/
 
 **未解决 / 后续**：
 - ✅ Level 2 的 10 课 Quiz 已补齐（见 `seed_quiz_level2.py`；50 题，5 类题型），测验接口对 Level 2 现已正常返回题目。
-- Level 3（Spark SQL）→ Level 4（执行计划）→ Level 5（Partition/Shuffle）→ Level 6（Join）→ Level 7（性能优化）按用户新路线图规划中，未实现。
+- ✅ Level 3（Spark SQL，9 课）已于 2026-08-28 落地（见下方「Level 3 实现记录」）；Level 4（执行计划，9 课）已于 2026-08-28 落地（见下方「Level 4 实现记录」）；Level 5（Partition/Shuffle）→ Level 6（Join 深类型/broadcast/调优）→ Level 7（性能优化）仍按用户新路线图规划中，未实现。
+
+## Level 3 实现记录 —— Spark SQL（2026-08-28）
+
+**范围（用户确认）**：在 Level 2（DataFrame 核心）之后落地 **Level 3：Spark SQL（9 课）**。设计原则严格"不抢跑 L4–L7"——SQL 与 DataFrame API 共享同一套 Catalyst 优化大脑；每课尽量与 Level 2 的等价 DataFrame 操作配对；JOIN 只做轻量 INNER 入门（深类型 / broadcast / 调优留给 Level 6）；UDF 点出"为什么慢"作为 Level 7 伏笔；明确不接入 Hive Metastore（沿用既有约束）。
+
+**已落地**：
+- 新增 `course_levels` 行：Level 3（order_index=3，id=4，status=active）
+- 新增 9 课（slug 前缀 `l3-*`），内容沿用七要素 content（explanation / examples / key_points / common_mistakes / review / problem / preview），且每课 explanation 含 v1.0 规定的 5 个固定小节（【先用人话理解】/【一个直观的心智模型】/⚠️ 比喻的边界（很重要）：/【正式的技术定义】/【写下代码后，Spark 内部发生了什么】）
+  1. `l3-what-is-spark-sql` Spark SQL 是什么
+  2. `l3-temp-views` 临时视图（Temporary View）
+  3. `l3-select-basics` SELECT 基础
+  4. `l3-where-order-limit` WHERE / ORDER BY / LIMIT
+  5. `l3-groupby-having` GROUP BY 与 HAVING
+  6. `l3-joins-intro` 多表关联（JOIN）入门（仅 INNER，深类型留 L6）
+  7. `l3-functions-and-udf` 内置函数与 UDF（点出 UDF 慢 → L7 伏笔）
+  8. `l3-tables-and-formats` Spark SQL 与表 / 文件格式（CREATE TABLE ... USING ... LOCATION；不接 Hive）
+  9. `l3-comprehensive` Spark SQL 综合练习（读 CSV → 注册 → 多步 SQL → 写出）
+- 每课 10 题，共 90 题，`single_choice`、`dimension` 开放词表（concept/why/mechanism/apply/comparison/debug），全部带 `explanation`；题库随 `quiz_seed.json` 与运行库同步写入。
+- 跨课一致性：复用 v1.0 道具表（Catalyst = 同一套优化大脑；临时视图 = 仓库门口临时工牌），并在「心智模型与比喻边界案例库」登记 Level 3 的新隐喻。
+- 同步更新 `backend/app/course_seed.json`（幂等：若已存在 Level 3 则跳过 JSON 写入）与 `backend/app/quiz_seed.json`（按 lesson_slug 追加，已存在则跳过）；数据库 upsert 按 slug 跳过已存在课程/题库，**未触碰 Level 0/1/2 与 lesson_mastery 进度**。
+
+**脚本**：`backend/seed_level3.py`（一次性幂等 upsert；JSON 合并 + DB upsert 一体，并顺带处理题库，覆盖 seed_level2 与 expand_quizzes 的分体模式）。
+
+**校验**：
+- DB：levels=4、lessons=30、quizzes=300、lesson_mastery=17（进度未动）。
+- 9 个 L3 课每课 `quizzes` = 10，`correct_index` ∈ [0,3]；全部 L3 课 content 七要素齐全、explanation 五小节齐全；JSON 合法。
+- 前端 `npm run build`（`tsc -b` + vite）通过：**tsc -b 类型检查通过**；vite 产出因 safe-delete 钩子拦截 `dist/` 清理而需在临时配置下构建（环境限制，非代码问题，已用临时 outDir 验证可正常产出 index.html + assets）。
+
+**未做 / 后续**：
+- Level 4（执行计划，9 课）已于 2026-08-28 落地（见下方「Level 4 实现记录」）；Level 5（Partition/Shuffle）→ Level 6（Join 深类型/broadcast/调优）→ Level 7（性能优化）仍按用户新路线图规划中，未实现。
+- 案例库 slug 一致性：原 `Spark_Quest_心智模型与比喻边界案例库.md` 中 `l2-sort-dedup-limit` / `l2-inspect-data` 与种子实际 slug `l2-sort-dedup` / `l2-inspect` 不符，本次一并校正。
+
+## Level 4 实现记录 —— 执行计划（2026-08-28）
+
+**范围（用户确认）**：在 Level 3（Spark SQL）之后落地 **Level 4：执行计划（9 课）**。设计上严格"不抢跑 L5–L7"——只教"怎么看懂 Spark 怎么算"，不展开 Shuffle/分区调优（L5）、JOIN 策略（L6）、Tungsten 内存细节（L7）；复用 Catalyst=优化大脑、Shuffle=空中飞货、Driver=前台、Executor=工人 等已登记道具。
+
+**已落地**：
+- 新增 `course_levels` 行：Level 4（order_index=4，id=5，status=active）
+- 新增 9 课（slug 前缀 `l4-*`），内容沿用七要素 content（explanation / examples / key_points / common_mistakes / review / problem / preview），且每课 explanation 含 v1.0 规定的 5 个固定小节（【先用人话理解】/【一个直观的心智模型】/⚠️ 比喻的边界（很重要）：/【正式的技术定义】/【写下代码后，Spark 内部发生了什么】）
+  1. `l4-why-explain` 为什么该看执行计划
+  2. `l4-logical-vs-physical` 逻辑计划 vs 物理计划（四段 Parsed→Analyzed→Optimized→Physical）
+  3. `l4-explain-api` explain() 怎么用（默认 / True / formatted 三档）
+  4. `l4-read-plan` 怎么读执行计划文本（Scan/Filter/Project/Aggregate/Exchange）
+  5. `l4-catalyst-rules` Catalyst 优化规则（谓词下推/列裁剪/常量折叠/null 传播）
+  6. `l4-wholestage-codegen` WholeStageCodegen 与 Tungsten（*(N) 融合标记）
+  7. `l4-dependency-narrow-wide` 窄依赖 vs 宽依赖（Stage 边界根源）
+  8. `l4-job-stage-task` Job / Stage / Task 层级模型
+  9. `l4-comprehensive` 综合练习（独立读图：找 Exchange → 数 Stage → 找优化点）
+- 每课 10 题，共 90 题，`single_choice`、`dimension` 覆盖 concept/why/mechanism/apply/comparison 五类（+ 部分 debug），全部带 `explanation`；题库随 `quiz_seed.json` 与运行库同步写入。
+- 跨课一致性：复用 v1.0 道具表，并在「心智模型与比喻边界案例库」登记 Level 4 的新隐喻（设计师概念图 vs 施工图、Stage、WholeStageCodegen、Job→Stage→Task）。
+- 同步更新 `backend/app/course_seed.json`（幂等：若已存在 Level 4 则跳过 JSON 写入）与 `backend/app/quiz_seed.json`（按 lesson_slug 追加，已存在则跳过）；数据库 upsert 按 slug 跳过已存在课程/题库，**未触碰 Level 0/1/2/3 与 lesson_mastery 进度**。
+
+**脚本**：`backend/seed_level4.py`（一次性幂等 upsert；JSON 合并 + DB upsert 一体，沿用 `seed_level3.py` 模式）。
+
+**校验**：
+- DB：levels=5、lessons=39、quizzes=390、lesson_mastery=18（进度未动）。
+- 9 个 L4 课每课 `quizzes` = 10，`correct_index` ∈ [0,3]，dimension 无 NULL；全部 L4 课 content 七要素齐全、explanation 五小节齐全；JSON 合法。
+- 前端 `npm run build`（`tsc -b` + vite）未改前端，无需重跑；课程文本数据化经 `/api/lessons/{id}` 渲染，与既有 L0–L3 一致。
+
+**未做 / 后续**：
+- Level 5（Partition/Shuffle）已于 2026-08-28 落地（见下方「Level 5 实现记录」）；Level 6（Join 深类型/broadcast/调优）→ Level 7（性能优化：Tungsten 内存/堆外/编码字节级）仍按用户新路线图规划中，未实现。
+- Level 4 综合练习只验收"读得懂"，不要求调优（呼应设计稿红线）。
+
+## Level 5 实现记录 —— 分区与 Shuffle（2026-08-28）
+
+**范围（用户确认）**：在 Level 4（执行计划）之后落地 **Level 5：分区与 Shuffle（9 课）**。设计上严格"不抢跑 L6–L7"——只教"数据怎么被切分（分区）、又在什么情况下被搬来搬去（Shuffle）及其代价"，不展开 JOIN 策略深类型（L6）、Tungsten 内存细节（L7）、具体调优参数/最优分区数（L7）；复用 Catalyst=优化大脑、Shuffle=空中飞货、Driver=前台、Executor=工人、Stage=不跨车间工序段、Job→Stage→Task 等已登记道具，并把 L4 的窄/宽依赖定义延展到分区物化层面。
+
+**已落地**：
+- 新增 `course_levels` 行：Level 5（order_index=5，id=6，status=active）
+- 新增 9 课（slug 前缀 `l5-*`），内容沿用七要素 content（explanation / examples / key_points / common_mistakes / review / problem / preview），且每课 explanation 含 v1.0 规定的 5 个固定小节（【先用人话理解】/【一个直观的心智模型】/⚠️ 比喻的边界（很重要）：/【正式的技术定义】/【写下代码后，Spark 内部发生了什么】；综合练习 l5-comprehensive 亦含五小节，未踩 L3 早期"comprehensive 缺小节"的坑）
+  1. `l5-what-is-partition` 分区是什么
+  2. `l5-partition-count-parallelism` 分区数与并行度
+  3. `l5-what-is-shuffle` Shuffle 是什么
+  4. `l5-shuffle-cost` Shuffle 为什么贵
+  5. `l5-narrow-wide-partition` 窄/宽依赖在分区层面的含义
+  6. `l5-shuffle-trigger-operators` 哪些操作会触发 Shuffle
+  7. `l5-reducebykey-vs-groupbykey` reduceByKey vs groupByKey
+  8. `l5-repartition-coalesce` repartition vs coalesce
+  9. `l5-comprehensive` 综合练习（独立读图：找 Shuffle → 数 Stage → 估并行度 → 指 reduceByKey 优化点）
+- 每课 10 题，共 90 题，`single_choice`、`dimension` 覆盖 concept/why/mechanism/apply/comparison 五类（无 NULL），全部带 `explanation`；题库随 `quiz_seed.json` 与运行库同步写入。
+- 跨课一致性：复用 v1.0 道具表，并在「心智模型与比喻边界案例库」登记 Level 5 的新隐喻（托盘/货盘、工人数量上限=托盘数、装箱→装车→卸货分拣、车间本地先捆小包再空运、推倒重排 vs 就地并拢）；案例库原 §6/§7 顺延为 §7/§8，新增 L5 章节为 §6。
+- 同步更新 `backend/app/course_seed.json`（幂等：若已存在 Level 5 则跳过 JSON 写入）与 `backend/app/quiz_seed.json`（按 lesson_slug 追加，已存在则跳过）；数据库 upsert 按 slug 跳过已存在课程/题库，**未触碰 Level 0/1/2/3/4 与 lesson_mastery 进度**。
+
+**脚本**：`backend/seed_level5.py`（一次性幂等 upsert；JSON 合并 + DB upsert 一体，沿用 `seed_level4.py` 模式）。
+
+**校验**：
+- DB：levels=6、lessons=48、quizzes=480、lesson_mastery=18（进度未动）。
+- 9 个 L5 课每课 `quizzes` = 10，`correct_index` ∈ [0,3]，dimension 五类全覆盖、无 NULL；全部 L5 课 content 七要素齐全、explanation 五小节齐全；JSON 合法。
+- 收尾核验按「Spark_Quest_新增Level_收尾核验踩坑.md §5」参数化脚本（`ORDER_INDEX=5, PREFIX="l5-"`）跑通：连真库 `backend/spark_quest.db`（非 `app/sparkquest.db`）、`quizzes` 用 `lesson_id` 关联、聚合结构、`content` 用实现态七键——全绿。
+
+**未做 / 后续**：
+- Level 6（Join 深类型 / broadcast / 调优）→ Level 7（性能优化：Tungsten 内存/堆外/编码字节级、具体调优参数与最优分区数）仍按用户新路线图规划中，未实现。
+- Level 5 综合练习只验收"看得懂分区与 Shuffle、能识别触发点"，不要求给出调优参数或最优分区数（呼应设计稿红线）。
 
 ## Phase 5 实现记录 —— 完整 Progress Dashboard 动态化 + 状态系统（已完成并验收）
 
