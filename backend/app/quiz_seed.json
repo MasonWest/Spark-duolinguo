@@ -6479,6 +6479,2436 @@
           "dimension": "mechanism"
         }
       ]
+    },
+    {
+      "lesson_slug": "l6-what-is-join",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "JOIN 最准确的本质是？",
+          "options": [
+            "把两张表查出来、拼上一列",
+            "一种特殊的 groupBy",
+            "先按 key 对齐、再拼合的二元算子",
+            "只在 Driver 端完成的合并操作"
+          ],
+          "correct_index": 2,
+          "explanation": "JOIN 要先把相同 key 的记录凑到一起再拼合——它的「重」就重在这个前置的对齐动作上，不是简单地拼列。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么 JOIN 通常比单表 groupBy 更贵？",
+          "options": [
+            "groupBy 通常只汇聚一侧，JOIN 往往两侧都要按 key 重分布",
+            "JOIN 涉及的列更多",
+            "JOIN 一定在 Driver 端执行",
+            "JOIN 的结果行数一定更多"
+          ],
+          "correct_index": 0,
+          "explanation": "单表 groupBy 只对一侧按 key 汇聚（通常 1 次 Exchange）；JOIN 常要两侧都按 key 重排（2 次 Exchange），代价自然更高。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "写下 orders.join(customers, 'customer_id') 后，Spark 内部的关键约束是？",
+          "options": [
+            "必须把两张表都读进 Driver 内存",
+            "必须先对两表全量排序才能 join",
+            "两表分区数必须完全相同才能 join",
+            "相同 key 的记录必须落到同一位置才能配对"
+          ],
+          "correct_index": 3,
+          "explanation": "同 key 必须同位置才能配对，这就是 JOIN 通常触发 Shuffle（Exchange）的物理根源。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "写完一句 join 之后，第一步最该做的是？",
+          "options": [
+            "直接 write 落盘",
+            "先 count() 核对行数量级，再用 explain 看走了什么策略",
+            "立刻给两侧都加 F.broadcast()",
+            "把分区数调到 2000"
+          ],
+          "correct_index": 1,
+          "explanation": "JOIN 结果行数不等于任一侧行数：条件写错会导致空结果或行数爆炸。先 count() 验量级、explain 看计划，是最便宜的自检。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于「JOIN 一定两边都 Shuffle」，正确的是？",
+          "options": [
+            "不一定：一侧足够小时可广播，大表完全不 Shuffle",
+            "永远成立",
+            "只有 SQL 写法会这样",
+            "分区数足够大就能免 Shuffle"
+          ],
+          "correct_index": 0,
+          "explanation": "Broadcast Hash Join 会把小表广播出去，让大表侧完全不按 key 重排——这是唯一常见的免 Shuffle 路径。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于 JOIN 的结果行数，正确的是？",
+          "options": [
+            "等于左表行数",
+            "等于右表行数",
+            "恒等于两表行数之和",
+            "取决于 key 的匹配关系，可能变多、变少甚至为 0"
+          ],
+          "correct_index": 3,
+          "explanation": "多对多会放大行数，key 完全不匹配会得到 0 行——所以写完 join 先 count() 对量级。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么「无 join key」或条件恒真是严重事故？",
+          "options": [
+            "会让 Spark 直接报错退出",
+            "会退化成笛卡尔积，结果行数是 n × m",
+            "只是结果不准，代价不大",
+            "会强制走广播"
+          ],
+          "correct_index": 1,
+          "explanation": "无等值 key 时 Spark 只能两两配对，1 亿 × 1 亿的结果量级足以压垮任何集群，且往往要跑很久才暴露。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "用 explain() 诊断 JOIN 时，它实际做了什么？",
+          "options": [
+            "先跑一遍再给计划",
+            "把结果拉回 Driver 统计",
+            "只打印计划，不触发执行",
+            "自动帮你改写并优化代码"
+          ],
+          "correct_index": 2,
+          "explanation": "explain 是零成本的静态窥视（复用 L4），不会执行任何计算，所以可以放心反复看。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "想知道大表有没有被免掉 Shuffle，最直接的看点是？",
+          "options": [
+            "看结果行数",
+            "看代码里有没有 filter",
+            "看 Executor 数量和核心数",
+            "数 Exchange：大表侧没有 Exchange 就说明没重排"
+          ],
+          "correct_index": 3,
+          "explanation": "Exchange 就是 Shuffle 信号。大表侧没有 Exchange（只出现 BroadcastExchange）＝ 大表一次货都没飞。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "同样是「按 key 处理」，单表 groupBy 与 JOIN 在计划上最典型的区别是？",
+          "options": [
+            "两者 Exchange 数一定相同",
+            "groupBy 常见 1 次 Exchange，JOIN 常见 2 次",
+            "groupBy 从不产生 Exchange",
+            "JOIN 一定不会产生 Exchange"
+          ],
+          "correct_index": 1,
+          "explanation": "groupBy 只汇聚一侧（1 次），JOIN 常要两侧都重排（2 次）——这是「JOIN 通常更贵」最直观的证据。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l6-join-strategies-overview",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "Spark 三种主要的 JOIN 执行策略是？",
+          "options": [
+            "Inner / Left / Full Join",
+            "Nested Loop / Index Scan / Hash Scan",
+            "Map Join / Reduce Join / Combine Join",
+            "Broadcast Hash Join / Sort-Merge Join / Shuffle Hash Join"
+          ],
+          "correct_index": 3,
+          "explanation": "BHJ（广播小表）/ SMJ（排序归并）/ SHJ（建哈希表）是 Spark 物理计划的三种主要 JOIN 实现；Inner/Left 那是 join 类型，不是执行策略。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么同一句 join 要有好几种执行策略？",
+          "options": [
+            "为了让计划看起来更丰富",
+            "不同数据规模下最省的拼法不同；策略结果等价、代价不同",
+            "Spark 会随机挑一种",
+            "因为 SQL 和 API 需要不同的策略"
+          ],
+          "correct_index": 1,
+          "explanation": "策略选择是等价改写——结果一致，只影响快慢与资源占用，所以优化器才能自由地在其中择优。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "JOIN 策略是在哪个阶段被确定的？",
+          "options": [
+            "物理计划阶段（所以只有 explain 才看得到）",
+            "读数据时",
+            "Action 触发执行之后",
+            "由 Driver 在运行时动态切换"
+          ],
+          "correct_index": 0,
+          "explanation": "逻辑计划里只有一个 Join 节点，进入物理计划阶段才被替换成具体策略实现。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "在计划里认出 Broadcast Hash Join，应找哪组节点？",
+          "options": [
+            "两个 Exchange + Sort",
+            "FileScan + Filter",
+            "BroadcastExchange + BroadcastHashJoin",
+            "CartesianProduct"
+          ],
+          "correct_index": 2,
+          "explanation": "BroadcastExchange 表示有小表被广播分发，紧随其后的 BroadcastHashJoin 就是它的连接节点。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "Sort-Merge Join 与 Shuffle Hash Join 的关键差异是？",
+          "options": [
+            "SMJ 不需要 Shuffle，SHJ 需要",
+            "SMJ 两侧排序后归并（有 Sort），SHJ 一侧在内存建哈希表（无 Sort 但要进内存）",
+            "两者完全一样，只是名字不同",
+            "SHJ 只用于非等值条件"
+          ],
+          "correct_index": 1,
+          "explanation": "两者都要按 key Shuffle 分区；差别在分区内是排序归并还是建哈希表——前者可溢写磁盘，后者要占内存。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "下列属于「兜底策略」的是？",
+          "options": [
+            "BroadcastNestedLoopJoin 与 CartesianProduct",
+            "Broadcast Hash Join 与 Sort-Merge Join",
+            "谓词下推与列裁剪",
+            "WholeStageCodegen"
+          ],
+          "correct_index": 0,
+          "explanation": "非等值条件会退化为 BroadcastNestedLoopJoin，无 key 时直接是 CartesianProduct——两个都是红灯。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "三种策略算出来的结果会不一样吗？",
+          "options": [
+            "会，BHJ 结果最少",
+            "会，SMJ 结果最全",
+            "不会：策略是等价改写，结果一致，只影响代价",
+            "取决于 Spark 版本"
+          ],
+          "correct_index": 2,
+          "explanation": "策略选择属于 Catalyst 的等价改写（复用 L4），结果不变，只改变执行成本。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于逻辑计划与 JOIN 策略，正确的是？",
+          "options": [
+            "逻辑计划里已经写明了用哪种策略",
+            "两者同时确定",
+            "逻辑计划里写的是 Sort-Merge，物理计划才改写",
+            "逻辑计划里只有一个 Join 节点，策略到物理计划阶段才确定"
+          ],
+          "correct_index": 3,
+          "explanation": "复用 L4 的「概念图 vs 施工图」：概念图只说「要拼」，施工图才说「怎么拼」。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "explain 里看到 CartesianProduct，你应该？",
+          "options": [
+            "立刻停下检查 join 条件是否缺失或写错",
+            "放心跑，Cartesian 是最快的策略",
+            "把分区数调大",
+            "给两侧都加 broadcast hint"
+          ],
+          "correct_index": 0,
+          "explanation": "CartesianProduct 意味着两两配对、n × m 的结果量级，几乎一定是条件写错的信号。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "非等值 join 条件（如 a.amount > b.threshold）通常会怎样？",
+          "options": [
+            "照常走 Sort-Merge Join",
+            "照常走 Broadcast Hash Join",
+            "哈希与归并用不上，常退化为嵌套循环（NestedLoop）",
+            "Spark 直接报错不支持"
+          ],
+          "correct_index": 2,
+          "explanation": "哈希表和排序归并都依赖等值 key；非等值条件只能一条条比，代价随数据量平方级上升。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l6-broadcast-hash-join",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "Broadcast Hash Join 的两步是？",
+          "options": [
+            "广播小表建哈希表（build）+ 大表流式探测（probe）",
+            "两侧都排序后归并",
+            "把大表复制到每个 Executor",
+            "把两表都读进 Driver 后拼接"
+          ],
+          "correct_index": 0,
+          "explanation": "小表被广播到每个 Executor 并建成哈希表，大表各分区在本地逐条探测匹配——大表始终不移动。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "BHJ 为什么能省下大量开销？",
+          "options": [
+            "它把 join 变成了 filter",
+            "它把结果写进了缓存",
+            "它免掉了大表那次 Shuffle，即 L5 讲的序列化+网络+排序那一串",
+            "它减少了读取的列数"
+          ],
+          "correct_index": 2,
+          "explanation": "大表不按 key 重排，就省掉了整条「装箱→装车→卸货分拣」链路，这是 BHJ 最大的价值。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "BHJ 执行时，数据在 Executor 上的流向是？",
+          "options": [
+            "大表复制到每个 Executor",
+            "小表整份复制到每个 Executor，大表分区留在本地被逐条探测",
+            "两表都先回 Driver 合并再分发",
+            "两表都按 key 重排到同一分区"
+          ],
+          "correct_index": 1,
+          "explanation": "BroadcastExchange 把小表发到所有 Executor，大表各分区原地不动、流式探测——所以大表侧没有 Exchange。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "想让小维表走广播，正确的写法是？",
+          "options": [
+            "fact.join(dim, 'city_id').repartition(200)",
+            "fact.join(dim, 'city_id').cache()",
+            "dim.join(fact, 'city_id')",
+            "fact.join(F.broadcast(dim), 'city_id')"
+          ],
+          "correct_index": 3,
+          "explanation": "F.broadcast() 明确要求广播该侧；注意给完 hint 还要 explain 复核是否真的生效。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于 BHJ 与 SMJ 的代价，正确的是？",
+          "options": [
+            "两者 Shuffle 次数相同",
+            "SMJ 一定更快",
+            "BHJ 大表不 Shuffle，SMJ 两侧都 Shuffle",
+            "BHJ 连小表都不用传输"
+          ],
+          "correct_index": 2,
+          "explanation": "BHJ 只飞小表（BroadcastExchange），SMJ 两侧各飞一次——这是两者最本质的代价差异。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "BHJ 成立的硬前提是？",
+          "options": [
+            "小表行数少于 1000 行",
+            "小表必须能塞进 Executor 内存",
+            "任意一侧都可以，只要加了 hint",
+            "两表分区数相同"
+          ],
+          "correct_index": 1,
+          "explanation": "被广播的表要在每个 Executor 内存里完整建哈希表，塞不进去就会 OOM 或被优化器放弃广播。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么说广播不是零成本？",
+          "options": [
+            "广播会触发全表排序",
+            "广播会把数据写回磁盘",
+            "广播要占用 Driver 的内存",
+            "小册子也要复印并运到每个工人手上，BroadcastExchange 本身也是一次网络传输"
+          ],
+          "correct_index": 3,
+          "explanation": "BHJ 省的是大表那次重排；小表的分发依然存在，只是数据量小好几个数量级。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "计划中出现 BroadcastExchange 说明什么？",
+          "options": [
+            "有数据被广播分发到各 Executor（通常是小表）",
+            "发生了大表 Shuffle",
+            "发生了数据倾斜",
+            "作业失败了"
+          ],
+          "correct_index": 0,
+          "explanation": "BroadcastExchange 就是「复印小册子并发货」的信号，配合 BroadcastHashJoin 一起出现。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "判断一张表「能不能广播」，更靠谱的口径是？",
+          "options": [
+            "看行数是否少于 1 万",
+            "看它的数据体积（字节级大小）能否塞进 Executor 内存",
+            "看它的分区数",
+            "看它有没有索引"
+          ],
+          "correct_index": 1,
+          "explanation": "宽表、长字符串字段会让「行数很少」的表实际体积很大；Spark 判断的也是统计大小（体积），不是行数。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于「给所有维表都加 broadcast」，正确的是？",
+          "options": [
+            "推荐，能普遍提速",
+            "无所谓，广播不占资源",
+            "只要表小就没问题，跟数量无关",
+            "危险：每张被广播的表都会在每个 Executor 内存里常驻一份，多了会 OOM"
+          ],
+          "correct_index": 3,
+          "explanation": "广播是「每个 Executor 各存一份」的内存账，同时广播多张表会迅速挤爆 Executor 内存。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l6-sort-merge-join",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "Sort-Merge Join 的两步是？",
+          "options": [
+            "广播小表 + 大表流式探测",
+            "两侧按 key 分区并排序（两个 Exchange）+ 归并扫描配对",
+            "一侧建哈希表 + 另一侧流式探测",
+            "把两表都读进 Driver 排序"
+          ],
+          "correct_index": 1,
+          "explanation": "SMJ 先让两侧同 key 落到同一分区并有序，再用两个游标归并配对——两次 Exchange 就是它的身份证。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么大表 × 大表不能走广播？",
+          "options": [
+            "大表没有 join key",
+            "Spark 禁止对大表使用 join",
+            "广播只能用于左表",
+            "广播要求整表塞进 Executor 内存，几十亿行做不到"
+          ],
+          "correct_index": 3,
+          "explanation": "广播要在每个 Executor 内存里完整建哈希表；表一大就只能改走可溢写磁盘的 SMJ。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "SMJ 的归并阶段实际在做什么？",
+          "options": [
+            "每条记录去另一侧全表扫一遍",
+            "把两表都拉回 Driver 逐条比对",
+            "两侧已按 key 有序，两个游标各扫一遍，key 相等就配对输出",
+            "随机抽样后估算结果"
+          ],
+          "correct_index": 2,
+          "explanation": "归并是线性扫描（排序后各扫一遍），不是嵌套循环——贵的是排序，不是归并本身。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "explain 里怎么一眼认出 SMJ？",
+          "options": [
+            "两侧各一个 Exchange + Sort + SortMergeJoin",
+            "出现 BroadcastExchange",
+            "出现 CartesianProduct",
+            "只有一个 FileScan"
+          ],
+          "correct_index": 0,
+          "explanation": "两个 Exchange 表示两侧都按 key 重排，Sort + SortMergeJoin 表示排序归并——三者一起出现基本就是 SMJ。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "SMJ 相比 BHJ 的优势与劣势分别是？",
+          "options": [
+            "更快且更省内存",
+            "完全不需要 Shuffle",
+            "只支持非等值条件",
+            "不要求任一侧进内存（能扛超大表），但两侧都要 Shuffle + 排序"
+          ],
+          "correct_index": 3,
+          "explanation": "SMJ 的代价是双份 Shuffle + 全量排序，但它能溢写磁盘，是唯一扛得住大表 × 大表的常规策略。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "SMJ 里的「排序」在内存不足时会怎样？",
+          "options": [
+            "直接报错退出",
+            "自动切换成广播",
+            "spill 到磁盘继续排，慢但能跑完",
+            "丢弃部分数据"
+          ],
+          "correct_index": 2,
+          "explanation": "排序结果可溢写磁盘（复用 L5 的 spill 概念），代价是 I/O 慢几个数量级，但保证了「能跑完」。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么 SMJ 是 Spark 无法广播时的默认选择？",
+          "options": [
+            "因为它是唯一通用：不依赖内存常驻、支持超大表",
+            "因为它结果最准确",
+            "因为它代码最短",
+            "因为 Spark 只实现了这一种"
+          ],
+          "correct_index": 0,
+          "explanation": "不要求任一侧重排进内存、可溢写磁盘，使 SMJ 成为最通用也最稳妥的大表 JOIN 策略。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "大表 × 大表 join 时，计划里通常会出现几次 Exchange？",
+          "options": [
+            "0 次",
+            "2 次（两侧各一次）",
+            "1 次",
+            "取决于结果行数"
+          ],
+          "correct_index": 1,
+          "explanation": "两侧同 key 必须到同一分区，因此各重排一次——两个 Exchange 就是这类 JOIN 的常规账单。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "看到计划里有两个 Exchange，正确的反应是？",
+          "options": [
+            "代码写错了，必须消掉一个",
+            "立刻把分区数调到最大",
+            "先判断能不能广播掉一侧；不能，就接受这是大表 JOIN 的必然代价",
+            "改用 crossJoin 简化计划"
+          ],
+          "correct_index": 2,
+          "explanation": "两个 Exchange 未必是错误：大表对大表本身就是双份重排。优化方向是「能不能广播一侧」或「先裁剪数据」。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于 SMJ 与 NestedLoopJoin，正确的是？",
+          "options": [
+            "SMJ 排序后线性归并，NestedLoop 是两两比对，复杂度天差地别",
+            "两者复杂度差不多",
+            "NestedLoop 更快因为不用排序",
+            "SMJ 只用于非等值条件"
+          ],
+          "correct_index": 0,
+          "explanation": "SMJ 是「排序 O(n log n) + 线性归并」，NestedLoop 是 O(n·m)——看到 NestedLoop/Cartesian 才是真正该警惕的红灯。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l6-shuffle-hash-join",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "Shuffle Hash Join 的原理是？",
+          "options": [
+            "广播小表，大表不 Shuffle",
+            "两侧排序后归并",
+            "两侧按 key Shuffle 分区后，较小一侧在内存建哈希表，较大一侧流式探测",
+            "把两表都广播出去"
+          ],
+          "correct_index": 2,
+          "explanation": "SHJ 仍然两侧重排（按 key 分区），只是把「排序归并」换成了「建哈希表 + 流式查」。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "SHJ 存在的意义是？",
+          "options": [
+            "省掉排序这一步（代价是 build 侧必须进内存）",
+            "彻底免掉 Shuffle",
+            "让结果更准确",
+            "专门用于非等值条件"
+          ],
+          "correct_index": 0,
+          "explanation": "SHJ 与 SMJ 都要 Shuffle，差别在于分区内是建哈希抽屉柜还是排序——前者省排序、费内存。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "SHJ 执行时，内存里放的是什么？",
+          "options": [
+            "两表的全部数据",
+            "Driver 端的执行计划",
+            "排序后的临时文件",
+            "较小一侧（build side）按 key 建成的哈希表"
+          ],
+          "correct_index": 3,
+          "explanation": "build 侧要完整驻留内存才能被随机查找；stream 侧则是流式逐条过来探测。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "想在计划里认出 SHJ，应找？",
+          "options": [
+            "BroadcastExchange",
+            "ShuffledHashJoin 节点（有 Exchange 但通常无 Sort）",
+            "CartesianProduct",
+            "FileScan 节点"
+          ],
+          "correct_index": 1,
+          "explanation": "和 SMJ 的关键区别就是有没有 Sort：ShuffledHashJoin 建哈希表，SortMergeJoin 先排序再归并。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "BHJ 与 SHJ 的本质差别是？",
+          "options": [
+            "BHJ 免掉大表的 Shuffle，SHJ 仍需两侧按 key 重排",
+            "两者都不需要 Shuffle",
+            "SHJ 更快且从不占内存",
+            "BHJ 只用于非等值条件"
+          ],
+          "correct_index": 0,
+          "explanation": "只有 BHJ 能让大表完全不 Shuffle；SHJ 免的是排序，不是传输——别把两者混为一谈。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "数据量大时，Spark 为什么更偏爱 SMJ 而不是 SHJ？",
+          "options": [
+            "SMJ 结果更准",
+            "SHJ 语法不支持",
+            "SMJ 不需要 Shuffle",
+            "SHJ 要求 build 侧进内存，数据一大就撑不住；SMJ 可溢写磁盘"
+          ],
+          "correct_index": 3,
+          "explanation": "能否溢写磁盘是分水岭：SHJ 的哈希表必须常驻内存，SMJ 的排序可以落盘。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么不建议死记「什么条件下一定走 SHJ」？",
+          "options": [
+            "因为 SHJ 已被废弃",
+            "触发条件与 Spark 版本、配置、统计估计都有关，会变",
+            "因为 SHJ 从不出现",
+            "因为书上没写"
+          ],
+          "correct_index": 1,
+          "explanation": "记原理（免排序、占内存、仍 Shuffle）+ 看 explain，比背一张会过期的条件表可靠得多。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "join 条件写成恒真表达式（如两列恒等）会发生什么？",
+          "options": [
+            "正常走 Sort-Merge Join",
+            "自动切换成广播",
+            "等价于无 key，退化为笛卡尔积，结果行数 n × m",
+            "Spark 报错拒绝执行"
+          ],
+          "correct_index": 2,
+          "explanation": "恒真条件让 Spark 找不到有效的等值 key，只能两两配对——这是生产中最隐蔽的性能事故之一。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "发现计划里出现 CartesianProduct，第一步该做？",
+          "options": [
+            "加大分区数",
+            "给两侧加 broadcast",
+            "直接重跑一次看看",
+            "检查 join 条件是否缺失或写错，并先 count() 验量级"
+          ],
+          "correct_index": 3,
+          "explanation": "先停下来核条件：笛卡尔积的代价是平方级的，跑下去只会浪费整个集群的时间。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于两个兜底策略，正确的是？",
+          "options": [
+            "它们是最快的策略，应优先使用",
+            "BroadcastNestedLoopJoin 用于非等值条件、CartesianProduct 用于无 key，二者在大表上都是灾难",
+            "它们都能免 Shuffle",
+            "它们只在广播时才会出现"
+          ],
+          "correct_index": 1,
+          "explanation": "两个兜底都是两两比对的量级，只适合极小数据；在大表上出现就要重新设计 join 条件。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l6-how-spark-chooses",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "JOIN 策略是由谁、在什么时候决定的？",
+          "options": [
+            "用户写代码时指定",
+            "Executor 在运行时动态切换",
+            "Driver 在收集结果后回选",
+            "Catalyst 在物理计划阶段依据估计信息自动选定"
+          ],
+          "correct_index": 3,
+          "explanation": "复用 L3/L4 的「Catalyst = 优化大脑」：策略决策发生在物理计划阶段，属于规划期行为。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "Spark 决定能不能广播，主要看什么？",
+          "options": [
+            "表的行数",
+            "两侧数据的统计大小估计与广播阈值（概念上的尺子）",
+            "SQL 里有没有写 hint",
+            "集群的磁盘容量"
+          ],
+          "correct_index": 1,
+          "explanation": "优化器拿「大小估计」去和广播阈值比；具体阈值数值与调优是 L7 的内容，本课只讲它是决策依据。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于策略选择的一般优先级，正确的是？",
+          "options": [
+            "能广播则优先 BHJ；否则在 SHJ / SMJ 间取舍，SMJ 是最通用的兜底",
+            "永远优先 CartesianProduct",
+            "永远优先 SMJ",
+            "随机选择"
+          ],
+          "correct_index": 0,
+          "explanation": "BHJ 最省（大表免 Shuffle）所以优先；不能广播时才在 SHJ/SMJ 之间按内存与排序条件取舍。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "验证「实际走了哪种策略」最便宜的手段是？",
+          "options": [
+            "把作业跑完看耗时",
+            "直接查看 Spark 源码",
+            "用 explain() 看物理计划里的 Join 节点名与 Exchange 个数",
+            "把数据 collect 回来看"
+          ],
+          "correct_index": 2,
+          "explanation": "explain 不执行、零成本，还能直接看到 BroadcastHashJoin / SortMergeJoin / ShuffledHashJoin 节点。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "「统计估计」与「实际运行」的关系，正确的是？",
+          "options": [
+            "两者永远一致",
+            "Spark 决策用的是规划期的估计值，不是实测，所以会误判",
+            "Spark 会先跑一遍再决定",
+            "估计值只在 SQL 里使用"
+          ],
+          "correct_index": 1,
+          "explanation": "估计来自统计信息，缺失或不准就会误判——这也是「该广播没广播」最常见的原因。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "本课提到的「广播阈值」指的是？",
+          "options": [
+            "一个决定「多大算小、能不能广播」的尺子（概念），具体值与调优留 L7",
+            "磁盘容量上限",
+            "Executor 个数",
+            "结果行数的上限"
+          ],
+          "correct_index": 0,
+          "explanation": "它是 Spark 判断「这表小不小」的判据；本课只讲它在决策中的作用，不展开数值与调优。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么「明明是小表，Spark 却没广播」？",
+          "options": [
+            "Spark 有 bug",
+            "因为没写 SQL",
+            "小表经过复杂变换后统计信息缺失，优化器估不出真实大小，只能保守按大表处理",
+            "因为列名不同"
+          ],
+          "correct_index": 2,
+          "explanation": "尺码单缺失时优化器按最坏情况处理，于是走保守的 SMJ——这正是需要人工 hint 的典型场景。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "先 filter 再 join，对策略选择有什么影响？",
+          "options": [
+            "没有影响",
+            "会强制走笛卡尔积",
+            "会禁用广播",
+            "过滤后数据量骤减，大小估计变小，更可能落在广播阈值内"
+          ],
+          "correct_index": 3,
+          "explanation": "缩小参与 join 的数据体积，是让 Spark 更愿意广播的最直接手段（配合谓词下推更省）。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "怀疑优化器误判时，合理的做法是？",
+          "options": [
+            "先用 explain 确认实际策略，必要时加 broadcast hint 再复核；定量调优留 L7",
+            "直接改源码",
+            "把所有表都缓存一遍",
+            "放弃优化，按原样跑"
+          ],
+          "correct_index": 0,
+          "explanation": "先诊断（explain）→ 再干预（hint）→ 再复核（explain），这是 L6 要求的完整动作。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于 hint 与自动选择的关系，正确的是？",
+          "options": [
+            "hint 是命令，Spark 必须执行",
+            "hint 会禁用 Catalyst",
+            "hint 是建议，可能被忽略，所以必须 explain 复核",
+            "hint 只影响逻辑计划"
+          ],
+          "correct_index": 2,
+          "explanation": "优化器可以基于自身判断不采纳 hint——所以「写了」不等于「生效了」。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l6-broadcast-hint-and-control",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "主动要求广播的三种写法是？",
+          "options": [
+            "F.broadcast(df) / df.hint('broadcast') / SQL 里的 broadcast 提示",
+            "repartition / coalesce / cache",
+            "join / union / crossJoin",
+            "explain / show / count"
+          ],
+          "correct_index": 0,
+          "explanation": "三种写法殊途同归，都是向优化器表达「建议广播这一侧」；团队内统一用一种即可。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "什么时候最需要人工给 broadcast hint？",
+          "options": [
+            "两表都很大时",
+            "结果行数不确定时",
+            "统计信息缺失/不准，导致小表没被自动广播时",
+            "使用 SQL 的时候必须给"
+          ],
+          "correct_index": 2,
+          "explanation": "优化器靠估计值决策，估计失灵就需要人递上那本「小册子」——这是 hint 最典型的使用场景。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "给 hint 之后，计划里会先出现什么、再变成什么？",
+          "options": [
+            "先 Sort 再 Exchange",
+            "先 ResolvedHint（记住倾向），生效后插入 BroadcastExchange 走 BHJ",
+            "直接跳到 CartesianProduct",
+            "计划不会有任何变化"
+          ],
+          "correct_index": 1,
+          "explanation": "hint 先在逻辑层留下 ResolvedHint 标记；被采纳后物理计划插入 BroadcastExchange，节点变成 BroadcastHashJoin。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "给了 F.broadcast() 之后，正确的收尾动作是？",
+          "options": [
+            "直接 write 落盘",
+            "立刻把分区数翻倍",
+            "把结果 collect 回来",
+            "再 explain 一次，确认计划里真的出现了 BroadcastExchange"
+          ],
+          "correct_index": 3,
+          "explanation": "hint 是建议不是命令，可能被静默忽略——不复核就等于没做。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于 hint 与调优参数的关系，正确的是？",
+          "options": [
+            "hint 就是调优参数，二者等价",
+            "调优参数能替代 hint",
+            "hint 是策略倾向的表达；具体阈值与调优参数是 L7 的内容",
+            "hint 会覆盖所有调优参数"
+          ],
+          "correct_index": 2,
+          "explanation": "L6 只教「怎么表达倾向、会不会翻车」；定量调优（阈值、分区数）留给 L7。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "「广播反噬」指的是？",
+          "options": [
+            "广播让结果行数变多",
+            "被广播的表在每个 Executor 内存各留一份完整副本，多了会挤爆内存甚至 OOM",
+            "广播会让计划变复杂",
+            "广播会禁用 Catalyst"
+          ],
+          "correct_index": 1,
+          "explanation": "广播不是免费的：每多广播一张表，每个 Executor 就多一份常驻内存账。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么「看起来小」的表广播后仍可能出问题？",
+          "options": [
+            "因为广播会触发全表排序",
+            "因为 Executor 数量太多",
+            "因为 Spark 会重复广播三次",
+            "大小判断基于统计估计（体积），宽表/长字符串会让它远比行数看起来大"
+          ],
+          "correct_index": 3,
+          "explanation": "判断口径是数据体积而非行数；估计还可能停留在 filter 之前的体积上。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "同时 join 三张维表并都加 broadcast，会发生什么？",
+          "options": [
+            "三份表各自在每个 Executor 内存常驻，内存压力陡增，可能 OOM",
+            "一定最快",
+            "只有第一个 hint 生效",
+            "Spark 会自动合并成一次广播"
+          ],
+          "correct_index": 0,
+          "explanation": "广播代价随表数量线性叠加——宁可只广播能省掉最大那次 Shuffle 的那张。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "发现 hint 没有生效（计划仍是 SortMergeJoin），下一步是？",
+          "options": [
+            "再多加几个 hint 强制",
+            "接受结果：检查被广播侧是否其实过大或连接类型不支持，必要时先过滤缩小数据",
+            "改用 crossJoin",
+            "重启 SparkSession"
+          ],
+          "correct_index": 1,
+          "explanation": "hint 被忽略通常有理由（太大/不支持）；硬加 hint 无效，应从缩小数据体积入手。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于「无脑给所有 join 加 broadcast」，正确的是？",
+          "options": [
+            "推荐做法，能普遍提速",
+            "无所谓，hint 不会有任何副作用",
+            "只在 SQL 里才危险",
+            "危险：会显著抬高 Executor 内存占用，甚至拖垮作业"
+          ],
+          "correct_index": 3,
+          "explanation": "广播的价值在于「能省掉最大那次 Shuffle」；不加区分地广播只是把账单从网络转到了内存。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l6-join-data-skew",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "JOIN 中的数据倾斜指的是？",
+          "options": [
+            "某个 Executor 宕机",
+            "少数 key 的记录数远超其他，导致对应 Task 数据量巨大、成为长尾任务",
+            "join 条件写错",
+            "结果行数比预期多"
+          ],
+          "correct_index": 1,
+          "explanation": "同 key 必须同分区，巨型 key 就会撑爆一个 Task，而整体完工时间由最慢的 Task 决定。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么增加分区数救不了倾斜？",
+          "options": [
+            "分区数有上限",
+            "加分区会触发更多 Shuffle",
+            "加分区会让结果变错",
+            "同 key 必须哈希到同一分区，巨大的 key 只会被换个托盘，不会被拆开"
+          ],
+          "correct_index": 3,
+          "explanation": "这是哈希分区的铁律：只要 key 相同，它就一定整块落在同一个分区里——所以必须靠「加盐」改 key 才能打散。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "倾斜为什么在执行计划里看不出来？",
+          "options": [
+            "计划被优化器隐藏了",
+            "因为 explain 有 bug",
+            "计划只有算子与估算行数，不含「每个 key 多少条」的真实分布",
+            "只有 SQL 才看得出"
+          ],
+          "correct_index": 2,
+          "explanation": "这正是 L4 埋下的伏笔——「计划相同 ≠ 运行时性能相同」，倾斜属于运行时现象，要看 Task 耗时/数据量分布。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "怀疑倾斜时，最该去看的是？",
+          "options": [
+            "运行时各 Task 的耗时与处理数据量分布（如 Spark UI）",
+            "explain 的节点名",
+            "代码的缩进",
+            "表的 Schema"
+          ],
+          "correct_index": 0,
+          "explanation": "典型信号是「进度条卡在 99%、少数 Task 耗时是其他的几十倍」——只有运行时指标能暴露它。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于 salting（加盐）的正确理解是？",
+          "options": [
+            "把所有 key 都加上随机数，永远安全",
+            "一种压缩算法",
+            "让结果去重的方法",
+            "给大 key 加随机前缀拆成 N 个子 key 分散到不同分区，另一侧需对应膨胀；适合少数大 key"
+          ],
+          "correct_index": 3,
+          "explanation": "加盐的代价是另一侧数据膨胀 N 倍，只适合少数巨型 key；对所有 key 加盐会得不偿失。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "本课讲的倾斜应对思路不包括哪一项？",
+          "options": [
+            "salting 加盐打散",
+            "把大 key 隔离出来单独处理",
+            "调整 skew 相关开关的具体参数值",
+            "用广播（BHJ）绕开按 key 的 Shuffle"
+          ],
+          "correct_index": 2,
+          "explanation": "具体倾斜开关与深调优是 Level 7 的内容，本课只到「能识别 + 懂原理」。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么广播（BHJ）能顺带解决倾斜？",
+          "options": [
+            "大表不再按 key 重排，自然就不存在「某 key 撑爆某分区」",
+            "广播会重排 key 使其均匀",
+            "广播会过滤掉大 key",
+            "广播只保留出现次数多的 key"
+          ],
+          "correct_index": 0,
+          "explanation": "倾斜是「按 key 重分布」的副产品；取消大表那次重排，倾斜就无从谈起。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "加盐之后，Shuffle 时数据如何分布？",
+          "options": [
+            "仍全部落在一个分区",
+            "大 key 被拆成 N 个子 key，哈希到不同分区，压力被摊开",
+            "被丢弃一部分",
+            "被复制到每个 Executor"
+          ],
+          "correct_index": 1,
+          "explanation": "改了 key 就改了哈希结果——这是唯一能绕开「同 key 同分区」铁律的办法。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "作业卡在 99%，199 个 Task 早完成、1 个还在跑，正确处置是？",
+          "options": [
+            "加机器、加分区数继续等",
+            "把 join 改成 crossJoin",
+            "先确认是否倾斜，再从打散/隔离/广播三条思路里选应对",
+            "直接重跑，可能是偶发"
+          ],
+          "correct_index": 2,
+          "explanation": "倾斜时加机器只是让其他 Task 更快空转；只有改 key 分布或绕开 Shuffle 才真正有效。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于「对所有 key 加盐」，正确的是？",
+          "options": [
+            "代价是另一侧膨胀 N 倍，key 一多反而更慢，只适合少数大 key",
+            "是标准做法，应优先采用",
+            "加盐不需要改另一侧",
+            "加盐会改变 join 结果"
+          ],
+          "correct_index": 0,
+          "explanation": "加盐是把压力换成数据量，只在「少数大 key」时划算；滥用会让膨胀代价超过收益。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l6-comprehensive",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "拿到一句 join 做诊断，第一步是？",
+          "options": [
+            "直接加 broadcast hint",
+            "把分区数调到 2000",
+            "判断两侧数据规模，识别有没有可广播的小表",
+            "改成 SQL 写法"
+          ],
+          "correct_index": 2,
+          "explanation": "诊断五步从「判大小」开始：能不能广播，决定了后面所有选择的走向。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么一条查询里的每个 join 都要单独看？",
+          "options": [
+            "每个 join 独立进行策略选择，可能走完全不同的路径",
+            "因为计划太长看不完",
+            "因为 Spark 对每个 join 单独收费",
+            "因为后面的 join 一定更慢"
+          ],
+          "correct_index": 0,
+          "explanation": "Catalyst 对每个 Join 节点分别决策：第一个可能 BHJ，第二个可能仍是 SMJ。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "数 Exchange 的意义是什么？",
+          "options": [
+            "数出一共有多少个 join",
+            "判断结果行数",
+            "判断倾斜程度",
+            "判断重排了几次：大表侧无 Exchange = 广播免 Shuffle；两侧各一个 = 都重排"
+          ],
+          "correct_index": 3,
+          "explanation": "Exchange 就是账单行：每一次按 key 重排都要付「装箱+装车+卸货分拣」的钱。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "检查倾斜风险，最实用的手段是？",
+          "options": [
+            "看 explain 的节点名",
+            "先 groupBy key 看分布（找出占比过高的 key），再结合运行时 Task 耗时观察",
+            "只看代码",
+            "看表有多少列"
+          ],
+          "correct_index": 1,
+          "explanation": "计划里没有 key 分布，只能自己查分布 + 观察运行时——这是清单里唯一「计划帮不上忙」的一步。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于「改完计划就一定更快」，正确的是？",
+          "options": [
+            "不成立：数据分布、倾斜、spill 都会让「看起来省」落空，最终以运行时为准",
+            "一定成立，计划更省就是更快",
+            "只在小数据量下成立",
+            "只有 SQL 才成立"
+          ],
+          "correct_index": 0,
+          "explanation": "复用 L4/L5 的核心边界：计划相同 ≠ 运行时相同；反过来，计划变省也不等于一定更快。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "本课的综合练习要求达到什么水平？",
+          "options": [
+            "能手调所有 Spark 性能参数",
+            "能写出 Spark 源码级优化",
+            "能消除所有 Shuffle",
+            "看得懂计划、能认策略、能判断要不要广播、能指出倾斜风险，不要求调优"
+          ],
+          "correct_index": 3,
+          "explanation": "L6 只验证「看得懂 + 能选 + 能给 hint」；定量调优是 Level 7 的主场。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么综合练习不要求你调参数？",
+          "options": [
+            "参数没用",
+            "定量调优（阈值、分区数最优值、倾斜开关）属于 Level 7，L6 只打基本功",
+            "参数会导致结果错误",
+            "Spark 不允许改参数"
+          ],
+          "correct_index": 1,
+          "explanation": "分阶段学习是有意为之：先能诊断，再学治疗——L6 负责前者，L7 负责后者。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "给某个维表加了 broadcast 后，计划的正常变化是？",
+          "options": [
+            "出现 CartesianProduct",
+            "Exchange 数量翻倍",
+            "出现 BroadcastExchange + BroadcastHashJoin，大表侧不再有 Exchange",
+            "计划完全不变"
+          ],
+          "correct_index": 2,
+          "explanation": "这就是「生效」的标志：小表多了一次广播分发，大表省掉了一次重排。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "大事实表 join 小维表，最理想的策略与理由是？",
+          "options": [
+            "SMJ，因为它最通用",
+            "SHJ，因为它免排序",
+            "Cartesian，因为维表小",
+            "BHJ：广播小表，让大表完全不 Shuffle，省下最贵的那次空中飞货"
+          ],
+          "correct_index": 3,
+          "explanation": "这是数仓里最经典的形态，也是 BHJ 价值最大化的场景——大表一次货都不用飞。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "走完 L6 的诊断清单，你的输出应该是？",
+          "options": [
+            "一份完整的参数调优方案",
+            "「它现在走哪条路、钱花在哪、能不能更省、风险在哪」的判断",
+            "一个全新的 Spark 引擎",
+            "所有 Shuffle 的消除方案"
+          ],
+          "correct_index": 1,
+          "explanation": "L6 的产出是「判断力」：认策略、数 Exchange、给 hint、查倾斜——把调优留给 L7。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l7-what-is-tuning",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "性能调优最准确的定位是？",
+          "options": [
+            "把能找到的加速参数全加上",
+            "换更快的机器就能解决",
+            "度量驱动的闭环：先量出瓶颈、改一处、再复测",
+            "把 Spark 升级到最新版本"
+          ],
+          "correct_index": 2,
+          "explanation": "调优的核心是「定位瓶颈 → 最小改动 → 复测验证」的迭代，不是堆参数；换机器与升级属运维/版本范畴。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么不能一上来就调 spark.sql.shuffle.partitions 这类参数？",
+          "options": [
+            "瓶颈可能根本不在 Shuffle；不度量的调参是碰运气，而且无法归因",
+            "这个参数已经废弃",
+            "调了一定会变慢",
+            "只有集群管理员能调"
+          ],
+          "correct_index": 0,
+          "explanation": "作业慢的原因可能是读太多、倾斜、UDF 等；先量清楚是哪一类瓶颈，再对症下药。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于 explain() 在调优中的作用，正确的是？",
+          "options": [
+            "会执行一遍并输出真实耗时",
+            "能显示每个 key 有多少条数据",
+            "能自动帮你优化代码",
+            "只打印执行计划、不触发执行，零成本"
+          ],
+          "correct_index": 3,
+          "explanation": "explain 是静态窥视（复用 L4），不执行、零成本；key 分布这类运行时信息它看不到。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "在 Spark UI 里看到「Task 耗时最大值远大于中位数」，最可能的结论是？",
+          "options": [
+            "分区数太少",
+            "存在数据倾斜（个别 Task 数据量爆炸）",
+            "代码有语法错误",
+            "网络带宽不足"
+          ],
+          "correct_index": 1,
+          "explanation": "耗时分布极不均是倾斜的典型信号；分区太少会表现为并行度不足而非长尾。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "explain 与 Spark UI 的分工，正确的是？",
+          "options": [
+            "explain 看静态计划（零成本），Spark UI 看运行时（耗时分布/spill/Shuffle 量）",
+            "两者完全等价，看一个就够",
+            "explain 更准，UI 只是参考",
+            "UI 只能在作业失败后查看"
+          ],
+          "correct_index": 0,
+          "explanation": "计划相同 ≠ 运行时相同（L4 埋下的伏笔）：explain 定方向，UI 定位置。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "本课归纳的 Spark 作业瓶颈类别有哪几类？",
+          "options": [
+            "CPU / 内存 / 磁盘 / 网络",
+            "语法 / 语义 / 运行时 / 逻辑",
+            "Driver / Executor / Shuffle / Storage",
+            "读太多 / 传太多 / 内存不够 / 倾斜 / CPU 开销"
+          ],
+          "correct_index": 3,
+          "explanation": "这五类对应后续几课的处方：减量（第 8 课）、内存（第 3 课）、倾斜（第 7 课）、UDF（复用 L3）。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么改非瓶颈处等于白改？",
+          "options": [
+            "因为 Spark 会忽略你的改动",
+            "木桶效应：整体耗时由最慢的 Stage/Task 决定，其他处提速不改善总耗时",
+            "因为参数有缓存",
+            "因为改动会被 Catalyst 回滚"
+          ],
+          "correct_index": 1,
+          "explanation": "先找出最慢的那道工序；改完一处还要重新度量，因为瓶颈会转移。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "一次改五个参数后作业变快了，最大的问题是什么？",
+          "options": [
+            "没什么问题，结果好就行",
+            "Spark 会拒绝应用多个配置",
+            "无法归因：不知道是哪一项起了作用，也难以迁移到其他作业",
+            "会导致结果不正确"
+          ],
+          "correct_index": 2,
+          "explanation": "无法归因就无法沉淀经验；正确做法是改一处、测一次、用耗时决定是否保留。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "面对一个跑得慢的作业，第一步应该做？",
+          "options": [
+            "把 shuffle 分区数翻倍",
+            "给所有表加 cache",
+            "重启集群",
+            "explain 看计划 + Spark UI 看运行时，先定位瓶颈类别"
+          ],
+          "correct_index": 3,
+          "explanation": "先量后动是第 1 课的核心：explain 零成本看方向，UI 看真实耗时与分布。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于「减量」与「调速」的关系，正确的是？",
+          "options": [
+            "两者收益相当，先做哪个都行",
+            "减量优先：能不读的数据就别读，这通常比任何参数都有效",
+            "调速优先，减量只影响代码美观",
+            "减量只对小数据集有效"
+          ],
+          "correct_index": 1,
+          "explanation": "少读少传省的是数量级的 I/O 与网络，远大于参数微调，这是第 8 课的主题。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l7-tungsten-encoding",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "Tungsten 要解决的核心问题是？",
+          "options": [
+            "网络传输太慢",
+            "SQL 解析太慢",
+            "磁盘容量不足",
+            "JVM 对象开销与 GC 压力"
+          ],
+          "correct_index": 3,
+          "explanation": "对象头、引用、装箱让存储成本远超数据本身，GC 还要反复扫描；Tungsten 直接操作字节来绕开它们。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么在 JVM 里存一行数据的代价比直觉高？",
+          "options": [
+            "因为 JVM 只支持字符串",
+            "每行要额外背对象头、引用与对齐填充，短字符串尤其吃亏",
+            "因为数据会被复制三份",
+            "因为 JVM 不支持数组"
+          ],
+          "correct_index": 1,
+          "explanation": "包装比数据本身还占地方，数据一多，GC 扫描这些对象的成本就拖垮作业。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于紧凑二进制行（UnsafeRow），正确的是？",
+          "options": [
+            "它把一行编码成连续字节，需要 Schema 才能解读",
+            "它是一种压缩文件格式",
+            "它只对字符串有效",
+            "它会自动丢弃 null 值"
+          ],
+          "correct_index": 0,
+          "explanation": "呼应 L2：Schema 是读这些字节的钥匙，没有 Schema，二进制就是乱码。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "想减少内存与 GC 压力，优先应该？",
+          "options": [
+            "把所有数据 collect 回来处理",
+            "把数据写成 CSV 再读",
+            "用内置函数替代 UDF，让计算留在 Tungsten 字节上",
+            "给每行加索引列"
+          ],
+          "correct_index": 2,
+          "explanation": "内置函数 Catalyst 认得、直接在字节上算；UDF 要把字节还原成对象，正是它慢的物理根源。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "内置函数与 UDF 在 Tungsten 层面的差异是？",
+          "options": [
+            "两者完全一样",
+            "内置函数可在字节上直接运算；UDF 要还原成对象、跨 JVM 序列化",
+            "UDF 更快因为它是手写的",
+            "内置函数只能在 SQL 里用"
+          ],
+          "correct_index": 1,
+          "explanation": "这正是 L3 埋下的「UDF 慢」的物理原因，也是「能用内置就别写 UDF」的根据。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "Tungsten 包含哪几件事？",
+          "options": [
+            "紧凑二进制表示 / 堆外内存 / 缓存友好计算 / 代码生成",
+            "列裁剪 / 谓词下推 / 分区裁剪 / 分桶",
+            "广播 / Shuffle / 排序 / 聚合",
+            "Driver / Executor / Stage / Task"
+          ],
+          "correct_index": 0,
+          "explanation": "前三者是内存与执行层，代码生成即 L4 已讲的 WholeStageCodegen。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "堆外内存（off-heap）的价值在于？",
+          "options": [
+            "它比堆内快十倍",
+            "它容量无限",
+            "它不在 JVM 堆里，GC 不再扫描它，由 Spark 自行管理",
+            "它会自动压缩数据"
+          ],
+          "correct_index": 2,
+          "explanation": "堆外不是无限空间，只是把账本从 GC 手里拿回 Spark 手里，超了照样 OOM。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "调用 df.collect() 时，内存层面发生了什么？",
+          "options": [
+            "只把 Schema 拉回 Driver",
+            "数据在 Executor 之间重分布",
+            "什么都没发生，只是打印",
+            "紧凑字节被还原成对象并全部拉回 Driver 内存，大数据量下直接 OOM"
+          ],
+          "correct_index": 3,
+          "explanation": "复用 L2 的 collect 边界：Driver 不抱数据，collect 是少数打破这条规矩的操作。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "printSchema() 在 Tungsten 语境下的意义是？",
+          "options": [
+            "Schema 是解读紧凑二进制的钥匙：没有它，字节流无法还原成字段",
+            "只是给开发者看字段",
+            "它会触发一次全表扫描",
+            "它会把数据缓存下来"
+          ],
+          "correct_index": 0,
+          "explanation": "逻辑 Schema 与物理字节是一对：Schema 定含义，Tungsten 定存放。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于堆内与堆外内存，正确的是？",
+          "options": [
+            "堆外由 GC 管理，更安全",
+            "两者完全一样",
+            "堆内受 GC 管理；堆外不受 GC 管，但需单独估量，超额同样 OOM",
+            "堆外只能存缓存数据"
+          ],
+          "correct_index": 2,
+          "explanation": "绕开 GC 不等于免死金牌：堆外的分配与回收由 Spark 负责，用超了照样失败。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l7-executor-memory",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "Executor 堆内存的四块划分是？",
+          "options": [
+            "Execution / Storage / User Memory / Reserved",
+            "Driver / Executor / Stage / Task",
+            "Heap / Off-heap / Disk / Network",
+            "Cache / Shuffle / Sort / Join"
+          ],
+          "correct_index": 0,
+          "explanation": "干活区（Execution）、缓存区（Storage）、用户代码（User）、系统保留（Reserved）各管各的。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么会出现「明明还有内存却报 OOM」？",
+          "options": [
+            "Spark 统计有误",
+            "磁盘满了",
+            "各格用途不同且 User/Reserved 不参与借用，某一格撑爆就会失败",
+            "网络超时"
+          ],
+          "correct_index": 2,
+          "explanation": "统一内存管理只让 Execution 与 Storage 互相借用；User 与 Reserved 不参与，所以某一格爆了就是爆了。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "统一内存管理下，Execution 与 Storage 的关系是？",
+          "options": [
+            "完全隔离，互不影响",
+            "可互相借用：执行内存紧张时缓存可能被逐出或落盘",
+            "Storage 优先，Execution 只能等",
+            "使用同一块空间无法区分"
+          ],
+          "correct_index": 1,
+          "explanation": "缓存不保证常驻——被逐出后要重算，这正是 cache 未必划算的原因。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "遇到 Driver 端 OOM，最该先查什么？",
+          "options": [
+            "分区数是否太少",
+            "Executor 内存配置",
+            "数据文件格式",
+            "代码里有没有 collect() / toPandas() 把数据拉回 Driver"
+          ],
+          "correct_index": 3,
+          "explanation": "位置决定病因：Driver 端 OOM 多半是有人把数据拉了回来，而不是计算本身太大。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "对比两类 OOM 的根因，正确的是？",
+          "options": [
+            "两者根因相同",
+            "Executor 端一定是配置问题",
+            "Executor 端多半是单分区过大/倾斜；Driver 端多半是 collect 拉数据回来",
+            "Driver 端不会 OOM"
+          ],
+          "correct_index": 2,
+          "explanation": "先看位置再定病因：Executor 查分区与倾斜，Driver 查有没有拉数据。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于堆外内存与堆内内存的关系，正确的是？",
+          "options": [
+            "堆外包含在堆内配额里",
+            "堆外是另一本账：不在 JVM 堆里、GC 不管，但也要单独配置与估量",
+            "堆外只能用于广播",
+            "开了堆外就不用管内存了"
+          ],
+          "correct_index": 1,
+          "explanation": "两本账都要估量；只盯着堆内会低估实际内存占用。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么 cache() 不一定能提速？",
+          "options": [
+            "cache 有 bug",
+            "cache 会改变结果",
+            "cache 只对 RDD 有效",
+            "缓存占 Storage Memory 且可能被逐出；重算有时比读缓存更便宜"
+          ],
+          "correct_index": 3,
+          "explanation": "只缓存「会被多次复用且重算代价高」的数据，其余场景重算往往更快（第 8 课展开）。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "groupBy 后接 collect_list 为什么容易 OOM？",
+          "options": [
+            "它把每个 key 的所有值堆在内存里，遇到大分组就会撑爆 Execution Memory",
+            "collect_list 会触发 Shuffle",
+            "它不支持字符串",
+            "它会把数据写到磁盘"
+          ],
+          "correct_index": 0,
+          "explanation": "能聚合就别收集：用 count/sum 这类可合并的聚合，或先过滤降维。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "在 UDF 里加载整张字典表持有引用，会带来什么问题？",
+          "options": [
+            "没有任何问题",
+            "User Memory 那格不参与借用，且每个 Task 都可能持有副本，内存被悄悄吃光",
+            "会让代码更快",
+            "会触发 Shuffle"
+          ],
+          "correct_index": 1,
+          "explanation": "改用 broadcast 变量或 join，别在 UDF 里塞大对象。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "内存不足时，更优先的做法通常是？",
+          "options": [
+            "直接加大 Executor 内存",
+            "关掉广播功能",
+            "减少并行度",
+            "先查根因：调分区数、处理倾斜、改写聚合方式，通常比加内存有效"
+          ],
+          "correct_index": 3,
+          "explanation": "加内存只是推迟爆掉的时间；数据量一涨，未解决的单分区过大或倾斜照样 OOM。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l7-shuffle-partitions",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "spark.sql.shuffle.partitions 决定什么？",
+          "options": [
+            "读取文件时的输入切片数",
+            "Shuffle 之后生成的目标分区数（即后续 Task 数）",
+            "Executor 的数量",
+            "广播块的大小"
+          ],
+          "correct_index": 1,
+          "explanation": "它控制 join/groupBy/distinct/orderBy 等 shuffle 类操作后数据被切成多少份。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "shuffle 分区数太少会带来什么？",
+          "options": [
+            "结果不正确",
+            "输出文件过多",
+            "网络带宽浪费",
+            "并行度不足、单 Task 数据量过大 → spill 到磁盘甚至 OOM"
+          ],
+          "correct_index": 3,
+          "explanation": "复用 L5：内存放不下就 spill，磁盘 I/O 比内存慢几个数量级。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "shuffle 分区数太多会带来什么？",
+          "options": [
+            "结果重复",
+            "自动触发广播",
+            "Task 调度与启动开销累积、输出小文件增多",
+            "内存必然溢出"
+          ],
+          "correct_index": 2,
+          "explanation": "复用 L2/L5 的小文件坑：每个分区通常落一个文件，分区过多会拖垮后续读取。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "给 shuffle 分区数估起点的合理思路是？",
+          "options": [
+            "按参与 shuffle 的数据量，让单个分区落在百 MB 量级，再实测收敛",
+            "固定设成 2000",
+            "设成集群核数的一半",
+            "设成与输入文件数相同"
+          ],
+          "correct_index": 0,
+          "explanation": "先估起点再实测收敛；没有放之四海皆准的数字，换份数据结论就变。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于分区数与并行上限，正确的是？",
+          "options": [
+            "分区越多并行度越高，没有上限",
+            "并行度与核数无关",
+            "分区数必须等于核数",
+            "并行上限是集群核数：车道再多，工人只有 8 个也只能同时开 8 条"
+          ],
+          "correct_index": 3,
+          "explanation": "复用 L5 分区与并行度：分区数决定理论并行度，实际并行受可用核数约束。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "spark.sql.shuffle.partitions 的默认值（常见为 200）应如何看待？",
+          "options": [
+            "是经过验证的最优值",
+            "必须保持不动",
+            "只是通用起点，未必适合你的数据量与集群",
+            "只在本地模式生效"
+          ],
+          "correct_index": 2,
+          "explanation": "默认值是「能跑起来」的起点，不是「跑得快」的保证。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么这个参数没有万能最优值？",
+          "options": [
+            "它取决于 shuffle 数据量、单条记录大小与集群并行能力",
+            "因为 Spark 实现有缺陷",
+            "因为参数名会变",
+            "因为只能由管理员设置"
+          ],
+          "correct_index": 0,
+          "explanation": "所以正确做法是「按数据量估起点 + 实测收敛」，并把依据写进作业注释。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "修改 spark.sql.shuffle.partitions 的影响范围是？",
+          "options": [
+            "只对下一条语句生效",
+            "全局生效：影响该 session 内所有 shuffle 操作，并决定输出文件数",
+            "只影响 join 不影响 groupBy",
+            "只在写入时生效"
+          ],
+          "correct_index": 1,
+          "explanation": "它是全局旋钮，不是针对某一条语句的精细调节——那是 hint 的职责。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "把结果写出到 Parquet 之前，应该先考虑？",
+          "options": [
+            "文件越多越好",
+            "必须设成 1 个文件",
+            "分区数决定输出文件数，先想清楚要多少个文件",
+            "输出文件数与分区数无关"
+          ],
+          "correct_index": 2,
+          "explanation": "写之前先决定文件数，必要时先 coalesce 再写出（复用 L5 的 repartition/coalesce）。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "同样是「让 Shuffle 更快」，更优先的手段通常是？",
+          "options": [
+            "先裁剪数据（少读）或广播小表（少传），再考虑调分区数",
+            "把分区数调大",
+            "禁用广播",
+            "增加 Executor 数量"
+          ],
+          "correct_index": 0,
+          "explanation": "减量优先于调速：参与 shuffle 的数据少了，分区数怎么设都更轻松。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l7-broadcast-threshold",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "spark.sql.autoBroadcastJoinThreshold 是什么？",
+          "options": [
+            "广播块的最大数量",
+            "广播的超时时间",
+            "判断「某侧多大算小、能否广播」的大小阈值（-1 为禁用）",
+            "广播表的最大行数"
+          ],
+          "correct_index": 2,
+          "explanation": "它就是 L6 只讲了概念的那把「秤」，用来判断能不能走 Broadcast Hash Join。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么表没被广播时，通常不该先去调大阈值？",
+          "options": [
+            "阈值比的是统计估计的大小；估计失真时调阈值只是掩盖问题，应先 ANALYZE 补统计信息",
+            "阈值不允许修改",
+            "调大一定会 OOM",
+            "调大只影响 SQL 写法"
+          ],
+          "correct_index": 0,
+          "explanation": "估计准了判断自然准——先 ANALYZE，往往不用调阈值就自动广播了。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "把 autoBroadcastJoinThreshold 设为 -1 会怎样？",
+          "options": [
+            "广播所有表",
+            "自动选择最优策略",
+            "只在本地模式生效",
+            "禁用自动广播：小维表也会被迫走 Sort-Merge Join，多付两侧 Shuffle"
+          ],
+          "correct_index": 3,
+          "explanation": "关掉广播不是更稳，而是把小表场景的性能直接扔掉——代价是两次 Exchange。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "维表很小但 explain 显示 SortMergeJoin，第一步应该？",
+          "options": [
+            "把阈值调到很大",
+            "先 ANALYZE TABLE 补统计信息，再 explain 看是否自动广播",
+            "改成 crossJoin",
+            "重启 SparkSession"
+          ],
+          "correct_index": 1,
+          "explanation": "统计信息缺失会让优化器保守按大表处理，补上统计往往一步解决。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "「调大阈值」与「禁用广播」的代价分别是？",
+          "options": [
+            "调大：每个 Executor 多一份常驻副本；禁用：小表也走 SMJ，多付两次 Shuffle",
+            "两者都没有代价",
+            "调大：结果变错；禁用：变快",
+            "两者等价"
+          ],
+          "correct_index": 0,
+          "explanation": "一个是内存账单，一个是网络账单，都不免费——按表逐个判断才对。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "广播的内存账单是怎样的？",
+          "options": [
+            "只在 Driver 存一份",
+            "只在网络传输，不占内存",
+            "按分区数分摊，总量不变",
+            "每个 Executor 各存一份被广播表的完整副本"
+          ],
+          "correct_index": 3,
+          "explanation": "复用 L6：广播反噬就来自「每个 Executor 各一份」这份常驻内存账。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "把广播阈值调得很大的主要风险是？",
+          "options": [
+            "结果行数变多",
+            "很多表被判为小表全部广播，每个 Executor 内存被吃光甚至 OOM",
+            "计划变得更复杂",
+            "会禁用 AQE"
+          ],
+          "correct_index": 1,
+          "explanation": "只在确认表真的小、且能省掉最大那次 Shuffle 时才调。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "调整阈值或加了 hint 之后，必须做什么？",
+          "options": [
+            "直接上线",
+            "清空缓存",
+            "再 explain 复核：确认计划里真的出现了 BroadcastExchange",
+            "重启 Executor"
+          ],
+          "correct_index": 2,
+          "explanation": "hint 与阈值都可能不生效或被忽略（L6 的规矩），不复核等于没做。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "Executor 内存紧张时的正确做法是？",
+          "options": [
+            "把广播一刀切禁掉",
+            "把所有表都广播",
+            "把阈值设为 0",
+            "按表逐个判断：该广播的用 hint 精确指定，不该广播的保持默认"
+          ],
+          "correct_index": 3,
+          "explanation": "一刀切会误伤本该广播的小表；精确指定才是控制内存的正解。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "调阈值与加 broadcast hint 的区别是？",
+          "options": [
+            "完全等价",
+            "阈值改的是全局判定标准；hint 是对某一次 join 精确表达倾向",
+            "hint 更粗暴",
+            "阈值只对 SQL 生效"
+          ],
+          "correct_index": 1,
+          "explanation": "先用统计信息让全局判断变准，个别场景再用 hint 精确干预。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l7-aqe",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "AQE（自适应查询执行）指的是？",
+          "options": [
+            "一种新的文件格式",
+            "自动加索引的功能",
+            "把作业拆成多个作业并行跑",
+            "运行时依据真实 Shuffle 统计重新优化剩余执行计划的机制"
+          ],
+          "correct_index": 3,
+          "explanation": "它把「出发前定死路线」改成「边跑边看路况再改道」。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么需要 AQE？",
+          "options": [
+            "因为 explain 太慢",
+            "因为规划期只能靠统计估计，估计错了优化就白做；运行时才有真相",
+            "因为集群不稳定",
+            "因为 SQL 太复杂"
+          ],
+          "correct_index": 1,
+          "explanation": "这正是 L6 第 6 课「估计会误判」的兜底方案。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "AQE 的「观察点」是什么？",
+          "options": [
+            "Shuffle 完成后拿到各分区的真实大小",
+            "读取文件时",
+            "Action 返回结果时",
+            "广播分发时"
+          ],
+          "correct_index": 0,
+          "explanation": "没有 shuffle 的地方拿不到真实分布，所以 AQE 在那里也无从优化。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "开启 AQE 后，验证效果应看？",
+          "options": [
+            "只看 explain 的静态输出",
+            "只看代码",
+            "Spark UI 的实际执行图与 Task 分布",
+            "看输出文件数"
+          ],
+          "correct_index": 2,
+          "explanation": "AQE 会在运行时改计划，静态 explain 展示的是初始计划，不再是最终真相。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "静态计划与 AQE 最终执行计划的关系是？",
+          "options": [
+            "永远一致",
+            "可能不同：AQE 会在运行时改写剩余计划（合并分区/切广播/拆倾斜）",
+            "静态计划优先，AQE 不能改",
+            "只在本地模式会不同"
+          ],
+          "correct_index": 1,
+          "explanation": "开 AQE 后要以实际执行图为准，别只信 explain。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "AQE 的三大典型能力是？",
+          "options": [
+            "动态合并小分区 / 运行时切换 JOIN 策略 / 自动处理倾斜 join",
+            "列裁剪 / 谓词下推 / 常量折叠",
+            "广播 / 排序 / 聚合",
+            "缓存 / 重试 / 推测执行"
+          ],
+          "correct_index": 0,
+          "explanation": "前两项分别补上了手动调分区数与手动调广播阈值的盲区，第三项是第 7 课的手段之一。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么 AQE 不是万能的？",
+          "options": [
+            "它经常算错结果",
+            "它只支持 SQL",
+            "它优化的是已读入数据的执行方式，解决不了「读太多」或 UDF 太慢",
+            "它只能用于小数据集"
+          ],
+          "correct_index": 2,
+          "explanation": "减量优先于调速（第 1 课结论）：AQE 修不了没读对数据的问题。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "AQE 的动态合并分区主要解决什么问题？",
+          "options": [
+            "数据倾斜",
+            "广播太慢",
+            "结果文件太大",
+            "分区设得过多时产生的大量小 Task 与调度开销"
+          ],
+          "correct_index": 3,
+          "explanation": "它让你不必把「分区数设多少」纠结到极致——过多时运行时会自动合并。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "运行时发现原本以为很大的一侧其实很小，AQE 会？",
+          "options": [
+            "把后续 join 改走 Broadcast Hash Join，省掉大表那次 Shuffle",
+            "保持 Sort-Merge Join 不变",
+            "报错并中止",
+            "自动重新读取一次数据"
+          ],
+          "correct_index": 0,
+          "explanation": "这正是「估计会误判」的运行时纠正，也是 L6 手动 hint 的自动化版本。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "AQE 与手动调参相比，正确的理解是？",
+          "options": [
+            "有了 AQE 就不用学手动调优了",
+            "手动调参一定比 AQE 准",
+            "AQE 是兜底与增益，减量与 SQL 改写仍是收益最大的手段",
+            "两者互斥，只能选一个"
+          ],
+          "correct_index": 2,
+          "explanation": "AQE 不替代「少读少传少算」，它是在此之上的运行时增强。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l7-skew-tuning",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "在 Spark UI 里判断数据倾斜，最直接的指标是？",
+          "options": [
+            "Task 耗时最大值远大于中位数 / Shuffle Read 分布极不均",
+            "Stage 数量很多",
+            "计划里 Exchange 数量",
+            "输出文件数量"
+          ],
+          "correct_index": 0,
+          "explanation": "计划里看不出倾斜（L6 的边界），只有运行时分布能暴露它。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么不该一说倾斜就立刻加盐？",
+          "options": [
+            "加盐会报错",
+            "加盐只适用于 groupBy",
+            "加盐要把另一侧膨胀 N 倍，是最重的手段；AQE 或隔离大 key 往往更划算",
+            "加盐需要管理员权限"
+          ],
+          "correct_index": 2,
+          "explanation": "手段有优先级：先试代价小的，最后才上重手段。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "salting 加盐的机制是？",
+          "options": [
+            "给两侧都加随机后缀",
+            "大 key 侧加随机后缀打散成 N 份，另一侧把该 key 记录复制 N 份以匹配",
+            "把大 key 直接删掉",
+            "把 key 换成行号"
+          ],
+          "correct_index": 1,
+          "explanation": "两侧必须严格对应：一侧加后缀、另一侧膨胀匹配，写错了结果会多算或少算。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "怀疑 join 倾斜时，第一步应该？",
+          "options": [
+            "立刻写 salting 代码",
+            "把分区数调大",
+            "禁用广播",
+            "先用 groupBy key 看分布，确认是哪些 key 撑爆的"
+          ],
+          "correct_index": 3,
+          "explanation": "先定位具体 key（常见元凶是 null/未知/默认值），再谈怎么治。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "「隔离大 key」与「全量加盐」相比？",
+          "options": [
+            "两者代价相同",
+            "隔离大 key 会改变结果",
+            "隔离大 key 只处理极少数巨型 key，代价远小于把整侧数据膨胀 N 倍",
+            "全量加盐一定更快"
+          ],
+          "correct_index": 2,
+          "explanation": "把极端少数与正常多数分开处理，通常比一刀切加盐划算得多。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "加盐最主要的代价是？",
+          "options": [
+            "需要额外的磁盘空间存中间结果",
+            "另一侧数据要膨胀 N 倍，key 一多就得不偿失",
+            "结果会变错",
+            "会禁用 AQE"
+          ],
+          "correct_index": 1,
+          "explanation": "所以它只适合少数巨型 key，或配合隔离只对那一小撮数据使用。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "造成倾斜最常见的元凶是？",
+          "options": [
+            "文件太大",
+            "集群节点太少",
+            "使用了 Parquet 格式",
+            "null / 未知 / 默认值这类被大量记录共用的 key"
+          ],
+          "correct_index": 3,
+          "explanation": "这类 key 常常业务上也不需要，先过滤掉往往就解决了大半。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "用广播绕过倾斜为什么有效？",
+          "options": [
+            "大表不再按 key 重排，自然不存在「某 key 撑爆某分区」",
+            "广播会自动过滤大 key",
+            "广播会重写数据分布",
+            "广播会减少行数"
+          ],
+          "correct_index": 0,
+          "explanation": "倾斜是「按 key 重分布」的副产品；取消大表那次重排，倾斜无从谈起。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "使用 salting 之后必须做什么？",
+          "options": [
+            "直接交付",
+            "核对结果行数/关键指标，确认与加盐前语义一致",
+            "立刻清理缓存",
+            "把随机种子固定下来即可"
+          ],
+          "correct_index": 1,
+          "explanation": "改 key 有语义风险：「看起来跑完了」不等于「算对了」。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "AQE 自动倾斜处理与手动加盐的关系是？",
+          "options": [
+            "完全等价",
+            "AQE 内部就是加盐",
+            "开了 AQE 就不能加盐",
+            "优先试 AQE（代价低、零代码改动）；不奏效再考虑隔离或加盐"
+          ],
+          "correct_index": 3,
+          "explanation": "按代价从低到高推进：AQE → 隔离大 key → 加盐 → 广播绕过 → 过滤异常 key。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l7-read-less-data",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "本课归纳的减量三层次是？",
+          "options": [
+            "多核 / 多机 / 多磁盘",
+            "少读 / 少传 / 少算",
+            "缓存 / 广播 / 加盐",
+            "读 / 写 / 同步"
+          ],
+          "correct_index": 1,
+          "explanation": "三个层次对应「进来的数据、传的数据、算的次数」，逐层递进。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么「减量」优先于「调速」？",
+          "options": [
+            "减量更容易实现",
+            "参数调优已废弃",
+            "减量不会出错",
+            "少读少传省的是数量级的 I/O 与网络，收益通常远大于参数微调"
+          ],
+          "correct_index": 3,
+          "explanation": "在错误的量级上做参数微调，怎么调都是原地打转。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "谓词下推能否真正生效，主要取决于？",
+          "options": [
+            "SQL 写得是否整齐",
+            "集群节点数",
+            "数据源格式：Parquet/ORC 这类列式格式效果好，CSV 有限",
+            "分区数设置"
+          ],
+          "correct_index": 2,
+          "explanation": "复用 L4 的边界：下推能否发生取决于数据源。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "一份 200 列、按天分区的事实表只要其中 5 列和一天数据，应该先做？",
+          "options": [
+            "列裁剪（只 select 需要的列）+ 分区裁剪与谓词下推",
+            "先把分区数调大",
+            "先 cache 起来",
+            "先 join 再过滤"
+          ],
+          "correct_index": 0,
+          "explanation": "这是收益最大的一步：直接从磁盘少读掉绝大部分字节。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "在「少算」这一层，内置函数优于 UDF 的原因是？",
+          "options": [
+            "内置函数名字更短",
+            "UDF 不支持 Python",
+            "内置函数会缓存结果",
+            "内置函数 Catalyst 认得、可优化且直接在 Tungsten 字节上算；UDF 要跨 JVM 还原对象"
+          ],
+          "correct_index": 3,
+          "explanation": "这正是 L3 埋下的伏笔，在第 8 课被归到「少算」这一层。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "map-side combine 属于减量的哪一层？",
+          "options": [
+            "少读",
+            "少算",
+            "少传（本地先聚合，只把小包空运）",
+            "不属于减量"
+          ],
+          "correct_index": 2,
+          "explanation": "复用 L5 的「车间本地先捆小包再空运」：省的是网络传输量。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么 cache() 未必划算？",
+          "options": [
+            "它占 Storage Memory、可能被逐出；只用一次时重算往往比读缓存更便宜",
+            "cache 会改变结果",
+            "cache 只对小表有效",
+            "cache 会触发 Shuffle"
+          ],
+          "correct_index": 0,
+          "explanation": "只在「会被多次复用且重算代价高」时才缓存，用完记得 unpersist。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于分桶（bucketing），正确的是？",
+          "options": [
+            "它是随手能开的加速开关",
+            "它是写入侧的布局约定：按 key 预先分桶写出，可让后续按同 key 的 join 省去一次 Shuffle",
+            "它等同于分区目录",
+            "它只影响文件大小"
+          ],
+          "correct_index": 1,
+          "explanation": "分桶是建模决策，需要在写入时就规划好，不是运行时开关。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "「先 join 再过滤」与「先过滤再 join」，后者好在？",
+          "options": [
+            "代码更短",
+            "结果更准确",
+            "参与 Shuffle 的数据量骤减，网络与内存压力大幅下降",
+            "可以避免 Shuffle"
+          ],
+          "correct_index": 2,
+          "explanation": "先裁剪再关联是最划算的一步，属于「少传」。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "判断该不该 cache 一个中间结果，关键问题是？",
+          "options": [
+            "它会被复用几次？重算代价高不高？",
+            "它有多少列",
+            "它是否来自 Parquet",
+            "它的分区数是多少"
+          ],
+          "correct_index": 0,
+          "explanation": "多次复用且重算昂贵 → 值得缓存；只用一次 → 重算通常更便宜。",
+          "dimension": "comparison"
+        }
+      ]
+    },
+    {
+      "lesson_slug": "l7-comprehensive",
+      "questions": [
+        {
+          "type": "single_choice",
+          "prompt": "本课给出的调优检查单顺序是？",
+          "options": [
+            "调参 → 减量 → 倾斜 → 复测",
+            "先加盐 → 再调分区 → 最后 explain",
+            "量（explain+UI）→ 归类 → 按优先级改（少读>少传>少算>调旋钮，倾斜专项在后）→ 改一处测一次",
+            "先换集群 → 再改代码"
+          ],
+          "correct_index": 2,
+          "explanation": "这张单子是九课的收口：诊断流程 + 优先级 + 每次只改一处。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "为什么优先级是「少读 > 少传 > 少算 > 调旋钮」？",
+          "options": [
+            "越靠前省掉的工作量越大、代价越小；参数调优是最后一道工序",
+            "按字母顺序排列",
+            "因为参数很难记",
+            "因为后面的手段容易出错"
+          ],
+          "correct_index": 0,
+          "explanation": "能在数据量上解决的问题，就别去动参数——这是全课的结论。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "「改一处、测一次」的意义在于？",
+          "options": [
+            "显得专业",
+            "Spark 要求这么做",
+            "可以少写代码",
+            "能归因：知道改善来自哪一步，经验可迁移；无改善则回滚换路"
+          ],
+          "correct_index": 3,
+          "explanation": "一次改五个参数，就算变快也无法归因，更无法沉淀为下个作业的经验。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "拿到一个跑了 40 分钟的慢作业，第一步是？",
+          "options": [
+            "把 shuffle 分区数翻倍",
+            "explain 看计划 + Spark UI 看运行时，先定位最慢的 Stage 与瓶颈类别",
+            "给所有表加 cache",
+            "直接重写成 SQL"
+          ],
+          "correct_index": 1,
+          "explanation": "先量后动是第 1 课立下的规矩，也是整张检查单的起点。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "在诊断流程中，explain 与 Spark UI 的分工是？",
+          "options": [
+            "explain 看静态计划（零成本、定方向），UI 看运行时（耗时分布/spill/Shuffle 量、定位置）",
+            "两者完全等价",
+            "UI 只能看失败的作业",
+            "explain 会执行作业"
+          ],
+          "correct_index": 0,
+          "explanation": "计划相同 ≠ 运行时相同；倾斜与 spill 只有 UI 能告诉你。",
+          "dimension": "comparison"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "参数调优在整个流程中处于什么位置？",
+          "options": [
+            "第一步就该做",
+            "永远不需要",
+            "只在大集群才做",
+            "最后一道工序：先减量、再治倾斜，参数调节放在后面"
+          ],
+          "correct_index": 3,
+          "explanation": "参数是在「已经读对、传对、算对」之后做微调，不是第一步。",
+          "dimension": "concept"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "一次改完全部想到的优化并跑通就交付，最大的隐患是？",
+          "options": [
+            "代码变长",
+            "无法归因，且某些改动在其他数据量下可能变成负担",
+            "Spark 会拒绝执行",
+            "结果一定会错"
+          ],
+          "correct_index": 1,
+          "explanation": "没有逐项度量，你就不知道哪一步真的有效，也不知道哪一步有副作用。",
+          "dimension": "why"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "方案中用到了 salting，交付前必须验证？",
+          "options": [
+            "集群负载",
+            "文件数量",
+            "结果行数与关键指标是否与加盐前一致（语义未变）",
+            "缓存命中率"
+          ],
+          "correct_index": 2,
+          "explanation": "改 key 有语义风险，必须验证结果正确性——这是第 7 课的硬要求。",
+          "dimension": "mechanism"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "50 亿行事实表 join 10 万行维表，合理的推进顺序是？",
+          "options": [
+            "先加盐处理倾斜",
+            "先把分区数调到 5000",
+            "先把维表 cache 起来",
+            "先列裁剪与分区裁剪 → 补统计信息或广播维表 → 再考虑分区数/AQE → 最后查倾斜"
+          ],
+          "correct_index": 3,
+          "explanation": "减量 → 少传（广播）→ 调旋钮 → 倾斜专项，正是检查单的顺序。",
+          "dimension": "apply"
+        },
+        {
+          "type": "single_choice",
+          "prompt": "关于「减量」与「参数调优」的收益对比，正确的是？",
+          "options": [
+            "两者收益相当",
+            "减量通常带来数量级的改善，参数调优多是在此基础上做微调",
+            "参数调优收益更大",
+            "减量只对小作业有效"
+          ],
+          "correct_index": 1,
+          "explanation": "这是全课最该带走的一条：先问「这份数据里有多少是必需的」。",
+          "dimension": "comparison"
+        }
+      ]
     }
   ]
 }
