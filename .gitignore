@@ -50,3 +50,10 @@ Thumbs.db
 
 # ===== Logs =====
 *.log
+
+# ===== Local migration / seed backups (one-off, not source) =====
+*.bak_before_*
+
+# ===== Local verification scratch (needs dev-only deps, not product) =====
+backend/_quiz_dump.json
+backend/_p6b_e2e_check.py

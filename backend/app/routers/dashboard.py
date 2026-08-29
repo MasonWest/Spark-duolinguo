@@ -10,6 +10,8 @@ Today-lesson recommendation rule (Phase 4 minimal):
 "completed" counts lessons with status "mastered".
 """
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -20,9 +22,15 @@ from ..schemas import (
     CurrentLevelOut,
     DashboardOut,
     ProgressOut,
+    ReviewDueItem,
     TodayLessonOut,
 )
-from ..services import lesson_status_map, ordered_lessons, recommend_today_lesson
+from ..services import (
+    due_reviews,
+    lesson_status_map,
+    ordered_lessons,
+    recommend_today_lesson,
+)
 
 router = APIRouter(prefix="/api")
 
@@ -81,9 +89,28 @@ def get_dashboard(db: Session = Depends(get_db)):
                 percentage=lvl_pct,
             )
 
+    # Phase 6b: lessons whose scheduled review date has arrived.
+    now = datetime.utcnow()
+    reviews_due = []
+    for lesson, mastery in due_reviews(db, now=now):
+        level = db.get(CourseLevel, lesson.level_id)
+        overdue = max(0, (now - mastery.next_review_at).days) if mastery.next_review_at else 0
+        reviews_due.append(
+            ReviewDueItem(
+                lesson_id=lesson.id,
+                title=lesson.title,
+                level_title=level.title if level else "",
+                next_review_at=(
+                    mastery.next_review_at.isoformat() if mastery.next_review_at else None
+                ),
+                overdue_days=overdue,
+            )
+        )
+
     return DashboardOut(
         progress=ProgressOut(completed=completed, total=total, percentage=percentage),
         current_level=current_level,
         today_lesson=today_out,
         streak_days=0,  # Phase 6
+        reviews_due=reviews_due,
     )

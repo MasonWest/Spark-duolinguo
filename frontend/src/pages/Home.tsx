@@ -66,6 +66,28 @@ export default function Home() {
         </div>
       )}
 
+      {/* 今日复习（Phase 6b：到期的间隔复习） */}
+      {data && data.reviews_due.length > 0 && (
+        <div className="card review-due-card">
+          <h2>🔁 今日复习</h2>
+          {data.reviews_due.map((r) => (
+            <div key={r.lesson_id} className="review-due-item">
+              <Link to={`/review/${r.lesson_id}`} className="review-due-name">
+                {r.title}
+                <span className="review-due-meta">
+                  {r.level_title}
+                  {r.overdue_days > 0 ? ` · 逾期 ${r.overdue_days} 天` : " · 今天到期"}
+                </span>
+              </Link>
+              <Link to={`/review/${r.lesson_id}`} className="review-due-go">
+                去复习 →
+              </Link>
+            </div>
+          ))}
+          <p className="today-hint">5 道题全部答对才算通过，答错需重读本课再挑战。</p>
+        </div>
+      )}
+
       {/* 今日任务 */}
       <div className="card today-card">
         <h2>🎯 今日任务</h2>

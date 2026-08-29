@@ -4,6 +4,7 @@ Phase 0: infrastructure endpoints (/api/health)
 Phase 1: course map endpoints (/api/levels, /api/levels/{id}/lessons)
 Phase 2: dashboard endpoint (/api/dashboard)
 Phase 3: lesson detail endpoint (/api/lessons/{id})
+Phase 6b: spaced review endpoints (/api/review/...)
 """
 
 import logging
@@ -13,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import check_database_connection, init_db
-from .routers import courses, dashboard, lessons, quizzes
+from .routers import courses, dashboard, lessons, quizzes, review
 
 logger = logging.getLogger("spark_quest")
 
@@ -48,6 +49,7 @@ app.include_router(courses.router)
 app.include_router(dashboard.router)
 app.include_router(lessons.router)
 app.include_router(quizzes.router)
+app.include_router(review.router)
 
 
 @app.get("/api/health")

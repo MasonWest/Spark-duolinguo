@@ -16,12 +16,102 @@ lesson is available only if its immediate predecessor is mastered. Because
 `mastered` is sticky (never downgraded in Phase 4), unlock is also sticky.
 """
 
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import CourseLevel, Lesson, LessonMastery
+
+
+# ---- Phase 6b: spaced-review schedule ----
+#
+# Deliberately NOT an SRS algorithm (no SM-2, no per-user curve fitting).
+# A fixed, explainable ladder: `srs_stage` indexes into this list.
+REVIEW_INTERVALS_DAYS = [1, 3, 7, 14, 30, 60, 120]
+# A failed review does NOT reset the ladder -- it only inserts one short
+# consolidation review. `srs_stage` is kept as-is.
+REVIEW_FAIL_INTERVAL_DAYS = 3
+# A review round is 5 questions and requires 5/5 (stricter than the 80%
+# mastery threshold used by the learning quiz).
+REVIEW_QUESTION_COUNT = 5
+
+
+def is_due_for_review(mastery: Optional[LessonMastery], now: Optional[datetime] = None) -> bool:
+    """True if this lesson's next review date has arrived.
+
+    Only `mastered` lessons participate in the review cycle; a lesson without
+    a scheduled review date is not due.
+    """
+    if mastery is None or mastery.status != "mastered":
+        return False
+    if mastery.next_review_at is None:
+        return False
+    return mastery.next_review_at <= (now or datetime.utcnow())
+
+
+def due_lesson_ids(db: Session, now: Optional[datetime] = None) -> Set[int]:
+    """Lesson ids whose review is due (batch, single query)."""
+    stmt = select(LessonMastery.lesson_id).where(
+        LessonMastery.status == "mastered",
+        LessonMastery.next_review_at.is_not(None),
+        LessonMastery.next_review_at <= (now or datetime.utcnow()),
+    )
+    return set(db.scalars(stmt).all())
+
+
+def due_reviews(db: Session, now: Optional[datetime] = None) -> List[Tuple[Lesson, LessonMastery]]:
+    """(lesson, mastery) pairs due for review, in global course order."""
+    now = now or datetime.utcnow()
+    due_ids = due_lesson_ids(db, now)
+    if not due_ids:
+        return []
+    masteries = {
+        m.lesson_id: m
+        for m in db.scalars(
+            select(LessonMastery).where(LessonMastery.lesson_id.in_(due_ids))
+        ).all()
+    }
+    return [(l, masteries[l.id]) for l in ordered_lessons(db) if l.id in masteries]
+
+
+def init_review_schedule(mastery: LessonMastery, now: Optional[datetime] = None) -> None:
+    """First mastery: anchor the schedule and schedule the first review (+1 day)."""
+    now = now or datetime.utcnow()
+    mastery.first_mastered_at = now
+    mastery.srs_stage = 0
+    mastery.last_review_at = None
+    mastery.review_count = 0
+    mastery.next_review_at = now + timedelta(days=REVIEW_INTERVALS_DAYS[0])
+
+
+def advance_review_schedule(mastery: LessonMastery, now: Optional[datetime] = None) -> int:
+    """Review passed (5/5): climb one rung of the ladder.
+
+    Returns the newly scheduled interval in days (for UI display).
+    """
+    now = now or datetime.utcnow()
+    max_stage = len(REVIEW_INTERVALS_DAYS) - 1
+    mastery.srs_stage = min(mastery.srs_stage + 1, max_stage)
+    mastery.review_count = (mastery.review_count or 0) + 1
+    mastery.last_review_at = now
+    interval = REVIEW_INTERVALS_DAYS[mastery.srs_stage]
+    mastery.next_review_at = now + timedelta(days=interval)
+    return interval
+
+
+def defer_review_schedule(mastery: LessonMastery, now: Optional[datetime] = None) -> int:
+    """Review failed (<5/5): insert one short consolidation review in 3 days.
+
+    `srs_stage` is intentionally left untouched -- failing is a consolidation
+    step, not a demotion. The user may still retry immediately; this date is
+    only the next *scheduled* review.
+    """
+    now = now or datetime.utcnow()
+    mastery.last_review_at = now
+    mastery.next_review_at = now + timedelta(days=REVIEW_FAIL_INTERVAL_DAYS)
+    return REVIEW_FAIL_INTERVAL_DAYS
 
 
 def ordered_lessons(db: Session) -> List[Lesson]:

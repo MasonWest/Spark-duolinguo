@@ -88,6 +88,20 @@ class LessonMastery(Base):
     `weak_points` is a JSON list of question_ids answered wrong in the
     *most recent* quiz submission -- NOT a long-term weak-point model.
     A normalized attempt-history table is deferred to Phase 6 (Review).
+
+    ---- Phase 6b: spaced-review scheduling ----
+
+    Review is NOT a new learning status. It is scheduling information attached
+    on top of an already-`mastered` lesson, so the Phase 4/5 status vocabulary
+    (locked / available / needs_review / mastered) is unchanged.
+
+    `srs_stage` is the authoritative scheduling state: it is the index into
+    `services.REVIEW_INTERVALS_DAYS` = [1, 3, 7, 14, 30, 60, 120]. It can NOT
+    be derived from `next_review_at` because a failed review also schedules
+    +3 days, which collides with the "passed stage 0" interval.
+
+    `review_count` is purely informational (how many reviews were passed).
+    It must never be used to re-derive `srs_stage`.
     """
 
     __tablename__ = "lesson_mastery"
@@ -101,6 +115,19 @@ class LessonMastery(Base):
     attempts: Mapped[int] = mapped_column(default=0)
     last_quiz_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     weak_points: Mapped[str] = mapped_column(Text, default="[]")  # JSON list[int]
+
+    # --- Phase 6b: spaced-review schedule (nullable: lessons never mastered) ---
+    # Anchor of the whole schedule. NOT the same as `last_quiz_at`: that one is
+    # "most recent attempt", this one is "first time the lesson was mastered".
+    first_mastered_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    # Index into REVIEW_INTERVALS_DAYS; authoritative scheduling state.
+    srs_stage: Mapped[int] = mapped_column(default=0)
+    # When the next review becomes due (NULL -> lesson not in the review cycle).
+    next_review_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    # Last time a review was actually taken (pass or fail).
+    last_review_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    # Number of *passed* reviews; informational only (see class docstring).
+    review_count: Mapped[int] = mapped_column(default=0)
 
 
 # ---- Phase 5.x: 学习笔记（单用户本地应用，无需 user_id） ----

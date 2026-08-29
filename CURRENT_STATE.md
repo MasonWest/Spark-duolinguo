@@ -1,6 +1,6 @@
 # Spark Quest — 当前项目状态
 
-> 最后更新：2026-08-28（V1.0 基线；与 `CHANGELOG.md` 同步建立）
+> 最后更新：2026-08-29（Phase 6b 间隔复习已完成并端到端验收；与 `CHANGELOG.md` 同步）
 > 代码目录：`E:\MMMason\Spark_dlg\spark-quest-app\`
 > 代码仓库：`https://github.com/MasonWest/Spark-duolinguo`（分支 `main`）
 > 文档目录（通常只读）：`E:\MMMason\Spark_dlg\spark_quest\`
@@ -16,14 +16,16 @@
 | 4 | Lesson Mastery Quiz + 最小进度 + 解锁 | 🟢 已完成 |
 | 5 | 完整 Progress Dashboard 动态化 + 状态系统 | 🟢 已完成 |
 | 6a | Quiz Bank 扩充（每课扩至 10 题 + 多样性抽题；L0/L1/L2 全完成） | 🟢 已完成（Phase 6.1 + 6.2） |
-| 6b | Review / Spaced Repetition（间隔重复） | 🔒 规划中（待你设计新机制，未启动） |
+| 6b | Review / Spaced Repetition（Lesson 级间隔复习闭环） | 🟢 已完成并验收（37 项端到端全过） |
 | 7 | Parking Lot 防止思绪发散 | 🔒 规划中 |
-| 8 | 完整 Spark 课程（Level 2/3/4/5 已落地：DataFrame 核心 / Spark SQL / 执行计划 / 分区与 Shuffle；Level 6-7 规划中） | 🟡 部分完成 |
+| 8 | 完整 Spark 课程（Level 2/3/4/5/6/7 **已全部落地**：DataFrame 核心 / Spark SQL / 执行计划 / 分区与 Shuffle / JOIN 深类型与 Broadcast / 性能调优）——课程主线完成 | 🟢 已完成（待验收） |
 | 9 | 游戏化 UI / Streak / Badge | 🔒 规划中 |
 | 10 | AI Tutor | 🔒 规划中 |
 | Notes | Lesson 学习笔记（lesson_notes 表 + 笔记 API + 前端接入） | 🟢 已完成（V1.0 基线） |
 
-**当前进度：Phase 5（完整 Progress Dashboard 动态化 + 状态系统）已实现完毕并通过回归测试。**
+**当前进度：Phase 6b（Lesson 级间隔复习闭环）已实现完毕并通过 37 项端到端验收。**
+
+**下一个可做方向（尚未启动）**：Phase 7 Parking Lot 防发散 / Phase 9 游戏化（Streak·Badge）/ Phase 10 AI Tutor / Level 8「真实 ETL 毕业项目」（见 CHANGELOG 2026-08-29 结论：不再线性扩 Spark 内核，不引入 Flink）。
 
 ## 运行端口（已统一）
 
@@ -80,7 +82,10 @@ quizzes (id, lesson_id FK→lessons.id, type, prompt, options[JSON],
         correct_index, explanation, order_index)
      │ 1:1
 lesson_mastery (id, lesson_id FK→lessons.id UNIQUE, status, score,
-        correct_count, total_count, attempts, last_quiz_at, weak_points[JSON])
+        correct_count, total_count, attempts, last_quiz_at, weak_points[JSON],
+        # ↓ Phase 6b 新增：间隔复习调度（不新增表）
+        first_mastered_at, srs_stage, next_review_at, last_review_at,
+        review_count)
      │ 1:N
 lesson_notes (id, lesson_id FK→lessons.id ON DELETE CASCADE, content,
         created_at)   # V1.0 基线新增：append-only 学习笔记
@@ -136,6 +141,11 @@ lesson_notes (id, lesson_id FK→lessons.id ON DELETE CASCADE, content,
 | attempts | INTEGER（该课 Quiz 累计提交次数） |
 | last_quiz_at | DATETIME (nullable) |
 | weak_points | TEXT（JSON list[int]，最近一次答错的 question_id 列表） |
+| first_mastered_at | DATETIME (nullable)（**Phase 6b 新增**：首次掌握时间，SRS 锚点；语义 ≠ last_quiz_at） |
+| srs_stage | INTEGER default 0（**Phase 6b 新增**：阶梯档位，索引 `REVIEW_INTERVALS_DAYS`；权威调度状态，不可由 next_review_at 反推） |
+| next_review_at | DATETIME (nullable)（**Phase 6b 新增**：下次复习到期时间） |
+| last_review_at | DATETIME (nullable)（**Phase 6b 新增**：上次复习时间，独立于 last_quiz_at） |
+| review_count | INTEGER default 0（**Phase 6b 新增**：累计通过复习次数，纯统计，不参与调度） |
 
 **lesson_notes**（V1.0 基线新增；每课可有多条笔记，新建即追加、不覆盖历史）
 | 列 | 类型 |
@@ -163,6 +173,10 @@ lesson_notes (id, lesson_id FK→lessons.id ON DELETE CASCADE, content,
   1. 为什么该看执行计划 · 2. 逻辑计划 vs 物理计划 · 3. explain() 怎么用 · 4. 怎么读执行计划文本 · 5. Catalyst 优化规则 · 6. WholeStageCodegen 与 Tungsten · 7. 窄依赖 vs 宽依赖 · 8. Job / Stage / Task 层级 · 9. 综合练习
 - **Level 5：分区与 Shuffle**（9 课，2026-08-28 新增，见下方 Level 5 实现记录）
   1. 分区是什么 · 2. 分区数与并行度 · 3. Shuffle 是什么 · 4. Shuffle 为什么贵 · 5. 窄/宽依赖在分区层面的含义 · 6. 哪些操作会触发 Shuffle · 7. reduceByKey vs groupByKey · 8. repartition vs coalesce · 9. 综合练习
+- **Level 6：JOIN 深类型与 Broadcast**（9 课，2026-08-29 新增，见下方 Level 6 实现记录）
+  1. JOIN 是什么（为什么比单表聚合更重）· 2. JOIN 策略全景 · 3. Broadcast Hash Join（小表广播）· 4. Sort-Merge Join（大表×大表默认）· 5. Shuffle Hash Join 与兜底策略 · 6. Spark 怎么选 JOIN 策略 · 7. 主动控制：broadcast() 提示与避坑 · 8. JOIN 中的数据倾斜（Skew）· 9. 综合练习
+- **Level 7：性能调优**（9 课，2026-08-29 新增，见下方 Level 7 实现记录）——**Phase 8 课程主线最后一关**
+  1. 性能调优是什么（度量驱动的闭环）· 2. Tungsten 与编码字节级 · 3. Executor 内存模型与 OOM 根因 · 4. Shuffle 分区数怎么定 · 5. 广播阈值调优 · 6. AQE：让 Spark 在运行时自我修正 · 7. 数据倾斜实战处理 · 8. 最优先的调优：少读、少传、少算 · 9. 综合练习（诊断清单与优先级）
 
 每课 `content` 字段结构（Phase 3 引入，JSON 文本）：
 ```json
@@ -181,9 +195,9 @@ lesson_notes (id, lesson_id FK→lessons.id ON DELETE CASCADE, content,
 
 title / objective / estimated_minutes 仍为独立列；课程文本**不硬编码在 React 组件**。
 
-当前数据量：`course_levels = 6`，`lessons = 48`，全部 lesson.content 已回填（Level 2 新增 10 课、Level 3 新增 9 课、Level 4 新增 9 课、Level 5 新增 9 课）。
+当前数据量：`course_levels = 8`，`lessons = 66`，全部 lesson.content 已回填（Level 2 新增 10 课、Level 3 新增 9 课、Level 4 新增 9 课、Level 5 新增 9 课、Level 6 新增 9 课、Level 7 新增 9 课）。
 
-> ✅ 全部 48 课均已补齐 Quiz 题库（每课 10 题，共 480 题）；Level 2/3/4/5 课程测试接口正常返回题目，且抽题已按维度多样性生效。
+> ✅ 全部 66 课均已补齐 Quiz 题库（每课 10 题，共 660 题）；Level 2/3/4/5/6/7 课程测试接口正常返回题目，且抽题已按维度多样性生效。
 
 ### 尚未引入的表（按文档规划，随对应 Phase 引入）
 
@@ -207,6 +221,11 @@ title / objective / estimated_minutes 仍为独立列；课程文本**不硬编�
 | `GET /api/lessons/{lesson_id}/notes` | 列出该课全部笔记，按 `created_at` 倒序（最新在前） | V1.0 基线（Notes） |
 | `POST /api/lessons/{lesson_id}/notes` | 新建一条笔记（append-only，绝不覆盖历史）；body `{content}`；返回新建笔记 | V1.0 基线（Notes） |
 | `DELETE /api/lessons/{lesson_id}/notes/{note_id}` | 删除单条笔记（仅当该笔记确属该 lesson 时才删，否则拒绝）；成功 204 | V1.0 基线（Notes） |
+| `GET /api/review/due` | **Phase 6b**：到期的复习列表（mastered 且 `next_review_at <= now`），按课程顺序；含 `overdue_days` | 6b |
+| `GET /api/review/{lesson_id}` | **Phase 6b**：取一轮复习（该课题库抽 5 题，不泄露答案；弱维度优先 + 维度多样性）；只要 `mastered` 即可取题（含失败后立即重试）；非 mastered → 403 | 6b |
+| `POST /api/review/{lesson_id}/submit` | **Phase 6b**：批改并重新调度。**5/5 才算通过**（4/5 判失败）；通过 → stage+1 且间隔按阶梯延长；失败 → stage 不变、`next_review_at = now+3d`、写 `weak_points`；提交题数 ≠5 → 422；**不改动 status / score / attempts / last_quiz_at** | 6b |
+
+> Phase 6b 的 `/api/dashboard` 新增 `reviews_due`（与 `/api/review/due` 同源同序）；`/api/levels` 的 lesson 新增 `due_for_review`（布尔，纯视觉提示，**不是第 5 种状态**）。
 
 ### 真实状态逻辑（Phase 4 起，由 `lesson_mastery` 派生，替换原占位规则）
 
@@ -241,6 +260,8 @@ title / objective / estimated_minutes 仍为独立列；课程文本**不硬编�
 | `/map` | 课程地图：Level → Lesson 层级 + locked/available/mastered/needs_review 状态图标 | 1（Phase 4 状态词更新） |
 | `/lesson/:id` | 学习页面：标题 / 预计时间 / 学习目标 / 概念解释 / 示例 / 必记知识 / 常见错误 / 下一课；按状态显示「开始测验 / 复习测验 / 已掌握」入口 | 3（Phase 4 接 Quiz 入口） |
 | `/lesson/:id/quiz` | **Phase 4 新增**：测验页——拉取题目 → 单选作答 → 提交 → 显示得分 / 每题解释 / 通过则提示解锁下一课、未通过提示复习 | 4 |
+| `/review/:id` | **Phase 6b 新增**：间隔复习页——5 题（第 n/5 题进度）→ 5/5 显示「🎉 复习通过 + 下次复习 N 天后」；<5/5 显示「还需巩固」→「重新阅读本课」（跳 `/lesson/:id?from=review`）或「直接再挑战一次」 | 6b |
+| `/lesson/:id?from=review` | **Phase 6b 新增**：学习页在复习失败入口下显示「先重读一遍，再挑战复习」提示条 + 「再次复习」按钮 | 6b |
 
 ## 目录结构
 
@@ -253,13 +274,16 @@ spark-quest-app/
 │   │   ├── models.py          # ORM：CourseLevel、Lesson、QuizQuestion、LessonMastery
 │   │   ├── schemas.py         # Pydantic 响应模型（含 Phase 4 Quiz*/QuizResult*、LessonOut 增 status/mastery_score）
 │   │   ├── services.py        # 共享逻辑：ordered_lessons / compute_lesson_status / mastery_score / lesson_status_map（真实派生）
-│   │   ├── course_seed.json   # 种子数据（含 48 课的结构化 content：L0-L5）
-│   │   ├── quiz_seed.json     # 题库种子（48 课 × 10 题 = 480 题，按 lesson_slug；Phase 6.1/6.2 + Level 3/4/5 扩充）
+│   │   ├── course_seed.json   # 种子数据（含 66 课的结构化 content：L0-L7）
+│   │   ├── quiz_seed.json     # 题库种子（66 课 × 10 题 = 660 题，按 lesson_slug；Phase 6.1/6.2 + Level 3/4/5/6/7 扩充）
 │   │   └── routers/
 │   │       ├── courses.py     # /api/levels、/api/levels/{id}/lessons
 │   │       ├── dashboard.py   # /api/dashboard（Phase 4：completed=mastered 数，今日课=首个未 mastered）
 │   │       ├── lessons.py     # /api/lessons/{id}（Phase 3，返回派生 status/mastery_score）
-│   │       └── quizzes.py     # Phase 4：/api/lessons/{id}/quiz、/api/lessons/{id}/quiz/submit
+│   │       ├── quizzes.py     # Phase 4：/api/lessons/{id}/quiz、/api/lessons/{id}/quiz/submit（P6b：首次掌握时写入复习锚点）
+│   │       ├── review.py      # Phase 6b：/api/review/due、/api/review/{id}、/api/review/{id}/submit
+│   │       └── migrate.py     # 幂等迁移（P6.1 dimension；P6b lesson_mastery 五列 + 存量回填）
+│   ├── _p6b_e2e_check.py      # Phase 6b 端到端验收脚本（跑在 DB 临时副本上，不污染真库）
 │   ├── .venv/
 │   ├── requirements.txt
 │   └── spark_quest.db
@@ -272,7 +296,8 @@ spark-quest-app/
 │   │       ├── Home.tsx + Home.css       # Dashboard
 │   │       ├── MapPage.tsx + MapPage.css # 课程地图（Phase 4 状态词/图例更新）
 │   │       ├── LessonPage.tsx + LessonPage.css # 学习页面（Phase 4 接 Quiz 入口，按状态显示）
-│   │       └── QuizPage.tsx + QuizPage.css # Phase 4 新增：测验页
+│   │       ├── QuizPage.tsx + QuizPage.css # Phase 4 新增：测验页（P6b 复习页复用其题目卡片样式）
+│   │       └── ReviewPage.tsx + ReviewPage.css # Phase 6b 新增：间隔复习页
 │   ├── index.html
 │   ├── package.json
 │   ├── tsconfig.json
@@ -370,7 +395,7 @@ spark-quest-app/
 
 **未解决 / 后续**：
 - ✅ Level 2 的 10 课 Quiz 已补齐（见 `seed_quiz_level2.py`；50 题，5 类题型），测验接口对 Level 2 现已正常返回题目。
-- ✅ Level 3（Spark SQL，9 课）已于 2026-08-28 落地（见下方「Level 3 实现记录」）；Level 4（执行计划，9 课）已于 2026-08-28 落地（见下方「Level 4 实现记录」）；Level 5（Partition/Shuffle）→ Level 6（Join 深类型/broadcast/调优）→ Level 7（性能优化）仍按用户新路线图规划中，未实现。
+- ✅ Level 3（Spark SQL，9 课）已于 2026-08-28 落地（见下方「Level 3 实现记录」）；Level 4（执行计划，9 课）已于 2026-08-28 落地（见下方「Level 4 实现记录」）；✅ Level 5（Partition/Shuffle）、Level 6（JOIN 深类型与 Broadcast）、Level 7（性能调优）已全部落地（L6/L7 均于 2026-08-29 完成，见下方对应实现记录）——Phase 8 课程主线完成。
 
 ## Level 3 实现记录 —— Spark SQL（2026-08-28）
 
@@ -400,7 +425,7 @@ spark-quest-app/
 - 前端 `npm run build`（`tsc -b` + vite）通过：**tsc -b 类型检查通过**；vite 产出因 safe-delete 钩子拦截 `dist/` 清理而需在临时配置下构建（环境限制，非代码问题，已用临时 outDir 验证可正常产出 index.html + assets）。
 
 **未做 / 后续**：
-- Level 4（执行计划，9 课）已于 2026-08-28 落地（见下方「Level 4 实现记录」）；Level 5（Partition/Shuffle）→ Level 6（Join 深类型/broadcast/调优）→ Level 7（性能优化）仍按用户新路线图规划中，未实现。
+- ✅ Level 4（执行计划，9 课）已于 2026-08-28 落地（见下方「Level 4 实现记录」）；✅ Level 5（Partition/Shuffle）、Level 6（JOIN 深类型与 Broadcast）、Level 7（性能调优）已落地（L6/L7 均于 2026-08-29，见下方「Level 6 / Level 7 实现记录」）——Phase 8 课程主线完成。
 - 案例库 slug 一致性：原 `Spark_Quest_心智模型与比喻边界案例库.md` 中 `l2-sort-dedup-limit` / `l2-inspect-data` 与种子实际 slug `l2-sort-dedup` / `l2-inspect` 不符，本次一并校正。
 
 ## Level 4 实现记录 —— 执行计划（2026-08-28）
@@ -431,7 +456,7 @@ spark-quest-app/
 - 前端 `npm run build`（`tsc -b` + vite）未改前端，无需重跑；课程文本数据化经 `/api/lessons/{id}` 渲染，与既有 L0–L3 一致。
 
 **未做 / 后续**：
-- Level 5（Partition/Shuffle）已于 2026-08-28 落地（见下方「Level 5 实现记录」）；Level 6（Join 深类型/broadcast/调优）→ Level 7（性能优化：Tungsten 内存/堆外/编码字节级）仍按用户新路线图规划中，未实现。
+- ✅ Level 5（Partition/Shuffle）已于 2026-08-28 落地；✅ Level 6（JOIN 深类型与 Broadcast）与 Level 7（性能调优）均已于 2026-08-29 落地（见下方「Level 6 / Level 7 实现记录」）——Phase 8 课程主线完成。
 - Level 4 综合练习只验收"读得懂"，不要求调优（呼应设计稿红线）。
 
 ## Level 5 实现记录 —— 分区与 Shuffle（2026-08-28）
@@ -462,8 +487,77 @@ spark-quest-app/
 - 收尾核验按「Spark_Quest_新增Level_收尾核验踩坑.md §5」参数化脚本（`ORDER_INDEX=5, PREFIX="l5-"`）跑通：连真库 `backend/spark_quest.db`（非 `app/sparkquest.db`）、`quizzes` 用 `lesson_id` 关联、聚合结构、`content` 用实现态七键——全绿。
 
 **未做 / 后续**：
-- Level 6（Join 深类型 / broadcast / 调优）→ Level 7（性能优化：Tungsten 内存/堆外/编码字节级、具体调优参数与最优分区数）仍按用户新路线图规划中，未实现。
+- ✅ Level 6 与 Level 7 均已落地（见下方「Level 6 / Level 7 实现记录」）——Phase 8 课程主线（Level 0–7）至此全部完成。
 - Level 5 综合练习只验收"看得懂分区与 Shuffle、能识别触发点"，不要求给出调优参数或最优分区数（呼应设计稿红线）。
+
+## Level 6 实现记录 —— JOIN 深类型与 Broadcast（2026-08-29）
+
+**范围（依据 `spark_quest/docs/Spark_Quest_Level6_执行计划_设计.md`）**：在 Level 5（分区与 Shuffle）之后落地 **Level 6：JOIN 深类型与 Broadcast（9 课）**。把 L3 埋下的「JOIN 必 Shuffle、深类型留 L6」、L4 埋下的 `BroadcastHashJoin`/`SortMergeJoin` 计划标记、L5 埋下的「Shuffle 代价 / 空中飞货」全部延展到 JOIN 策略层面。
+
+**红线（未抢跑 L7）**：不展开 Tungsten 内存/堆外/编码字节级；不展开 shuffle 分区数最优值与深调优参数；广播阈值只讲「存在这把尺子」的概念（不给数值）；skew 只到「识别 + 原理级应对」（salting / 隔离大 key / BHJ 绕过），不写 `skewJoin` 类开关；不重复 L3 INNER 语法、L4 explain 读法、L5 Shuffle 定义与代价。
+
+**已落地**：
+- 新增 `course_levels` 行：Level 6（order_index=6，id=7，status=active）
+- 新增 9 课（slug 前缀 `l6-*`），content 七要素齐全（explanation / examples / key_points / common_mistakes / review / problem / preview），每课 explanation 含 5 个固定小节（含 `l6-comprehensive`）：
+  1. `l6-what-is-join` JOIN 是什么（为什么比单表聚合更重）
+  2. `l6-join-strategies-overview` JOIN 策略全景（Spark 怎么拼）
+  3. `l6-broadcast-hash-join` Broadcast Hash Join（小表广播）
+  4. `l6-sort-merge-join` Sort-Merge Join（大表×大表默认）
+  5. `l6-shuffle-hash-join` Shuffle Hash Join 与兜底策略
+  6. `l6-how-spark-chooses` Spark 怎么选 JOIN 策略（基于代价）
+  7. `l6-broadcast-hint-and-control` 主动控制：broadcast() 提示与避坑
+  8. `l6-join-data-skew` JOIN 中的数据倾斜（Skew）
+  9. `l6-comprehensive` 综合练习（诊断五步：判大小 → 看计划 → 数 Exchange → 给/不给 hint → 查倾斜）
+- 每课 10 题，共 90 题，`single_choice`、`dimension` 五类各 2 题（concept/why/mechanism/apply/comparison），全部带 `explanation`；`correct_index` ∈ [0,3] 且**每课四个位置均被打散**（避免学员按位置猜答案）。
+- 跨课一致性：复用已登记道具（Catalyst=优化大脑、Shuffle=空中飞货、Driver=前台、Executor=工人、JOIN=两拨货按 key 拼桌、托盘=分区、Stage=不跨车间工序段），并在案例库登记 Level 6 的 5 个新隐喻（小册子复印 N 份=BHJ、两本按 key 排序的电话簿逐页对照=SMJ、抽屉柜流式查=SHJ、Catalyst 看两桌人数决定拼法=策略自动选择、某把椅子挤满 90% 的人=数据倾斜）；案例库原 §7/§8 顺延为 §8/§9，新增 L6 章节为 §7。
+- 同步更新 `backend/app/course_seed.json`（幂等）与 `backend/app/quiz_seed.json`（按 lesson_slug 追加）；数据库 upsert 按 slug 跳过已存在课程/题库，**未触碰 Level 0–5 与 lesson_mastery 进度**。
+
+**脚本**：`backend/seed_level6.py`（复制 `seed_level5.py` 模式，一次性幂等 upsert）。落库前已备份 `spark_quest.db.bak_before_l6` / `course_seed.json.bak_before_l6` / `quiz_seed.json.bak_before_l6`。
+
+**校验**：
+- 运行前 DB：levels=6、lessons=48、quizzes=480、lesson_mastery=18
+- 运行后 DB：levels=7、lessons=57、quizzes=570、lesson_mastery=18（进度未动）
+- L0–L5 课数不变（5/6/10/9/9/9）；9 个 L6 课每课 `quizzes` = 10，选项无重复、4 选项、`correct_index` 合法、dimension 五类全覆盖；全部 L6 课 content 七要素齐全、explanation 五小节齐全；JSON 合法无乱码。
+- 收尾核验按「Spark_Quest_新增Level_收尾核验踩坑.md §5」参数化脚本（`ORDER_INDEX=6, PREFIX="l6-"`）跑通：连真库 `backend/spark_quest.db`、`quizzes` 用 `lesson_id` 关联（无 `lesson_slug` 列）、`quiz_seed.json` 聚合结构、`content` 用实现态七键——全绿；新 Level 在 `lesson_mastery` 引用 = 0。
+
+**未做 / 后续**：
+- ✅ Level 7（性能调优）已落地（见下方 Level 7 实现记录）——**Phase 8 课程主线（Level 0–7）至此全部完成**。
+- Level 6 综合练习只验收「看得懂 JOIN 策略与触发点、能选策略、能给 hint」，不要求手调参数。
+
+## Level 7 实现记录 —— 性能调优（2026-08-29）
+
+**范围（依据 `spark_quest/docs/Spark_Quest_Level7_执行计划_设计.md`）**：在 Level 6（JOIN 深类型与 Broadcast）之后落地 **Level 7：性能调优（9 课）**，是 Phase 8 课程主线的最后一关。把 L3 埋下的 UDF 慢、L4 埋下的 Tungsten/WholeStageCodegen 内存细节、L5 埋下的 shuffle 分区数与 spill、L6 埋下的广播阈值与 skew 深调优**全部收口到一套调优方法论**。
+
+**红线（不越界）**：不讲集群资源调度层（YARN/K8s 队列、动态资源分配）；不展开 GC 调优；不给万能最优参数值（只给起点思路与取舍）；不重复 L4 explain 读法、L5 Shuffle 定义与代价、L6 JOIN 策略框架；不引入外部监控体系。
+
+**已落地**：
+- 新增 `course_levels` 行：Level 7（order_index=7，id=8，status=active）
+- 新增 9 课（slug 前缀 `l7-*`），content 七要素齐全（explanation / examples / key_points / common_mistakes / review / problem / preview），每课 explanation 含 5 个固定小节（含 `l7-comprehensive`）：
+  1. `l7-what-is-tuning` 性能调优是什么（度量驱动的闭环）
+  2. `l7-tungsten-encoding` Tungsten 与编码字节级
+  3. `l7-executor-memory` Executor 内存模型与 OOM 根因
+  4. `l7-shuffle-partitions` Shuffle 分区数怎么定
+  5. `l7-broadcast-threshold` 广播阈值调优
+  6. `l7-aqe` AQE：让 Spark 在运行时自我修正
+  7. `l7-skew-tuning` 数据倾斜实战处理
+  8. `l7-read-less-data` 最优先的调优：少读、少传、少算
+  9. `l7-comprehensive` 综合练习（诊断清单与优先级）
+- 每课 10 题，共 90 题，`single_choice`、`dimension` 五类各 2 题（concept/why/mechanism/apply/comparison），全部带 `explanation`；`correct_index` ∈ [0,3] 且**每课四个位置均被打散**（沿用 L6 的做法，写完后重排并复核）。
+- 跨课一致性：复用已登记道具（Catalyst=优化大脑、Shuffle=空中飞货、Executor=工人、分区=托盘、BHJ=小册子、skew=挤满人的椅子、UDF=临时外聘手艺人、谓词下推=滤网瞬移），并在案例库登记 Level 7 的 7 个新隐喻（木桶/最慢工序、真空压缩袋、货车车厢四格、车道数与车流、秤的刻度、会实时改路的导航、交警堵点分流）；案例库原 §8/§9 顺延为 §9/§10，新增 L7 章节为 §8。
+- 同步更新 `backend/app/course_seed.json`（幂等）与 `backend/app/quiz_seed.json`（按 lesson_slug 追加）；数据库 upsert 按 slug 跳过已存在课程/题库，**未触碰 Level 0–6 与 lesson_mastery 进度**。
+
+**脚本**：`backend/seed_level7.py`（复制 `seed_level6.py` 模式，一次性幂等 upsert）。落库前已备份 `spark_quest.db.bak_before_l7` / `course_seed.json.bak_before_l7` / `quiz_seed.json.bak_before_l7`。
+
+**校验**：
+- 运行前 DB：levels=7、lessons=57、quizzes=570、lesson_mastery=18
+- 运行后 DB：levels=8、lessons=66、quizzes=660、lesson_mastery=18（进度未动）
+- L0–L6 课数不变（5/6/10/9/9/9/9）；9 个 L7 课每课 `quizzes` = 10，选项无重复、4 选项、`correct_index` 合法、dimension 五类全覆盖；全部 L7 课 content 七要素齐全、explanation 五小节齐全；JSON 合法无乱码。
+- 收尾核验按「Spark_Quest_新增Level_收尾核验踩坑.md §5」参数化脚本（`ORDER_INDEX=7, PREFIX="l7-"`）跑通：连真库 `backend/spark_quest.db`、`quizzes` 用 `lesson_id` 关联、`quiz_seed.json` 聚合结构、`content` 用实现态七键——全绿；新 Level 在 `lesson_mastery` 引用 = 0。
+- API 冒烟：`/api/levels` 返回 8 个 Level（末位为 Level 7：性能调优），L7 九课均可通过 `/api/lessons/{id}` 取到完整七要素与五小节；L7 课程 `status=locked` 是既有解锁规则（前置未 mastered），非缺陷。
+
+**未做 / 后续**：
+- Phase 8 课程主线已全部完成（Level 0–7）。后续可选方向：Level 0/1 早期课按 v1.0 补「⚠️ 比喻的边界」小节（案例库 §10 已标注）；Phase 6b 间隔重复、Phase 7 Parking Lot、Phase 9 游戏化、Phase 10 AI Tutor 仍规划中。
+- Level 7 综合练习只验证「会诊断、知道优先级、能给方向」，不要求背参数值。
 
 ## Phase 5 实现记录 —— 完整 Progress Dashboard 动态化 + 状态系统（已完成并验收）
 
@@ -533,6 +627,75 @@ spark-quest-app/
 - `submit_quiz` 仍只判本次呈现的 5 题（阈值 80% 不变）。
 
 **数据现状（全部）**：21 课 × 10 题 = 210 题；L0/L1 = 110（44+66），L2 = 100（50+50）。
+
+## Phase 6b 实现记录 —— Lesson 级间隔复习闭环（2026-08-29，已完成并端到端验收）
+
+**目标**：学完 Lesson → 到期 → 做 5 题 → 全对通过 → 延长下一次复习间隔；答错 → 回看本 Lesson → 再做 5 题 → 直到通过。让用户每天打开系统就能明确知道「今天哪些 Lesson 需要复习，复习完下次什么时候复习」。
+
+**硬约束（用户明确划定，已严格遵守）**：
+- **不新增任何表**——复习调度信息全部落在既有 `lesson_mastery` 上（原规划的 `review_items` 表不建）
+- **不新增 `review_attempts` 历史日志**
+- **不新增第 5 种学习状态**——`locked / available / needs_review / mastered` 四状态体系原封不动；复习是 `mastered` 之上的附加调度信息
+- **不做 SM-2 / Anki 式 SRS / 个性化遗忘曲线拟合**，只用固定可解释的间隔阶梯
+- **复习单位是 Lesson**，不做单题级 SRS、不做每 dimension 独立进度
+
+**调度规则（`services.py`）**：
+```
+REVIEW_INTERVALS_DAYS = [1, 3, 7, 14, 30, 60, 120]     # srs_stage 索引这张表
+REVIEW_FAIL_INTERVAL_DAYS = 3
+REVIEW_QUESTION_COUNT = 5
+```
+- 首次掌握（学习测验第一次转 `mastered`）→ `first_mastered_at = now`、`srs_stage = 0`、`next_review_at = now + 1d`
+- 复习通过（5/5）→ `srs_stage + 1`（封顶 6）、`review_count + 1`、`next_review_at = now + INTERVALS[stage]`
+- 复习失败（<5/5）→ **`srs_stage` 保持不变**、`next_review_at = now + 3d`（只插入一次短期巩固，不是降级）
+- 到达 120 天后封顶，不再无限增长
+- `srs_stage` 是权威调度状态，**不可由 `next_review_at` 反推**（失败与「通过 stage0」的间隔都是 3 天，会撞车）；`review_count` 只做统计，不参与调度
+
+**关键设计点：失败后的「立即重做」与「下一次调度」是两个概念。** 失败会把 `next_review_at` 推到 3 天后，但 `GET /api/review/{id}` **只看是否 mastered**，不看是否到期——因此用户读完本课可以立刻再挑战，不受 `next_review_at` 阻挡。
+
+**数据模型变更（最小）**：`lesson_mastery` 新增 5 列 `first_mastered_at / srs_stage / next_review_at / last_review_at / review_count`。`first_mastered_at` 与 `last_quiz_at` 语义分离（前者＝首次掌握，后者＝最近一次测验），不混用。
+**存量回填**（`migrate.py::backfill_mastered_review_schedule`）：对 `status='mastered' AND next_review_at IS NULL AND last_quiz_at IS NOT NULL` 的历史行，令 `first_mastered_at = last_quiz_at`、`srs_stage = 0`、`next_review_at = last_quiz_at + 1d`。**代码注释已明确声明**：历史数据没有真实首次掌握时间，`last_quiz_at` 只是**近似锚点**；此后新掌握的 Lesson 用真实 `first_mastered_at`。本次执行回填了 **18 条**存量 mastered 记录。
+
+**改动文件清单（15 个）**：
+
+后端
+1. `models.py` — `LessonMastery` 增 5 列 + 类注释说明「review ≠ 新状态」「stage 权威、count 仅统计」
+2. `migrate.py` — `add_lesson_mastery_review_columns()`（PRAGMA 检测 + ALTER，幂等）+ 上述回填函数，挂进 `run_migrations()`（`init_db` 已自动调用）
+3. `services.py` — 新增 `REVIEW_INTERVALS_DAYS` 等常量 + `is_due_for_review / due_lesson_ids / due_reviews / init_review_schedule / advance_review_schedule / defer_review_schedule`
+4. `routers/review.py`（新增）— `/api/review/due`、`/api/review/{id}`、`/api/review/{id}/submit`
+5. `routers/quizzes.py` — `submit_quiz` 在「首次转 mastered」分支写入复习锚点（+5 行）；`_sample_quiz_questions` 增加可选 `priority_dims`（弱维度优先，仅排序偏好，非权重模型）
+6. `routers/dashboard.py` — `DashboardOut.reviews_due`
+7. `routers/courses.py` — `_to_lesson_out` 增加 `due_for_review`
+8. `schemas.py` — `ReviewDueItem / ReviewFetchOut / ReviewSubmitIn / ReviewResultOut`；`LessonOut.due_for_review`、`DashboardOut.reviews_due`
+9. `main.py` — 注册 review router
+
+前端
+10. `types.ts` — `ReviewDue / ReviewFetch / ReviewSubmit / ReviewResult`；`Lesson.due_for_review`、`Dashboard.reviews_due`
+11. `main.tsx` — 新增 `/review/:id` 路由
+12. `Home.tsx` + `Home.css`/`index.css` — Dashboard「🔁 今日复习」区块（显示 Level 与逾期天数）
+13. `MapPage.tsx` — mastered 课加「待复习」角标 + 图例补 🔁
+14. `LessonPage.tsx` — mastered 课加「间隔复习（5 题）」入口；`?from=review` 时顶部显示重读提示条 + 「再次复习」按钮
+15. `ReviewPage.tsx` + `ReviewPage.css`（新增）— 5 题答题、第 n/5 进度、5/5 闸门、失败态「重新阅读本课 / 直接再挑战一次」
+
+**抽题策略**：复用 Phase 6.1 的 `_sample_quiz_questions`，先按 `dimension` 分组各取 1 题（保证维度覆盖），不足 5 题再随机补足；上一轮答错题目所属 dimension 排在**优先访问顺序**（简单排序偏好，不建权重模型）。每课固定 10 题，抽 5 题永远可行。
+
+**验收（`backend/_p6b_e2e_check.py`，DB 临时副本上运行，不污染真库；37 项全过）**：
+1. 新掌握 → `first_mastered_at` 已记录、`next_review_at = +1 天`、`stage=0 / count=0`
+2. 到期 → `review/due` 与 Dashboard `reviews_due` 均出现（显示逾期 2 天）
+3. `GET /api/review/{id}` → 5 题、不含 `correct_index`、维度分散（`comparison/debug/apply/concept/mechanism`）
+4. 5/5 → 通过，`stage 0→1`，间隔 3 天；`review_count=1` 不参与调度
+5. 连续通过验证整条阶梯 `1→3→7→14→30→60→120` 全部正确，到 120 天后封顶
+6. 4/5 → 判失败；`srs_stage` 不变；`next_review_at = +3 天`；错题 id 写入 `weak_points`；**score / attempts / last_quiz_at / status 四个学习态字段零改动**
+7. 失败后（`next_review_at` 已在 3 天后）仍能立即再次取题挑战（HTTP 200）
+8. 未到期（+1 天）不出现在今日复习；`reviews_due` 与 `review/due` 完全一致
+9. 存量 18 条 mastered 已回填并可正常进入复习（回填锚点＝`last_quiz_at`，近似值）
+10. 状态词表仍只有 4 个、复习全程零状态变化、Level 状态词表不变、Map `due_for_review` 只出现在 mastered 课上、Dashboard 进度口径不变、非 mastered 课复习被 403、提交题数 ≠5 被 422
+
+**未做 / 明确不属于 Phase 6b**：SM-2 / Anki 式 SRS、个性化遗忘曲线拟合、单题级 SRS、每 dimension 独立进度、`review_attempts` 历史日志、复杂统计分析、连错智能教学、AI 动态出题。
+
+**遗留 / 观察项**：
+- 存量 18 课的首次复习锚点是近似的（= `last_quiz_at`），因此它们几乎全部一次性变为「已逾期」。这是历史数据兼容的必然结果，用户可选择先清一遍再进入正常节奏。
+- `.venv` 内新增了 `httpx2`（Starlette TestClient 依赖，仅供验收脚本使用），不影响运行时依赖。
 
 ## 概念解释排版增强（2026-08-27）
 

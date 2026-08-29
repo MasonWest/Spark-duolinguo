@@ -18,6 +18,9 @@ export interface Lesson {
   order_index: number;
   status: LessonStatus;
   mastery_score?: number | null;
+  // Phase 6b: 复习到期（mastered + next_review_at 已到）。仅用于视觉提示，
+  // 不是第五种学习状态。
+  due_for_review?: boolean;
 }
 
 export interface Level {
@@ -70,6 +73,7 @@ export interface Dashboard {
   current_level: CurrentLevel | null;
   today_lesson: TodayLesson | null;
   streak_days: number;
+  reviews_due: ReviewDue[]; // Phase 6b
 }
 
 export const statusIcon: Record<LessonStatus, string> = {
@@ -185,4 +189,34 @@ export interface QuizResult {
   results: QuizResultItem[];
   unlocked_next: boolean;
   next_lesson_id: number | null;
+}
+
+// ---- Phase 6b: 间隔复习 ----
+
+export interface ReviewDue {
+  lesson_id: number;
+  title: string;
+  level_title: string;
+  next_review_at: string | null;
+  overdue_days: number;
+}
+
+/** 复习题目复用 Quiz 的题型定义（题目结构完全一致，只是门槛不同） */
+export type ReviewFetch = QuizFetch;
+
+/** 提交复习答案（结构与学习测验一致） */
+export type ReviewSubmit = QuizSubmit;
+
+export interface ReviewResult {
+  lesson_id: number;
+  total: number;
+  correct: number;
+  /** 5/5 才算通过，4/5 不通过 */
+  passed: boolean;
+  status: string;
+  srs_stage: number;
+  review_count: number;
+  next_review_at: string | null;
+  next_interval_days: number;
+  results: QuizResultItem[];
 }

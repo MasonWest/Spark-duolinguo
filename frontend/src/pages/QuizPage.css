@@ -143,19 +143,3 @@
   line-height: 1.5;
 }
 
-.btn-ghost {
-  display: inline-block;
-  margin: 10px 8px 0 0;
-  padding: 10px 16px;
-  border-radius: 10px;
-  border: 1px solid #cbd5e1;
-  background: #fff;
-  color: #334155;
-  cursor: pointer;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.btn-ghost:hover {
-  background: #f1f5f9;
-}

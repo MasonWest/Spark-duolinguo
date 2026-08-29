@@ -33,6 +33,7 @@ export default function MapPage() {
         <span>🟢 已掌握</span>
         <span>🟡 需复习</span>
         <span>🔒 未解锁</span>
+        <span>🔁 待复习</span>
       </div>
 
       {error && (
@@ -83,7 +84,12 @@ export default function MapPage() {
                   <Link to={`/lesson/${lesson.id}`} className="lesson-link">
                     <span className="lesson-icon">{statusIcon[lesson.status]}</span>
                     <span className="lesson-order">{lesson.order_index + 1}</span>
-                    <span className="lesson-title">{lesson.title}</span>
+                    <span className="lesson-title">
+                      {lesson.title}
+                      {lesson.due_for_review && (
+                        <span className="lesson-due-badge">待复习</span>
+                      )}
+                    </span>
                     <span className="lesson-mins">
                       {lesson.estimated_minutes} 分钟
                     </span>

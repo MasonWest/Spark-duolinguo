@@ -9,7 +9,7 @@ is "available", everything else is "locked". The real progress system arrives
 in Phase 5.
 """
 
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from ..models import CourseLevel, Lesson
 from ..schemas import LessonOut, LevelOut
-from ..services import lesson_status_map, compute_level_status
+from ..services import compute_level_status, due_lesson_ids, lesson_status_map
 
 router = APIRouter(prefix="/api")
 
@@ -31,17 +31,26 @@ def get_db() -> Session:
         db.close()
 
 
-def _to_lesson_out(lesson: Lesson, status_map: dict, score_map: dict) -> LessonOut:
+def _to_lesson_out(
+    lesson: Lesson,
+    status_map: dict,
+    score_map: dict,
+    due_map: Optional[set] = None,
+) -> LessonOut:
     return LessonOut(
         **{c.name: getattr(lesson, c.name) for c in Lesson.__table__.columns},
         status=status_map.get(lesson.id, "locked"),
         mastery_score=score_map.get(lesson.id),
+        # Phase 6b: purely a visual "due for review" hint. The 4-status
+        # vocabulary (locked/available/needs_review/mastered) is untouched.
+        due_for_review=lesson.id in (due_map or set()),
     )
 
 
 @router.get("/levels", response_model=List[LevelOut])
 def list_levels(db: Session = Depends(get_db)):
     status_map, score_map = lesson_status_map(db)
+    due_map = due_lesson_ids(db)
     levels = db.scalars(select(CourseLevel).order_by(CourseLevel.order_index)).all()
     result = []
     for level in levels:
@@ -62,7 +71,8 @@ def list_levels(db: Session = Depends(get_db)):
             lessons=[],
         )
         level_out.lessons = [
-            _to_lesson_out(lesson, status_map, score_map) for lesson in level_lessons
+            _to_lesson_out(lesson, status_map, score_map, due_map)
+            for lesson in level_lessons
         ]
         result.append(level_out)
     return result
@@ -74,4 +84,8 @@ def list_lessons(level_id: int, db: Session = Depends(get_db)):
     if level is None:
         raise HTTPException(status_code=404, detail="Level not found")
     status_map, score_map = lesson_status_map(db)
-    return [_to_lesson_out(lesson, status_map, score_map) for lesson in level.lessons]
+    due_map = due_lesson_ids(db)
+    return [
+        _to_lesson_out(lesson, status_map, score_map, due_map)
+        for lesson in level.lessons
+    ]

@@ -18,6 +18,9 @@ class LessonOut(BaseModel):
     status: str
     # Most recent quiz score (0-100) for this lesson, or None if never attempted
     mastery_score: Optional[int] = None
+    # Phase 6b: review date has arrived (mastered + next_review_at <= now).
+    # Not a new learning status -- only a visual hint for the map.
+    due_for_review: bool = False
 
     class Config:
         from_attributes = True
@@ -66,11 +69,28 @@ class TodayLessonOut(BaseModel):
     status: str = "available"  # available / needs_review
 
 
+# ---- Phase 6b: 间隔复习（Lesson 级调度，不是新的学习状态） ----
+
+
+class ReviewDueItem(BaseModel):
+    """One lesson whose scheduled review date has arrived."""
+
+    lesson_id: int
+    title: str
+    level_title: str
+    # ISO timestamp of the scheduled review date (in the past => overdue).
+    next_review_at: Optional[str] = None
+    # Whole days the review is overdue (0 => due today).
+    overdue_days: int = 0
+
+
 class DashboardOut(BaseModel):
     progress: ProgressOut
     current_level: Optional[CurrentLevelOut] = None
     today_lesson: Optional[TodayLessonOut] = None
     streak_days: int = 0  # Phase 6
+    # Phase 6b: lessons whose scheduled review date has arrived.
+    reviews_due: List["ReviewDueItem"] = []
 
 
 # ---- Phase 4: Quiz + Lesson Mastery ----
@@ -181,3 +201,35 @@ class LessonDetailOut(BaseModel):
     mastery_score: Optional[int] = None
     content: LessonContentOut
     next_lesson: Optional[NextLessonOut] = None
+
+
+# ---- Phase 6b: 复习接口 schema（放在 QuizResultItem 之后以便复用） ----
+
+
+class ReviewFetchOut(BaseModel):
+    """A review round: 5 questions drawn from the lesson bank (no answers)."""
+
+    lesson_id: int
+    lesson_title: str
+    questions: List[QuizQuestionOut] = []
+
+
+class ReviewSubmitIn(BaseModel):
+    answers: List[QuizAnswerIn] = []
+
+
+class ReviewResultOut(BaseModel):
+    lesson_id: int
+    total: int
+    correct: int
+    # 5/5 required -- 4/5 does NOT count as a pass.
+    passed: bool
+    # Learning status after this review. Phase 6b never changes it: a review
+    # only runs on mastered lessons, and failing one never demotes them.
+    status: str
+    # Scheduling state after this submission.
+    srs_stage: int
+    review_count: int
+    next_review_at: Optional[str] = None
+    next_interval_days: int = 0
+    results: List[QuizResultItem] = []

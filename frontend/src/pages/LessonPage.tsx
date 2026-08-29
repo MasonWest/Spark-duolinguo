@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import type { LessonDetail, LessonNote } from "../types";
 import { statusLabel } from "../types";
 import RichText from "../components/RichText";
@@ -7,6 +7,9 @@ import "./LessonPage.css";
 
 export default function LessonPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  // Phase 6b: 复习失败后跳过来重读本课，读完后从这里回到复习。
+  const fromReview = searchParams.get("from") === "review";
   const [data, setData] = useState<LessonDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -143,6 +146,20 @@ export default function LessonPage() {
         <span className="meta-chip time">⏱️ 约 {data.estimated_minutes} 分钟</span>
         <span className="meta-chip status-chip">{statusLabel[data.status]}</span>
       </div>
+
+      {/* 复习失败后的重读提示（Phase 6b） */}
+      {fromReview && data.status === "mastered" && (
+        <section className="card review-remind-card">
+          <h2>🔁 先重读一遍，再挑战复习</h2>
+          <p className="para">
+            上一次复习没有全部答对。把下面的内容重新过一遍，读完后点击「再次复习」即可立刻再挑战一次（5
+            题全对才算通过）。
+          </p>
+          <Link to={`/review/${data.id}`} className="btn-primary">
+            再次复习 →
+          </Link>
+        </section>
+      )}
 
       {/* 上一课回顾 */}
       {c.review ? (
@@ -306,6 +323,10 @@ export default function LessonPage() {
             )}
             <Link to={`/lesson/${data.id}/quiz`} className="back-link">
               复习测验
+            </Link>
+            {/* Phase 6b: 间隔复习入口（已掌握的课程随时可以主动复习） */}
+            <Link to={`/review/${data.id}`} className="btn-ghost">
+              间隔复习（5 题）
             </Link>
           </>
         )}

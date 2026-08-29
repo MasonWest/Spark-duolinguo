@@ -80,3 +80,99 @@ h1 {
   font-size: 13px;
   margin-top: 32px;
 }
+
+/* ---- Phase 6b: 待复习提示（Home / Map / Lesson 共用） ---- */
+
+/* 次级按钮（Quiz / Lesson / Review 共用；原先只在 QuizPage.css 里定义） */
+.btn-ghost {
+  display: inline-block;
+  margin: 10px 8px 0 0;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.btn-ghost:hover {
+  background: #f1f5f9;
+}
+
+.review-due-card {
+  border: 2px solid #7c3aed;
+  background: #faf5ff;
+}
+
+.review-due-item {
+  border-top: 1px solid #eef2f7;
+  padding: 10px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.review-due-item:first-child {
+  border-top: none;
+}
+
+.review-due-name {
+  font-weight: 600;
+  color: #1f2937;
+  text-decoration: none;
+}
+
+.review-due-name:hover {
+  text-decoration: underline;
+}
+
+.review-due-meta {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 400;
+  margin-left: 8px;
+}
+
+.review-due-go {
+  white-space: nowrap;
+  font-size: 14px;
+  color: #7c3aed;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.review-due-go:hover {
+  text-decoration: underline;
+}
+
+.review-empty {
+  color: #6b7280;
+  font-size: 14px;
+  margin: 0;
+}
+
+/* 课程地图：待复习角标（不新增状态，只是 mastered 之上的视觉提示） */
+.lesson-due-badge {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #7c3aed;
+  background: #f3e8ff;
+  border: 1px solid #ddd6fe;
+  border-radius: 999px;
+  padding: 1px 8px;
+  vertical-align: middle;
+}
+
+/* 学习页：从复习失败跳转过来时的提示条 */
+.review-remind-card {
+  border: 2px solid #7c3aed;
+  background: #faf5ff;
+}
+
+.review-remind-card h2 {
+  color: #6d28d9;
+}

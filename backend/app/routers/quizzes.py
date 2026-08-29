@@ -16,7 +16,7 @@ next lesson). A sub-80% first attempt is `needs_review` and can be retaken.
 import json
 import random
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -31,7 +31,7 @@ from ..schemas import (
     QuizResultOut,
     QuizSubmitIn,
 )
-from ..services import compute_lesson_status, ordered_lessons
+from ..services import compute_lesson_status, init_review_schedule, ordered_lessons
 
 router = APIRouter(prefix="/api")
 
@@ -53,7 +53,11 @@ def _parse_options(raw: str) -> List[str]:
         return []
 
 
-def _sample_quiz_questions(questions: List[QuizQuestion], n: int = 5) -> List[QuizQuestion]:
+def _sample_quiz_questions(
+    questions: List[QuizQuestion],
+    n: int = 5,
+    priority_dims: Optional[List[str]] = None,
+) -> List[QuizQuestion]:
     """Phase 6.1: draw `n` questions, preferring dimension diversity.
 
     Questions are grouped by their `dimension` tag (NULL -> "uncategorized").
@@ -62,6 +66,10 @@ def _sample_quiz_questions(questions: List[QuizQuestion], n: int = 5) -> List[Qu
     not require a fixed number of dimensions) — diversity is only preferred
     when the lesson naturally has variety, so future lessons are never boxed
     in by the rule.
+
+    Phase 6b: `priority_dims` (dimensions the learner got wrong last round) are
+    visited FIRST when picking one question per dimension. This is a simple
+    ordering preference — not a weight model.
     """
     if len(questions) <= n:
         return list(questions)
@@ -73,6 +81,9 @@ def _sample_quiz_questions(questions: List[QuizQuestion], n: int = 5) -> List[Qu
 
     dims = list(groups.keys())
     random.shuffle(dims)
+    if priority_dims:
+        prio = [d for d in priority_dims if d in groups]
+        dims.sort(key=lambda d: 0 if d in prio else 1)
 
     picked: List[QuizQuestion] = []
     for d in dims:
@@ -202,8 +213,17 @@ def submit_quiz(lesson_id: int, payload: QuizSubmitIn, db: Session = Depends(get
     # SQLAlchemy applies the `default=0` only at INSERT time, so a freshly
     # created object has attempts=None until flush. Tolerate None to be safe.
     existing.attempts = (existing.attempts or 0) + 1
-    existing.last_quiz_at = datetime.utcnow()
+    now = datetime.utcnow()
+    existing.last_quiz_at = now
     existing.weak_points = json.dumps(weak_points, ensure_ascii=False)
+
+    # Phase 6b: the FIRST time this lesson becomes mastered, anchor the spaced
+    # review schedule. `first_mastered_at` is deliberately separate from
+    # `last_quiz_at` (most recent attempt) -- they mean different things.
+    # Later re-quizzes of an already-mastered lesson must NOT move the anchor.
+    if effective_status == "mastered" and existing.first_mastered_at is None:
+        init_review_schedule(existing, now=now)
+
     db.commit()
     db.refresh(existing)
 
