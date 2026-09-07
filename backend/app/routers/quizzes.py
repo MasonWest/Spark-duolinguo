@@ -164,17 +164,28 @@ def submit_quiz(lesson_id: int, payload: QuizSubmitIn, db: Session = Depends(get
     # Phase 6.1: only the 5 questions actually presented (and answered) are
     # graded. `questions` holds the full bank (10); `payload.answers` lists the
     # 5 submitted, so we grade exactly those.
-    total = len(payload.answers)
+    #
+    # Order fix (2026-09-04): iterate `payload.answers`, NOT the DB-ordered
+    # `questions`. GET /quiz returns a RANDOM sample in a shuffled order, so
+    # grading in DB order made the result page list answers in a different
+    # order than the learner saw them. The result list must mirror the
+    # presented order. Duplicate question_ids are collapsed (last wins) so
+    # `total` stays truthful.
+    selected_by_q: dict = {}
+    ordered_ids: List[int] = []
+    for ans in payload.answers:
+        if ans.question_id not in selected_by_q:
+            ordered_ids.append(ans.question_id)
+        selected_by_q[ans.question_id] = ans.selected_index
+
+    total = len(ordered_ids)
     correct = 0
     weak_points: List[int] = []
     results: List[QuizResultItem] = []
-    selected_by_q = {a.question_id: a.selected_index for a in payload.answers}
 
-    for q in questions:
-        selected = selected_by_q.get(q.id)
-        if selected is None:
-            # This question was not part of the presented 5; skip it.
-            continue
+    for qid in ordered_ids:
+        q = q_by_id[qid]
+        selected = selected_by_q[qid]
         is_correct = selected == q.correct_index
         if is_correct:
             correct += 1
@@ -189,6 +200,10 @@ def submit_quiz(lesson_id: int, payload: QuizSubmitIn, db: Session = Depends(get
                 explanation=q.explanation,
             )
         )
+
+    # Guard: an empty submission would divide by zero below.
+    if total == 0:
+        raise HTTPException(status_code=422, detail="Empty submission: no answers provided")
 
     score = round(correct / total * 100)
     this_passed = score >= MASTERY_THRESHOLD

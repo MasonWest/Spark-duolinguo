@@ -177,22 +177,33 @@ def submit_review(lesson_id: int, payload: ReviewSubmitIn, db: Session = Depends
                 detail=f"Unknown question_id {ans.question_id} for lesson {lesson_id}",
             )
 
-    total = len(payload.answers)
+    # Order fix (2026-09-04): iterate in SUBMISSION order, not DB order.
+    # GET /review returns a shuffled random sample, so grading in DB order
+    # made the result page list answers differently from how they were shown.
+    # Duplicate ids are collapsed (last wins) before the count check, so a
+    # submission of [A, A, B, C, D] is rejected as 4 questions instead of
+    # silently scoring against a total of 5.
+    selected_by_q: dict = {}
+    ordered_ids: List[int] = []
+    for ans in payload.answers:
+        if ans.question_id not in selected_by_q:
+            ordered_ids.append(ans.question_id)
+        selected_by_q[ans.question_id] = ans.selected_index
+
+    total = len(ordered_ids)
     if total != REVIEW_QUESTION_COUNT:
         raise HTTPException(
             status_code=422,
-            detail=f"复习需提交 {REVIEW_QUESTION_COUNT} 道题，本次收到 {total} 道",
+            detail=f"复习需提交 {REVIEW_QUESTION_COUNT} 道不同的题，本次收到 {total} 道",
         )
 
     correct = 0
     weak_points: List[int] = []
     results: List[QuizResultItem] = []
-    selected_by_q = {a.question_id: a.selected_index for a in payload.answers}
 
-    for q in questions:
-        selected = selected_by_q.get(q.id)
-        if selected is None:
-            continue
+    for qid in ordered_ids:
+        q = q_by_id[qid]
+        selected = selected_by_q[qid]
         is_correct = selected == q.correct_index
         if is_correct:
             correct += 1
