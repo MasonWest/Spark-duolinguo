@@ -1,11 +1,89 @@
-/* 全局基础样式 */
+/* 全局基础样式 + Design Tokens */
 
 :root {
-  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
-  color: #1f2937;
-  background: #f9fafb;
+  /* === Color System (继承 Course Map 色标) === */
+  --sq-bg: #f9fafb;
+  --sq-bg-atmosphere: linear-gradient(180deg, #eaf3fb 0%, #f1f0fb 52%, #fbf1ec 100%);
+
+  --sq-primary: #2563eb;
+  --sq-primary-hover: #1d4ed8;
+  --sq-primary-light: #eff6ff;
+  --sq-primary-border: #93b4dc;
+
+  --sq-success: #639922;
+  --sq-success-light: #eaf3de;
+  --sq-success-border: #c0dd97;
+
+  --sq-warning: #ef9f27;
+  --sq-warning-light: #fef3c7;
+  --sq-warning-border: #fcd34d;
+
+  --sq-review: #7c3aed;
+  --sq-review-light: #faf5ff;
+  --sq-review-border: #ddd6fe;
+
+  --sq-text: #1f2937;
+  --sq-text-muted: #6b7280;
+  --sq-text-subtle: #9ca3af;
+
+  --sq-border: #e5e7eb;
+  --sq-border-muted: #dbe3ee;
+  --sq-card-bg: #fff;
+
+  /* === Radius === */
+  --sq-radius-card: 16px;
+  --sq-radius-button: 10px;
+  --sq-radius-badge: 999px;
+
+  /* === Shadow === */
+  --sq-shadow-base: 0 1px 2px rgb(0 0 0 / 0.04);
+  --sq-shadow-hover: 0 2px 8px rgb(0 0 0 / 0.06);
+  --sq-shadow-elevated: 0 2px 10px rgb(29 78 216 / 0.1);
+
+  /* === Spacing (16px base) === */
+  --sq-space-1: 4px;
+  --sq-space-2: 8px;
+  --sq-space-3: 12px;
+  --sq-space-4: 16px;
+  --sq-space-5: 20px;
+  --sq-space-6: 24px;
+
+  /* === Typography === */
+  --sq-text-h1: 28px;
+  --sq-text-h2: 20px;
+  --sq-text-h3: 16px;
+  --sq-text-body: 14px;
+  --sq-text-small: 13px;
+  --sq-text-tiny: 12px;
+  --sq-line-tight: 1.3;
+  --sq-line-normal: 1.6;
+
+  /* === Focus Ring === */
+  --sq-focus-ring: 0 0 0 3px rgb(29 78 216 / 0.3);
+
+  /* === Breakpoints === */
+  --sq-bp-narrow: 420px;
+  --sq-bp-tablet: 720px;
 }
 
+/* Dark mode (可选) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sq-bg: #111827;
+    --sq-bg-atmosphere: linear-gradient(180deg, #0f172a 0%, #1e1b3a 52%, #2d1a0e 100%);
+    --sq-card-bg: #1f2937;
+    --sq-border: #374151;
+    --sq-border-muted: #4b5563;
+    --sq-text: #f9fafb;
+    --sq-text-muted: #9ca3af;
+    --sq-primary-light: #1e3a8a;
+    --sq-success-light: #14532d;
+    --sq-warning-light: #78350f;
+    --sq-review-light: #3b0764;
+  }
+}
+
+/* === Base === */
 * {
   box-sizing: border-box;
 }
@@ -13,97 +91,142 @@
 body {
   margin: 0;
   min-height: 100vh;
+  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: var(--sq-text);
+  background: var(--sq-bg);
 }
 
+/* === Focus Visible 统一 === */
+*:focus-visible {
+  outline: none;
+  box-shadow: var(--sq-focus-ring);
+}
+
+/* === Button System === */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sq-space-2);
+  padding: var(--sq-space-2) var(--sq-space-5);
+  background: var(--sq-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--sq-radius-button);
+  font-size: var(--sq-text-body);
+  font-weight: 600;
+  line-height: 1.5;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.05s;
+}
+.btn-primary:hover { background: var(--sq-primary-hover); }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-block { width: 100%; }
+.btn-sm { padding: var(--sq-space-1) var(--sq-space-3); font-size: var(--sq-text-small); }
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sq-space-2);
+  padding: var(--sq-space-2) var(--sq-space-4);
+  background: #fff;
+  color: var(--sq-text);
+  border: 1px solid var(--sq-border);
+  border-radius: var(--sq-radius-button);
+  font-size: var(--sq-text-body);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-ghost:hover { background: var(--sq-bg); border-color: var(--sq-border-muted); }
+
+/* === Card === */
+.card {
+  background: var(--sq-card-bg);
+  border: 1px solid var(--sq-border);
+  border-radius: var(--sq-radius-card);
+  box-shadow: var(--sq-shadow-base);
+}
+
+/* === Badge === */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sq-space-1);
+  padding: var(--sq-space-1) var(--sq-space-3);
+  border-radius: var(--sq-radius-badge);
+  font-size: var(--sq-text-tiny);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+.badge-sm { padding: 1px var(--sq-space-2); font-size: 11px; }
+
+.badge-primary { background: var(--sq-primary-light); color: #1e3a8a; border: 1px solid var(--sq-primary-border); }
+.badge-success { background: var(--sq-success-light); color: #27500a; border: 1px solid var(--sq-success-border); }
+.badge-warning { background: var(--sq-warning-light); color: #92400e; border: 1px solid var(--sq-warning-border); }
+.badge-review { background: var(--sq-review-light); color: #6d28d9; border: 1px solid var(--sq-review-border); }
+.badge-neutral { background: var(--sq-bg); color: var(--sq-text-muted); border: 1px solid var(--sq-border); }
+
+/* === Progress Ring === */
+.progress-ring {
+  display: inline-block;
+  width: var(--size, 64px);
+  height: var(--size, 64px);
+  transform: rotate(-90deg);
+}
+.progress-ring__bg { fill: none; stroke: var(--sq-border); stroke-width: var(--stroke, 6); }
+.progress-ring__fg {
+  fill: none;
+  stroke: var(--sq-primary);
+  stroke-width: var(--stroke, 6);
+  stroke-linecap: round;
+  stroke-dasharray: var(--dash, 158);
+  stroke-dashoffset: var(--offset, 0);
+  transition: stroke-dashoffset 0.6s ease-out;
+}
+
+/* === Icon System === */
+.sq-icon {
+  display: inline-block;
+  width: var(--size, 1em);
+  height: var(--size, 1em);
+  vertical-align: -0.125em;
+  flex-shrink: 0;
+}
+.sq-icon path { stroke: currentColor; }
+
+/* === Legacy / Shared (保持兼容) === */
 .container {
   max-width: 640px;
   margin: 0 auto;
   padding: 48px 24px;
 }
 
-h1 {
-  margin: 0 0 4px;
-  font-size: 32px;
-}
+h1 { margin: 0 0 4px; font-size: 32px; }
 
-.subtitle {
-  margin: 0 0 32px;
-  color: #6b7280;
-}
+.subtitle { margin: 0 0 32px; color: var(--sq-text-muted); }
 
-.card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 20px 24px;
-  margin-bottom: 16px;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
-}
+.card h2 { margin: 0 0 12px; font-size: 16px; color: #374151; }
 
-.card h2 {
-  margin: 0 0 12px;
-  font-size: 16px;
-  color: #374151;
-}
+.card ul { margin: 8px 0 0; padding-left: 20px; color: #4b5563; line-height: 1.8; }
 
-.card ul {
-  margin: 8px 0 0;
-  padding-left: 20px;
-  color: #4b5563;
-  line-height: 1.8;
-}
+.card a:not(.btn-primary) { color: var(--sq-primary); text-decoration: none; }
+.card a:not(.btn-primary):hover { text-decoration: underline; }
 
-.card a:not(.btn-primary) {
-  color: #2563eb;
-  text-decoration: none;
-}
+.status { font-weight: 600; }
+.status.ok { color: #059669; }
+.status.error { color: #dc2626; }
 
-.card a:not(.btn-primary):hover {
-  text-decoration: underline;
-}
+.phase { text-align: center; color: var(--sq-text-subtle); font-size: 13px; margin-top: 32px; }
 
-.status {
-  font-weight: 600;
-}
-
-.status.ok {
-  color: #059669;
-}
-
-.status.error {
-  color: #dc2626;
-}
-
-.phase {
-  text-align: center;
-  color: #9ca3af;
-  font-size: 13px;
-  margin-top: 32px;
-}
-
-/* ---- Phase 6b: 待复习提示（Home / Map / Lesson 共用） ---- */
-
-/* 次级按钮（Quiz / Lesson / Review 共用；原先只在 QuizPage.css 里定义） */
-.btn-ghost {
-  display: inline-block;
-  margin: 10px 8px 0 0;
-  padding: 10px 16px;
-  border-radius: 10px;
-  border: 1px solid #cbd5e1;
-  background: #fff;
-  color: #334155;
-  cursor: pointer;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.btn-ghost:hover {
-  background: #f1f5f9;
-}
-
+/* Phase 6b: 待复习提示（Home / Map / Lesson 共用） */
 .review-due-card {
-  border: 2px solid #7c3aed;
-  background: #faf5ff;
+  border: 2px solid var(--sq-review);
+  background: var(--sq-review-light);
 }
 
 .review-due-item {
@@ -114,65 +237,37 @@ h1 {
   align-items: center;
   gap: 12px;
 }
+.review-due-item:first-child { border-top: none; }
 
-.review-due-item:first-child {
-  border-top: none;
-}
+.review-due-name { font-weight: 600; color: var(--sq-text); text-decoration: none; }
+.review-due-name:hover { text-decoration: underline; }
 
-.review-due-name {
-  font-weight: 600;
-  color: #1f2937;
-  text-decoration: none;
-}
+.review-due-meta { font-size: 12px; color: var(--sq-text-muted); font-weight: 400; margin-left: 8px; }
 
-.review-due-name:hover {
-  text-decoration: underline;
-}
+.review-due-go { white-space: nowrap; font-size: 14px; color: var(--sq-review); font-weight: 600; text-decoration: none; }
+.review-due-go:hover { text-decoration: underline; }
 
-.review-due-meta {
-  font-size: 12px;
-  color: #6b7280;
-  font-weight: 400;
-  margin-left: 8px;
-}
+.review-empty { color: var(--sq-text-muted); font-size: 14px; margin: 0; }
 
-.review-due-go {
-  white-space: nowrap;
-  font-size: 14px;
-  color: #7c3aed;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.review-due-go:hover {
-  text-decoration: underline;
-}
-
-.review-empty {
-  color: #6b7280;
-  font-size: 14px;
-  margin: 0;
-}
-
-/* 课程地图：待复习角标（不新增状态，只是 mastered 之上的视觉提示） */
 .lesson-due-badge {
   margin-left: 8px;
   font-size: 11px;
   font-weight: 700;
-  color: #7c3aed;
-  background: #f3e8ff;
-  border: 1px solid #ddd6fe;
+  color: var(--sq-review);
+  background: var(--sq-review-light);
+  border: 1px solid var(--sq-review-border);
   border-radius: 999px;
   padding: 1px 8px;
   vertical-align: middle;
 }
 
-/* 学习页：从复习失败跳转过来时的提示条 */
-.review-remind-card {
-  border: 2px solid #7c3aed;
-  background: #faf5ff;
-}
+.review-remind-card { border: 2px solid var(--sq-review); background: var(--sq-review-light); }
+.review-remind-card h2 { color: #6d28d9; }
 
-.review-remind-card h2 {
-  color: #6d28d9;
+/* Focus breathe animation (for Primary Card) */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes sq-focus-breathe {
+    0%, 100% { transform: scale(1); opacity: 0.35; }
+    50% { transform: scale(1.05); opacity: 0.08; }
+  }
 }

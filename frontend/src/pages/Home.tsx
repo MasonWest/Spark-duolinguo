@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Dashboard } from "../types";
+import { ProgressRing, Badge, Icon } from "../components/ui";
 import "./Home.css";
 
 export default function Home() {
@@ -17,123 +18,162 @@ export default function Home() {
       .catch((e) => setError(String(e)));
   }, []);
 
-  const connected = data !== null;
   const p = data?.progress;
+  const cl = data?.current_level;
+  const tl = data?.today_lesson;
+  const reviews = data?.reviews_due ?? [];
+
+  if (error) {
+    return (
+      <div className="dashboard-page">
+        <div className="card" style={{ textAlign: "center", padding: "48px 24px" }}>
+          <h2>加载失败</h2>
+          <p className="status error">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="dashboard-page">
+        <div className="card" style={{ textAlign: "center", padding: "48px 24px" }}>
+          <span className="status">加载中…</span>
+        </div>
+      </div>
+    );
+  }
+
+  const currentLevelTitle = cl?.title ?? "—";
+  const currentLessonNum = tl ? (cl?.completed_count ?? 0) + 1 : (cl?.completed_count ?? 0);
+  const totalLessonsInLevel = cl?.total_count ?? 0;
+
+  const todayStatus = tl?.status === "needs_review" ? "warning" : "primary";
+  const todayStatusLabel = tl?.status === "needs_review" ? "需复习" : "可学习";
+  const ctaText = tl?.status === "needs_review" ? "继续挑战 (复习测验)" : "开始学习";
+  const hintText = tl?.status === "needs_review"
+    ? "建议先温习课程内容，再次尝试测验"
+    : "点击开始今天的 Spark 探索之旅";
 
   return (
-    <div className="container">
-      <h1>🔥 Spark Quest</h1>
-      <p className="subtitle">今天系统让你学什么？</p>
-
-      {/* 总进度 */}
-      <div className="card">
-        <h2>📊 总进度</h2>
-        {error ? (
-          <span className="status error">加载失败：{error}</span>
-        ) : !data ? (
-          <span className="status">加载中…</span>
-        ) : (
-          <>
-            <div className="progress-bar">
-              <div
-                className="progress-fill"
-                style={{ width: `${p!.percentage}%` }}
-              />
-            </div>
-            <div className="progress-text">
-              已完成 {p!.completed} / {p!.total} · {p!.percentage}%
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* 当前 Level */}
-      {data?.current_level && (
-        <div className="card">
-          <h2>📍 当前阶段</h2>
-          <div className="current-level-header">
-            <span className="current-level-title">{data.current_level.title}</span>
-            <span className="current-level-count">
-              {data.current_level.completed_count} / {data.current_level.total_count}
-            </span>
-          </div>
-          <div className="progress-bar level-progress">
-            <div
-              className="progress-fill level-fill"
-              style={{ width: `${data.current_level.percentage}%` }}
-            />
-          </div>
+    <div className="dashboard-page">
+      {/* Hero: 当前学习定位 */}
+      <header className="hero-bar">
+        <div className="hero-location">
+          <Icon name="location" size={16} aria-hidden={true} />
+          <span className="hero-level">{currentLevelTitle}</span>
+          <span className="hero-lesson">Lesson {currentLessonNum} / {totalLessonsInLevel}</span>
         </div>
-      )}
+        <ProgressRing
+          percentage={p!.percentage}
+          size={56}
+          showLabel
+          className="hero-ring"
+          aria-label={`总进度 ${p!.percentage}%`}
+        />
+      </header>
 
-      {/* 今日复习（Phase 6b：到期的间隔复习） */}
-      {data && data.reviews_due.length > 0 && (
-        <div className="card review-due-card">
-          <h2>🔁 今日复习</h2>
-          {data.reviews_due.map((r) => (
-            <div key={r.lesson_id} className="review-due-item">
-              <Link to={`/review/${r.lesson_id}`} className="review-due-name">
-                {r.title}
-                <span className="review-due-meta">
-                  {r.level_title}
-                  {r.overdue_days > 0 ? ` · 逾期 ${r.overdue_days} 天` : " · 今天到期"}
-                </span>
-              </Link>
-              <Link to={`/review/${r.lesson_id}`} className="review-due-go">
-                去复习 →
-              </Link>
+      {/* Primary Action: 今日任务 - 最强视觉焦点 */}
+      <main className="primary-action">
+        {tl ? (
+          <div className="primary-card focus-ring">
+            <div className="primary-header">
+              <Badge variant={todayStatus} size="sm">{todayStatusLabel}</Badge>
+              <h1 className="primary-title">{tl.title}</h1>
             </div>
-          ))}
-          <p className="today-hint">5 道题全部答对才算通过，答错需重读本课再挑战。</p>
-        </div>
-      )}
-
-      {/* 今日任务 */}
-      <div className="card today-card">
-        <h2>🎯 今日任务</h2>
-        {data?.today_lesson ? (
-          <>
-            <div className="today-title">
-              {data.today_lesson.status === "needs_review" && (
-                <span className="status-badge review">需复习</span>
-              )}
-              {data.today_lesson.title}
+            <div className="primary-meta">
+              <span><Icon name="lesson" size={14} aria-hidden={true} /> {tl.level_title}</span>
+              <span><Icon name="clock" size={14} aria-hidden={true} /> 约 {tl.estimated_minutes} 分钟</span>
             </div>
-            <div className="today-meta">
-              <span>{data.today_lesson.level_title}</span>
-              <span>·</span>
-              <span>约 {data.today_lesson.estimated_minutes} 分钟</span>
-            </div>
-            <p className="today-desc">{data.today_lesson.description}</p>
-            <Link to={`/lesson/${data.today_lesson.id}`} className="btn-primary">
-              {data.today_lesson.status === "needs_review" ? "继续挑战 (复习测验) →" : "开始学习 →"}
+            <p className="primary-desc">{tl.description}</p>
+            <Link to={`/lesson/${tl.id}`} className="btn-primary btn-block">
+              <span>{ctaText}</span>
+              <Icon name="chevron" size={18} aria-hidden={true} />
             </Link>
-            <p className="today-hint">
-              {data.today_lesson.status === "needs_review" 
-                ? "建议先温习课程内容，再次尝试测验" 
-                : "点击开始今天的 Spark 探索之旅"}
-            </p>
-          </>
+            <p className="primary-hint">{hintText}</p>
+          </div>
         ) : (
-          <div className="all-completed">
-            <span className="trophy">🏆</span>
+          <div className="primary-card all-completed">
+            <Icon name="check" size={48} aria-hidden={true} />
             <p>太棒了！你已经完成了目前所有的课程！</p>
-            <Link to="/map" className="btn-secondary">去课程地图回顾 →</Link>
+            <Link to="/map" className="btn-ghost">去课程地图回顾</Link>
           </div>
         )}
-      </div>
+      </main>
 
-      {/* 课程地图入口 */}
-      <div className="card">
-        <h2>🗺️ 课程地图</h2>
-        <Link to="/map" className="map-link">
-          查看完整学习路线 →
+      {/* Secondary: 可折叠，默认收起 */}
+      <section className="secondary-zone">
+        <button
+          className="secondary-toggle"
+          aria-expanded="false"
+          aria-controls="secondary-content"
+          onClick={(e) => {
+            const btn = e.currentTarget;
+            const content = document.getElementById("secondary-content");
+            const expanded = btn.getAttribute("aria-expanded") === "true";
+            btn.setAttribute("aria-expanded", String(!expanded));
+            if (content) content.hidden = expanded;
+          }}
+        >
+          <span>更多</span>
+          <Icon name="chevron" size={16} className="toggle-icon" aria-hidden={true} />
+        </button>
+        <div id="secondary-content" className="secondary-content" hidden>
+          {/* 今日复习 - 仅有数据时渲染 */}
+          {reviews.length > 0 && (
+            <div className="secondary-section review-section">
+              <h2 className="section-title">
+                <Icon name="review" size={16} aria-hidden={true} /> 今日复习
+                <Badge variant="review" size="sm">{reviews.length}</Badge>
+              </h2>
+              <ul className="review-list">
+                {reviews.map((r) => (
+                  <li key={r.lesson_id} className="review-item">
+                    <Link to={`/review/${r.lesson_id}`} className="review-link">
+                      <span className="review-title">{r.title}</span>
+                      <span className="review-meta">
+                        {r.level_title} · {r.overdue_days > 0 ? `逾期 ${r.overdue_days} 天` : "今天到期"}
+                      </span>
+                    </Link>
+                    <Link to={`/review/${r.lesson_id}`} className="btn-ghost btn-sm">去复习</Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* 进度摘要 */}
+          <div className="secondary-section progress-section">
+            <h2 className="section-title"><Icon name="progress" size={16} aria-hidden={true} /> 进度摘要</h2>
+            <dl className="progress-summary">
+              <div className="progress-row">
+                <dt>总进度</dt>
+                <dd><strong>{p!.completed} / {p!.total}</strong> · {p!.percentage}%</dd>
+              </div>
+              <div className="progress-row">
+                <dt>当前 Level</dt>
+                <dd><strong>{cl!.completed_count} / {cl!.total_count}</strong> · {cl!.percentage}%</dd>
+              </div>
+            </dl>
+          </div>
+
+          {/* 课程地图入口 */}
+          <div className="secondary-section map-section">
+            <Link to="/map" className="map-link">
+              <Icon name="map" size={18} aria-hidden={true} />
+              <span>查看完整学习路线</span>
+              <Icon name="chevron" size={16} aria-hidden={true} />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer: Map 入口二次保障 */}
+      <footer className="footer-nav">
+        <Link to="/map" className="footer-map-link">
+          <Icon name="map" size={16} aria-hidden={true} /> 查看完整学习路线 →
         </Link>
-      </div>
-
-      <p className="phase">
-        Phase 2 · Dashboard{connected ? "" : " · 连接中"}
-      </p>
+      </footer>
     </div>
   );
 }
