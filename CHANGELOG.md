@@ -317,6 +317,32 @@ V1.0 基线 + Level 3 + Level 4 之后，按设计稿 `Spark_Quest_Level5_执行
 
 ---
 
+## 2026-09-07 — v1.1.1 Product Experience Polish（地图交互修复 + 复习入口合并）
+
+v1.1 Course Map 重做上线后，用户实机走查反馈三处地图交互问题，并发现已掌握课底部复习入口存在产品语义重复。均属 v1.1 范围内的打磨，不引入新功能、不碰后端。
+
+### Fixed（地图交互，Round A）
+- **展开/收起任意 Level 不再自动滚动到焦点节点**：`pages/MapPage.tsx` 原 `useEffect` 依赖 `expanded`，每次 toggle 都触发 `scrollIntoView`；改为 `useRef` 守卫，仅首次进入地图时滚动一次，切列表↔地图不重滚。
+- **Level 介绍在收起/展开都能看全**：
+  - 收起态 `components/map/map.css` 的 `.region-summary` 去掉 `-webkit-line-clamp:2` 截断，长介绍完整显示；
+  - 展开态路径上方新增 `.region-intro` 浅蓝左边框卡片，长介绍不再丢失。
+- **`due_for_review` 渲染确认**：设计为「绿勾 + 紫色外环」（`map.css` `.is-due .node-orb::before`），非黄色问号；用户确认紫环已存在，未改动。
+
+### Changed（复习入口合并，Round B）
+- 经代码核查确认：`复习测验`（`/lesson/{id}/quiz`）与 `间隔复习`（`/review/{id}`）出题逻辑完全相同——同一 `quizzes` 10 题库、同一采样函数 `_sample_quiz_questions(questions, n=5)`、同 n=5；review 仅多「上次错题维度优先」弱偏好（`priority_dims`，读 `weak_points`），非逐题遗忘曲线。
+- **合并已掌握课底部入口**：`pages/LessonPage.tsx` mastered 分支删「复习测验」链接，仅留「下一课」（btn-primary）+「间隔复习（5 题）」（btn-ghost → `/review/{id}`）；available/needs_review 分支不变。
+- **复习结果页显示本次得分**：`pages/ReviewPage.tsx` 结果 banner 加「本次复习得分 X%」+「仅本次反馈，不写回本课掌握得分」提示；后端 `submit_review` 本就不改 `score/attempts`，与约定一致，无需改。
+
+### 验收
+- `tsc -b && vite build` 零错误
+- 地图：展开区 2 个 `.region-intro`、收起区 6 个 `.region-summary`；toggle 时 scrollY 0→0→0（不跳）
+- 复习：已掌握课 CTA 仅剩「下一课 / 间隔复习（5 题）」；结果页 `🎉 复习通过 | 5/5 · 本次复习得分 100% | 不写回提示`
+
+### 备注（教训已记入项目记忆）
+- 本轮验证脚本跑完整 5/5 复习时真实推进了 lesson 1 的 SRS（违反「写库前先快照」约定，无真快照，已用 Python 还原为估算值）；核查全库仅 lesson 1 被碰且已还原，其余 29 行完好。单用户本地库影响可忽略，但规矩不能破。
+
+---
+
 ## 模板（后续阶段直接复制此结构，改日期与内容）
 
 ## YYYY-MM-DD — <阶段标题>

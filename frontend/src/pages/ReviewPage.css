@@ -61,6 +61,12 @@
   font-weight: 500;
 }
 
+.review-score-note {
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.72;
+}
+
 .review-next .para {
   line-height: 1.7;
   margin: 0 0 14px;

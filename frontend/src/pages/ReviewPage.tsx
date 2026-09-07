@@ -123,7 +123,11 @@ export default function ReviewPage() {
         <div className={`review-banner ${result.passed ? "ok" : "retry"}`}>
           {result.passed ? "🎉 复习通过" : "📖 本次复习还需要巩固"}
           <span className="review-score">
-            {result.correct} / {result.total} · 需要 5 / 5 才算通过
+            {result.correct} / {result.total} · 本次复习得分{" "}
+            {Math.round((result.correct / result.total) * 100)}%
+          </span>
+          <span className="review-score-note">
+            （仅本次反馈，不写回本课掌握得分）
           </span>
         </div>
 

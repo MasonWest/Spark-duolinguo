@@ -321,10 +321,9 @@ export default function LessonPage() {
             ) : (
               <p className="para">🏆 已是课程最后一课，恭喜通关！</p>
             )}
-            <Link to={`/lesson/${data.id}/quiz`} className="back-link">
-              复习测验
-            </Link>
-            {/* Phase 6b: 间隔复习入口（已掌握的课程随时可以主动复习） */}
+            {/* 已掌握的课程：单一复习入口。复习测验（重测刷分）在 mastered 态是冗余
+                （粘性掌握：重测不能改状态、不能解锁，仅重写分数），合并到间隔复习。
+                间隔复习 = 系统按课程级 SRS 决定「何时回来」，并优先抽上次错过的维度。 */}
             <Link to={`/review/${data.id}`} className="btn-ghost">
               间隔复习（5 题）
             </Link>

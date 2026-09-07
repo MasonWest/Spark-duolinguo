@@ -801,6 +801,28 @@ REVIEW_QUESTION_COUNT = 5
 
 ---
 
+## v1.1.1 实现记录 — 地图交互修复 + 复习入口合并（2026-09-07）
+
+v1.1 Course Map 重做上线后的两轮打磨，不引入新功能、不碰后端、不新增文件。
+
+### Round A — 地图交互三处修复
+- 展开/收起任意 Level 不再自动滚动：`MapPage.tsx` 的 `useEffect` 改为 `useRef` 守卫（仅首次进入地图滚动一次，切列表↔地图不重滚）。
+- 长介绍显示：`.region-summary` 去 `-webkit-line-clamp:2` 截断（收起态完整显示）；展开态路径上方加 `.region-intro` 卡片（长介绍不丢失）。
+- `due_for_review` 维持「绿勾 + 紫色外环」设计（`map.css` `.is-due .node-orb::before`），未改动（用户确认紫环已存在）。
+
+### Round B — 复习入口合并
+- 代码核查：`/lesson/{id}/quiz`（复习测验）与 `/review/{id}`（间隔复习）同库、同 `_sample_quiz_questions(questions, n=5)`、同 n=5；review 仅多弱维度优先偏好（`priority_dims`，读 `weak_points`），非逐题遗忘曲线。
+- `LessonPage.tsx` mastered 分支删「复习测验」入口，仅留「下一课」（btn-primary）+「间隔复习（5 题）」（btn-ghost → `/review/{id}`）；available/needs_review 分支不变。
+- `ReviewPage.tsx` 结果页显示「本次复习得分 X%」并注明不写回 `lesson_mastery.score`；后端 `submit_review` 本就不碰 `score/attempts`，与约定一致，无需改。
+
+### 验收
+- `tsc -b && vite build` 零错误；地图 toggle 不跳滚动、长介绍收起/展开均完整；已掌握课 CTA 仅「下一课 / 间隔复习（5 题）」，结果页显示本次得分且不写回掌握分。
+
+### 教训（已记入项目记忆）
+- 写库接口冒烟前必须 `cp spark_quest.db` 快照。本轮验证完整复习推进了 lesson 1 的 SRS 且无真快照，已用 Python 还原为估算值（status/score/attempts 完好，仅下次复习排期可能早几天）。单用户本地库影响可忽略，但规矩不能破。
+
+---
+
 ## V1.0 基线说明（2026-08-28）
 
 本文件与同目录 `CHANGELOG.md` 同步建立。
