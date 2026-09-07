@@ -148,6 +148,8 @@ body {
   background: var(--sq-card-bg);
   border: 1px solid var(--sq-border);
   border-radius: var(--sq-radius-card);
+  padding: 20px 24px;
+  margin-bottom: 16px;
   box-shadow: var(--sq-shadow-base);
 }
 
