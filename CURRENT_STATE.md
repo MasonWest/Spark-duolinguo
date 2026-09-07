@@ -1,6 +1,6 @@
 # Spark Quest — 当前项目状态
 
-> 最后更新：2026-08-29（Phase 6b 间隔复习已完成并端到端验收；与 `CHANGELOG.md` 同步）
+> 最后更新：2026-09-07（v1.1 Product Experience Polish — Course Map 重做已验收；与 `CHANGELOG.md` 同步）
 > 代码目录：`E:\MMMason\Spark_dlg\spark-quest-app\`
 > 代码仓库：`https://github.com/MasonWest/Spark-duolinguo`（分支 `main`）
 > 文档目录（通常只读）：`E:\MMMason\Spark_dlg\spark_quest\`
@@ -10,7 +10,7 @@
 | Phase | 内容 | 状态 |
 |-------|------|------|
 | 0 | 项目骨架（前后端通信 + SQLite 连接） | 🟢 已完成并验收 |
-| 1 | 课程地图（course_levels / lessons + /map 页面） | 🟢 已完成并验收 |
+| 1 | 课程地图（course_levels / lessons + /map 页面） | 🟢 已完成并验收（v1.1 已重做：长列表 → 区域化垂直旅程） |
 | 2 | Dashboard / 今日任务（/api/dashboard + 推荐首课） | 🟢 已完成并验收 |
 | 3 | Lesson 学习页面（/api/lessons/{id} + /lesson/:id，七要素 + 数据化） | 🟢 已完成并验收 |
 | 4 | Lesson Mastery Quiz + 最小进度 + 解锁 | 🟢 已完成 |
@@ -22,8 +22,9 @@
 | 9 | 游戏化 UI / Streak / Badge | 🔒 规划中 |
 | 10 | AI Tutor | 🔒 规划中 |
 | Notes | Lesson 学习笔记（lesson_notes 表 + 笔记 API + 前端接入） | 🟢 已完成（V1.0 基线） |
+| **v1.1** | **Course Map 重做（区域化垂直旅程 / 三档时间叙事 / 5 态节点 / 列表兜底）** | **🟢 已完成并验收** |
 
-**当前进度：Phase 6b（Lesson 级间隔复习闭环）已实现完毕并通过 37 项端到端验收。**
+**当前进度：v1.1 Course Map 重做已实现完毕并通过 7 项端到端验收。**
 
 **下一个可做方向（尚未启动）**：Phase 7 Parking Lot 防发散 / Phase 9 游戏化（Streak·Badge）/ Phase 10 AI Tutor / Level 8「真实 ETL 毕业项目」（见 CHANGELOG 2026-08-29 结论：不再线性扩 Spark 内核，不引入 Flink）。
 
@@ -741,6 +742,62 @@ REVIEW_QUESTION_COUNT = 5
 - 笔记不参与 Mastery / 解锁逻辑，纯个人记录。
 
 **验证**：前端 `npm run build`（`tsc -b` + vite）通过；`LessonPage` 笔记卡渲染逻辑与端点调用完整（草稿态禁用保存、删除即时从列表移除）。浏览器可视化验证受沙箱限制未做截图，但类型检查与端点契约已覆盖。
+
+---
+
+## v1.1 实现记录 — Course Map 重做（2026-09-07）
+
+### 范围
+- 仅重做 `pages/MapPage.tsx` 与新增 `components/map/*`
+- 不动后端 / `LessonStatus` 四态模型 / API
+- 不碰 Dashboard / Lesson / Quiz / Review / Notes
+
+### 新增文件
+- `components/map/mapLayout.ts` — 纯函数布局算法（`layoutRegion / regionHeight / segmentPath / regionTone`），零依赖
+- `components/map/LessonNode.tsx` — 5 态节点（mastered/needs / /available/locked + due 紫环叠加）
+- `components/map/LessonPath.tsx` — SVG 分段道路，一段一课，mastered 点亮该段
+- `components/map/JourneyRegion.tsx` — 一个 Level 一个区域，header 含徽章 + 折叠按钮
+- `components/map/RegionNav.tsx` — 顶部 8 个区域导航胶囊，点击跳转并展开
+- `components/map/MapBackdrop.tsx` — sticky 氛围层（远山/云 + CSS 渐渐），零信息载荷
+- `components/map/map.css` — 统一样式（含三档、5 态、响应式、reduced-motion）
+
+### 改写 / 删除
+- 改写：`pages/MapPage.tsx`（取数 / 折叠状态 / 自动定位 / 视图切换）
+- 删除：`pages/MapPage.css`（174 行旧样式全部废弃）
+- 类型收窄：`types.ts` 中 `Level.status: string` → `LevelStatus` 联合类型
+
+### 三档时间叙事（`regionTone()` 派生自 `Level.status`）
+| 档位 | 触发 | 增强层 | 信息兜底徽章 |
+|------|------|--------|--------------|
+| past | `completed` | `saturate(.65) brightness(1.06) contrast(.92) scale(.985)` | 「已通关 · N/N」+ 旗帜 |
+| present | `in_progress` / `available` | 无滤镜 + 蓝色描边 + 高光阴影 | 「进行中 · N/N」 |
+| future | `locked` | `::after` 白色蒙层 42%，节点 `z-index` 高于蒙层 | 「未解锁 · N 课」+ 锁 |
+
+蒙层浓度 42%（用户底线 30-50%，按实机节点文字清晰度取中位）。past 沉淀保守（saturate(.65)），按用户「先保持不加重」原则。
+
+### 验收
+- `tsc -b && vite build` 零错误
+- 全展开地图 66 节点 / 列表视图 66 `<li>`
+- 5 态齐全（临时插入 needs_review 后还原）
+- 禁用氛围层 + 滤镜 + 蒙层后 8 个区域徽章仍清晰
+- `mapLayout(11)` 返回 11 坐标（加课无需改码）
+- 31 个 `<a>` + 35 个 `<div>`（locked 不可点）
+- 375px 窄屏无横向溢出
+
+### 实机截图
+- `E:\MMMason\Spark_dlg\ux_audit\v11-01-initial.png` — 1280 宽首屏（默认展开 L4+L5）
+- `v11-03-current-focus.png` — 自动定位到当前节点
+- `v11-past-closeup.png` — past 沉淀特写（L1 RDD 基础）
+- `v11-present-closeup.png` — present 高亮 + current 节点特写（L4 执行计划）
+- `v11-future-closeup.png` — future 朦胧特写（L6 JOIN）
+- `v11-needs_review-closeup.png` — 琥珀节点验证
+- `v11-04-no-ambience.png` — 禁用氛围层后整体可读
+- `v11-05-list-view.png` — 列表视图（无障碍兜底）
+- `v11-06-narrow-375.png` — 窄屏 375px 无溢出
+
+### 顺手修的两个 bug
+1. `currentLessonId` 旧逻辑把 `needs_review` 也算进 current，导致琥珀节点被错套 current 样式 → 改为只 `available` 是 current
+2. `stepY=86` 时 L1 RDD 6 课的 5/6 节点标题与下一节点 orb 重叠 → 改为 96
 
 ---
 

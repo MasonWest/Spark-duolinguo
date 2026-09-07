@@ -23,12 +23,18 @@ export interface Lesson {
   due_for_review?: boolean;
 }
 
+/**
+ * Level 状态（后端 services.compute_level_status 动态计算，非存储字段）。
+ * v1.1 Course Map 用它推导 past / present / future 三档视觉。
+ */
+export type LevelStatus = "completed" | "in_progress" | "available" | "locked";
+
 export interface Level {
   id: number;
   title: string;
   description: string;
   order_index: number;
-  status: string;
+  status: LevelStatus;
   completed_count: number;
   total_count: number;
   percentage: number;

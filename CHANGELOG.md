@@ -239,6 +239,84 @@ V1.0 基线 + Level 3 + Level 4 之后，按设计稿 `Spark_Quest_Level5_执行
 
 ---
 
+## 2026-09-04 — 修复：答题页与结果页题目顺序不一致
+
+### Fixed
+- **结果页顺序错位**（用户报障）：`POST /api/lessons/{id}/quiz/submit` 遍历的是**按 `order_index` 排序的全库题目**，而 `GET /api/lessons/{id}/quiz` 返回的是**随机抽样并打乱顺序**的 5 题。前端结果页直接按后端 `results` 顺序渲染，导致「做题时看到的第 3 题」与「结果页列出的第 3 题」不是同一题。
+  - 修复：改为按 `payload.answers`（= 前端呈现顺序）遍历构造 `results`，结果列表与呈现顺序严格一致。
+- **间隔复习同源缺陷**：`POST /api/review/{id}/submit` 存在完全相同的遍历顺序问题，一并修复。
+- **重复 `question_id` 未收敛**：重复提交同一题时 `total` 按提交条数计、但 `results` 去重渲染，分数与题数不符。现统一在计数前折叠重复（`last wins`）。
+- **空提交除零**：`answers: []` 时 `correct / total` 触发 `ZeroDivisionError` → 500。现返回 422 `Empty submission: no answers provided`。
+
+### Architecture
+- 判分语义不变：仍以 `selected_index == correct_index` 为准，阈值不变（学习 ≥80%、复习 5/5），`weak_points` 仍存 `question_id`
+- 复习提交的数量校验改为在**去重后**执行：`[A,A,B,C,D]` 现返回 422「需提交 5 道不同的题，本次收到 4 道」，避免 4 题作答被按 5 题计分而误判失败
+- 只改后端两个路由（`app/routers/quizzes.py`、`app/routers/review.py`），前端 `QuizPage.tsx` / `ReviewPage.tsx` 无需改动（其提交顺序本就与呈现顺序一致）
+- 回归验证：乱序提交 → 结果顺序 == 提交顺序；重复 id → `total` 收敛为 5；空提交 / 非法 id → 422；Quiz 与 Review 两链路抽题顺序与结果顺序逐一比对一致
+- 验证过程产生的脏数据已还原：`lesson_id=1` 的 `lesson_mastery` 整行回滚至测试前快照（score 100、attempts 2、SRS 排期不变），全库 `mastery` 24 行、无非 `mastered` 残留
+- 改动前自动备份：`spark_quest.db.bak_before_quizfix`
+
+---
+
+## 2026-09-07 — v1.1 Product Experience Polish：Course Map 重做
+
+### Added
+- **Course Map 全新视觉**：从「课程长列表」改为**区域化垂直旅程地图**（region-based vertical journey），单条蜿蜒路径 + 节点沿路径排布，可垂直滚动
+- **5 态节点 + 6 态视觉**：
+  - `mastered` 实心绿 + 白勾；`due_for_review` 在 mastered 之上叠加紫色外环（不新增状态，纯装饰）
+  - `needs_review` 琥珀实心 + 白色叹号
+  - `available`（全图唯一焦点）放大 1.32 倍 + 蓝色呼吸光环 + 浮动「开始」气泡
+  - `locked` 灰虚线圈 + 锁图标，标题仍可见（预告前方）
+- **完成感三层叠加**：
+  1. 节点层（实心 + 勾）
+  2. **路径层**（核心载体）：已掌握节点之间的道路从灰虚线变亮实线 ——「走过的路被点亮」
+  3. 区域层（整区通关 → 绿色 + 插旗 + 已通关印章）
+- **三档时间叙事**（`regionTone()` 纯函数派生 from `Level.status`）：
+  - `past`（已通关）— `saturate(.65) brightness(1.06) contrast(.92)` + `scale(.985)`，徽章「已通关 · N/N」+ 旗帜
+  - `present`（进行中）— 全饱和 + 蓝色描边 + 高光阴影，徽章「进行中 · N/N」
+  - `future`（未解锁）— 节点 z-index 高于 ::after 蒙层，徽章「未解锁 · N 课」+ 锁
+- **顶部区域导航胶囊**：8 个胶囊，当前高亮（蓝色），已通关用绿字，未解锁灰；点击跳转并展开 —— 直接回答 UX Audit Q1「我现在在哪里」
+- **地图/列表视图切换**（无障碍兜底）：右上角 toggle，状态持久化到 `localStorage: sq_map_view`，列表视图为同一份数据的语义化 `<ol>` 呈现
+- **首次进入自动滚动**到焦点节点（`scrollIntoView`），用户不用自己找「学到哪了」
+- **氛围层**：`MapBackdrop.tsx`（纯装饰）— sticky 远景山 + 渐变天空 + 漂浮云，`z-index: 0`，**不接收任何 props，不知道课程/状态/进度的存在**。删掉它整个结构仍可读。
+
+### Changed
+- `pages/MapPage.tsx` **完全重写**：取数 / 折叠状态 / 自动定位 / 视图切换 / 区域导航 / 列表视图
+- `pages/MapPage.css` **删除**（174 行旧样式全部废弃，CSS 现统一在 `components/map/map.css`）
+- `types.ts`：`Level.status` 由 `string` 收窄为联合类型 `LevelStatus = 'completed' | 'in_progress' | 'available' | 'locked'`（仅前端类型收窄，后端 schema 未动）
+- 地图页副标题由「Spark 学习路线：从环境搭建到 RDD 基础」改为数据驱动的「N 个区域 · M 课 · 已完成 K 课」
+
+### Fixed
+- **`currentLessonId` 抢占焦点 bug**：旧代码把 `needs_review` 也算进 current 焦点，导致琥珀节点被错误地套上 current 蓝色大圆 + 光环（needs_review 不该抢「下一步」的视觉焦点）。改为**只 `available` 才是 current**，needs_review 单独显示
+- **节点标题重叠**：L1 RDD 基础（6 课）的 stepY=86 导致 5/6 课两行标题与下一节点 orb 重叠。改为 `stepY=96`，所有 9 课区域都安全
+
+### Architecture
+- **`components/map/mapLayout.ts` 纯函数布局算法**（v1.1 硬约束兑现点）：
+  - `layoutRegion(count, opts)` 输入只有课程数，输出 `MapNode[]`，加课自动延长、零硬编码
+  - 水平偏移用**预设偏移表循环** `[0, 58, 78, 58, 0, -58, -78, -58]`（不是 `sin()`，确定性、可单测）
+  - `regionHeight(count)`、`segmentPath(a, b)`（S 曲线三次贝塞尔）、`regionTone(level)` 全部纯函数
+  - **零新增依赖**（不引动画库/UI 库），仅用 CSS `@keyframes` + `prefers-reduced-motion` 关闭
+- **新增文件清单**：
+  - `components/map/mapLayout.ts`（纯函数）
+  - `components/map/LessonNode.tsx`（5 态节点）
+  - `components/map/LessonPath.tsx`（SVG 分段道路）
+  - `components/map/JourneyRegion.tsx`（Level 区域）
+  - `components/map/RegionNav.tsx`（顶部导航）
+  - `components/map/MapBackdrop.tsx`（氛围层）
+  - `components/map/map.css`（统一样式）
+- **约束兑现：禁用全部氛围层与滤镜后结构 100% 可读**（已脚本验证）
+
+### 验收
+- `tsc -b && vite build` 零错误
+- DOM 节点数 === 66（全展开地图视图）；列表 `<li>` 数 === 66
+- 真实数据下 5 态全部出现（mastered:30 / locked:35 / current:1 / due:12；临时插入 needs_review 验证琥珀节点后还原）
+- `mapLayout(11)` 返回 11 个坐标（数据驱动断言：`layoutRegion` 数量 === 输入）
+- 375px 窄屏无横向溢出（节点最左 108 / 最右 298，视口 0..375）
+- 31 个 `<a.lesson-node>`（可点）+ 35 个 `<div.lesson-node>`（locked 不可点）= 66
+- 实机截图见 `E:\MMMason\Spark_dlg\ux_audit\v11-*.png`
+
+---
+
 ## 模板（后续阶段直接复制此结构，改日期与内容）
 
 ## YYYY-MM-DD — <阶段标题>

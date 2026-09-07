@@ -1,0 +1,560 @@
+/* Course Map v1.1 — 区域化垂直旅程
+ *
+ * 硬约束兑现：
+ *   · 背景（.map-backdrop）只提供氛围，不承担任何信息
+ *   · past 的沉淀、future 的朦胧都只是「增强层」
+ *   · 节点层 z-index 高于 future 蒙层 —— 节点文字与锁图标永不被压暗
+ *   · 禁用本文件中所有 filter / 蒙层后，三档状态仍可由徽章文字 + 节点色 + 道路虚实判别
+ */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- 页面骨架 ---------- */
+
+.map-shell {
+  max-width: 720px;
+  position: relative;
+  z-index: 1;
+}
+
+.map-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.map-back-link {
+  color: #2563eb;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.map-back-link:hover {
+  text-decoration: underline;
+}
+
+/* 视图切换：地图 / 列表（列表是无障碍兜底） */
+.view-switch {
+  display: flex;
+  gap: 6px;
+  margin: -24px 0 20px;
+  padding: 4px;
+  background: #f1f5f9;
+  border-radius: 10px;
+  width: fit-content;
+}
+
+.view-switch button {
+  border: 0;
+  background: transparent;
+  padding: 7px 16px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b5563;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.view-switch button.is-active {
+  background: #fff;
+  color: #1e3a8a;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+/* ---------- 氛围层（纯装饰，零信息） ---------- */
+
+.map-backdrop {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  margin-bottom: -100vh;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: linear-gradient(180deg, #eaf3fb 0%, #f1f0fb 52%, #fbf1ec 100%);
+}
+
+.map-backdrop svg {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  display: block;
+}
+
+.bd-clouds {
+  top: 12vh;
+}
+
+.bd-hills {
+  bottom: 0;
+}
+
+/* ---------- 区域导航胶囊 ---------- */
+
+.region-nav {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 2px 12px;
+  margin: 0 0 20px;
+  scrollbar-width: thin;
+}
+
+.region-nav button {
+  flex: 0 0 auto;
+  border: 1px solid #dbe3ee;
+  background: rgba(255, 255, 255, 0.86);
+  border-radius: 999px;
+  padding: 7px 15px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b5563;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.region-nav button:hover {
+  border-color: #93b4dc;
+}
+
+.region-nav button.is-current {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+.region-nav button.is-done {
+  color: #3b6d11;
+  border-color: #c0dd97;
+}
+
+/* ---------- 区域 ---------- */
+
+.region {
+  position: relative;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 18px 20px 20px;
+  margin-bottom: 18px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+
+/* 过去：走过的路 —— 沉淀。saturate(.65) 先保持，不主动加重 */
+.region-past {
+  border-color: #ded9cd;
+  filter: saturate(0.65) brightness(1.06) contrast(0.92);
+}
+
+/* 现在：我在这里 —— 全饱和 + 高亮描边 */
+.region-present {
+  border: 2px solid #93b4dc;
+  box-shadow: 0 2px 10px rgb(29 78 216 / 0.1);
+}
+
+/* 未来：前方未知 —— 低对比 + 蒙层。
+   蒙层只压背景与道路，节点 z-index 更高，文字与锁图标始终清晰。 */
+.region-future {
+  border-color: #e6e6de;
+}
+
+.region-future::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  background: #fff;
+  opacity: 0.42;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.region-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: relative;
+  z-index: 2;
+}
+
+.region-head-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.region-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.region-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.region-past .region-badge {
+  background: #eaf3de;
+  color: #3b6d11;
+}
+
+.region-present .region-badge {
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+.region-future .region-badge {
+  background: #f3f3ef;
+  color: #6b6b63;
+}
+
+.tone-mark {
+  flex: 0 0 auto;
+}
+
+.region-toggle {
+  flex: 0 0 auto;
+  border: 1px solid #dbe3ee;
+  background: #fff;
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 6px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.region-toggle:hover {
+  border-color: #93b4dc;
+  color: #1e3a8a;
+}
+
+.region-summary {
+  margin: 12px 0 2px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #6b7280;
+  position: relative;
+  z-index: 2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.region-body {
+  position: relative;
+  width: 100%;
+  z-index: 2;
+}
+
+/* 区域之间的连接：一段小路 */
+.region-link {
+  height: 26px;
+  margin: -8px 0 10px;
+  display: flex;
+  justify-content: center;
+}
+
+.region-link span {
+  width: 3px;
+  border-radius: 2px;
+}
+
+.region-link.is-open span {
+  background: repeating-linear-gradient(180deg, #bcd9a8 0 7px, transparent 7px 13px);
+}
+
+.region-link.is-sealed span {
+  background: repeating-linear-gradient(180deg, #dcdcd6 0 5px, transparent 5px 12px);
+}
+
+/* ---------- 道路 ---------- */
+
+.lesson-path {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.seg {
+  fill: none;
+  stroke-linecap: round;
+}
+
+/* 已走过的路：点亮 —— 完成感的核心载体 */
+.seg-lit {
+  stroke: #7fb85a;
+  stroke-width: 6;
+}
+
+/* 未解锁的路：虚线 */
+.seg-dim {
+  stroke: #ded9cd;
+  stroke-width: 4;
+  stroke-dasharray: 2 10;
+}
+
+/* ---------- 节点 ---------- */
+
+.lesson-node {
+  position: absolute;
+  z-index: 3;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 116px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.node-orb {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgb(0 0 0 / 0.13);
+}
+
+.node-title {
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+  max-width: 112px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* mastered —— 已掌握 */
+.lesson-node.is-mastered .node-orb {
+  background: #639922;
+  color: #fff;
+  border: 2px solid #3b6d11;
+}
+.lesson-node.is-mastered .node-title {
+  color: #27500a;
+}
+
+/* due_for_review —— mastered 之上叠加紫环（不新增状态，纯装饰） */
+.lesson-node.is-due .node-orb::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid #534ab7;
+}
+
+/* needs_review —— 需复习 */
+.lesson-node.is-needs_review .node-orb {
+  background: #ef9f27;
+  color: #fff;
+  border: 2px solid #854f0b;
+}
+.lesson-node.is-needs_review .node-title {
+  color: #633806;
+}
+
+/* locked —— 未解锁（标题仍可见，用于预告前方） */
+.lesson-node.is-locked {
+  cursor: default;
+}
+.lesson-node.is-locked .node-orb {
+  background: #f1efe8;
+  color: #8a8a82;
+  border: 2px dashed #b9b9b0;
+  box-shadow: none;
+}
+.lesson-node.is-locked .node-title {
+  color: #6b6b63;
+}
+
+/* available —— 全图唯一焦点 */
+.lesson-node.is-current {
+  z-index: 4;
+}
+.lesson-node.is-current .node-orb {
+  width: 58px;
+  height: 58px;
+  margin-top: -29px;
+  background: #378add;
+  color: #fff;
+  border: 3px solid #185fa5;
+}
+.lesson-node.is-current .node-title {
+  margin-top: 9px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #042c53;
+  max-width: 132px;
+}
+
+/* 焦点光环：呼吸 */
+.lesson-node.is-current .node-orb::after {
+  content: "";
+  position: absolute;
+  inset: -11px;
+  border-radius: 50%;
+  border: 2.5px solid #185fa5;
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes nodeBreathe {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 0.55;
+    }
+    50% {
+      transform: scale(1.14);
+      opacity: 0.14;
+    }
+  }
+  .lesson-node.is-current .node-orb::after {
+    animation: nodeBreathe 2.4s ease-in-out infinite;
+  }
+}
+
+.lesson-node:not(.is-locked):hover .node-orb {
+  transform: translateY(-2px);
+}
+
+.lesson-node:focus-visible .node-orb {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 3px;
+}
+
+/* ---------- 列表视图（无障碍兜底） ---------- */
+
+.map-list {
+  position: relative;
+  z-index: 1;
+}
+
+.map-list-level {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 16px 20px;
+  margin-bottom: 14px;
+}
+
+.map-list-level h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  color: #1f2937;
+}
+
+.map-list-meta {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 10px;
+}
+
+.map-list ol {
+  margin: 0;
+  padding-left: 20px;
+  list-style: decimal;
+}
+
+.map-list li {
+  font-size: 14px;
+  line-height: 2;
+}
+
+.map-list li a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.map-list li a:hover {
+  text-decoration: underline;
+}
+
+.map-list li.is-locked {
+  color: #9ca3af;
+}
+
+.chip {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.chip-mastered {
+  background: #eaf3de;
+  color: #3b6d11;
+}
+.chip-available {
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+.chip-needs_review {
+  background: #faeeda;
+  color: #854f0b;
+}
+.chip-locked {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* ---------- 响应式 ---------- */
+
+@media (max-width: 520px) {
+  .map-shell {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .lesson-node {
+    width: 96px;
+  }
+  .node-title {
+    max-width: 92px;
+    font-size: 11px;
+  }
+  .region {
+    padding: 14px 14px 16px;
+  }
+  .region-title {
+    font-size: 15px;
+  }
+}
