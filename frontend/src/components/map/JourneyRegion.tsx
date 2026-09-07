@@ -96,24 +96,27 @@ export default function JourneyRegion({
 
       <div id={`region-body-${level.id}`} className="region-body-wrap">
         {expanded ? (
-          <div className="region-body" style={{ height }}>
-            <LessonPath
-              nodes={nodes}
-              lessons={lessons}
-              width={width}
-              height={height}
-            />
-            {lessons.map((l, i) => (
-              <LessonNode
-                key={l.id}
-                lesson={l}
-                index={i}
-                x={nodes[i].x}
-                y={nodes[i].y}
-                isCurrent={l.id === currentLessonId}
+          <>
+            <p className="region-intro">{level.description}</p>
+            <div className="region-body" style={{ height }}>
+              <LessonPath
+                nodes={nodes}
+                lessons={lessons}
+                width={width}
+                height={height}
               />
-            ))}
-          </div>
+              {lessons.map((l, i) => (
+                <LessonNode
+                  key={l.id}
+                  lesson={l}
+                  index={i}
+                  x={nodes[i].x}
+                  y={nodes[i].y}
+                  isCurrent={l.id === currentLessonId}
+                />
+              ))}
+            </div>
+          </>
         ) : (
           <p className="region-summary">{level.description}</p>
         )}

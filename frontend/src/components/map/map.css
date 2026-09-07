@@ -263,10 +263,22 @@
   color: #6b7280;
   position: relative;
   z-index: 2;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  /* 收起态也展示完整介绍（不再截断，避免长介绍显示不全） */
+}
+
+/* 展开态：介绍写在路径上方，用浅色卡片突出 */
+.region-intro {
+  margin: 12px 0 8px;
+  padding: 11px 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #eef2f7;
+  border-left: 3px solid #93b4dc;
+  border-radius: 10px;
+  position: relative;
+  z-index: 2;
 }
 
 .region-body {

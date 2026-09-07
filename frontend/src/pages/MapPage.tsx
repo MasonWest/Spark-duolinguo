@@ -52,16 +52,20 @@ export default function MapPage() {
     return () => ro.disconnect();
   }, [view]);
 
-  // 首次进入自动定位到焦点节点（用户不用自己找「我学到哪了」）
+  // 首次进入自动定位到焦点节点（用户不用自己找「我学到哪了」）。
+  // 用 ref 守卫：只在初次加载地图时滚一次，展开/收起任意 Level 不再触发跳转。
+  const didInitScroll = useRef(false);
   useEffect(() => {
     if (!levels || view !== "map") return;
+    if (didInitScroll.current) return;
+    didInitScroll.current = true;
     const t = setTimeout(() => {
       document
         .querySelector(".lesson-node.is-current")
         ?.scrollIntoView({ block: "center", behavior: "smooth" });
     }, 160);
     return () => clearTimeout(t);
-  }, [levels, view, expanded]);
+  }, [levels, view]);
 
   // 全图焦点：只有「available」才是真正的"我下一步该学"。
   // needs_review 是次级焦点（需要回头复习），不抢走蓝色大圆与光环。
