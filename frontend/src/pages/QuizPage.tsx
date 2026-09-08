@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { QuizFetch, QuizQuestion, QuizResult, QuizSubmit } from "../types";
+import type { Badge, QuizFetch, QuizQuestion, QuizResult, QuizSubmit } from "../types";
+import BadgeUnlockToast from "../components/BadgeUnlockToast";
 import "./QuizPage.css";
 
 type Choice = Record<number, number>; // question_id -> selected_index
@@ -14,6 +15,10 @@ export default function QuizPage() {
   const [notFound, setNotFound] = useState(false);
   const [locked, setLocked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Phase 9.2: badges unlocked by the most recent submit (for the toast).
+  const [newBadges, setNewBadges] = useState<Badge[]>([]);
+  // Phase 9.2: when the quiz screen opened (UTC ISO) -> evaluates BLITZ.
+  const startedAtRef = useRef<string>("");
 
   function loadQuiz() {
     setQuiz(null);
@@ -22,6 +27,8 @@ export default function QuizPage() {
     setError(null);
     setNotFound(false);
     setLocked(false);
+    setNewBadges([]);
+    startedAtRef.current = new Date().toISOString();
     fetch(`/api/lessons/${id}/quiz`)
       .then((res) => {
         if (res.status === 404) {
@@ -64,6 +71,7 @@ export default function QuizPage() {
         question_id: q.id,
         selected_index: choices[q.id],
       })),
+      started_at: startedAtRef.current,
     };
     fetch(`/api/lessons/${id}/quiz/submit`, {
       method: "POST",
@@ -74,7 +82,10 @@ export default function QuizPage() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json() as Promise<QuizResult>;
       })
-      .then(setResult)
+      .then((r) => {
+        setResult(r);
+        setNewBadges(r.new_badges ?? []);
+      })
       .catch((e) => setError(String(e)))
       .finally(() => setSubmitting(false));
   }
@@ -135,6 +146,7 @@ export default function QuizPage() {
     const mastered = result.status === "mastered";
     return (
       <div className="container quiz-container">
+        <BadgeUnlockToast badges={newBadges} onClose={() => setNewBadges([])} />
         <header className="lesson-header">
           <Link to="/map" className="back-link">
             ← 返回课程地图

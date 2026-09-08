@@ -10,10 +10,15 @@ parking_lot / study_sessions.
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import ForeignKey, Text
+from sqlalchemy import ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
+
+# Single-user local app: there is no auth and no user table (Phase 9.1).
+# `study_days.user_id` exists so the schema does not have to change shape when
+# a real user system arrives; every row written today uses this sentinel.
+DEFAULT_USER_ID = "local"
 
 
 class CourseLevel(Base):
@@ -149,3 +154,133 @@ class LessonNote(Base):
     )
     content: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(default=datetime.now)
+
+
+# ---- Phase 9.1: 每日学习行为（Streak 的唯一数据源） ----
+
+
+class StudyDay(Base):
+    """One row per (user, local calendar day) on which real learning happened.
+
+    Why a table and not a derivation from `lesson_mastery`:
+        `lesson_mastery.last_quiz_at` is the *most recent* attempt per lesson.
+        Study lesson 3 on Sept 1, re-attempt it on Sept 5, and Sept 1 vanishes
+        from the record -- history would be corrupted retroactively and the
+        streak would shrink the more you use the app. Day-grain activity must
+        be recorded independently of per-lesson state.
+
+    What counts as a valid study day (Phase 9.1):
+        quiz submit      YES (pass or fail)
+        review submit    YES (pass or fail)
+        lesson reading   NO
+        note writing     NO
+        opening dashboard NO
+
+    `study_date` is a LOCAL calendar date "YYYY-MM-DD" (see
+    `services.LOCAL_UTC_OFFSET_HOURS`), not a UTC date -- otherwise the day
+    boundary would land at 08:00 local time for a UTC+8 user.
+
+    `first_at` / `last_at` keep the existing UTC convention used by every other
+    timestamp in this database.
+    """
+
+    __tablename__ = "study_days"
+    __table_args__ = (
+        UniqueConstraint("user_id", "study_date", name="uq_study_days_user_date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(default=DEFAULT_USER_ID, index=True)
+    # Local calendar day, "YYYY-MM-DD".
+    study_date: Mapped[str]
+    # Total valid learning actions that day (quiz + review submissions).
+    activity_count: Mapped[int] = mapped_column(default=0)
+    lessons_done: Mapped[int] = mapped_column(default=0)
+    reviews_done: Mapped[int] = mapped_column(default=0)
+    first_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    last_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+
+
+# ---- Phase 9.2: Badge 成就系统 ----
+#
+# Three tables, deliberately split by responsibility:
+#   badge_definitions : the catalog (facts about each badge). Seeded once.
+#   user_badges      : per-user unlocks. Insert-only; never updated except via
+#                      new unlocks. UNIQUE(user_id, badge_id) enforces idempotency.
+#   user_stats       : lifetime counters incremented in the same transaction as
+#                      the originating quiz/review submit. These are FACTS about
+#                      real events (a question was answered, a review passed),
+#                      not learning state. They are the only way to count
+#                      lifetime totals -- lesson_mastery only stores the most
+#                      recent attempt per lesson.
+#
+# Badge ENGINE lives in `badge_service.py`. The DB never holds "badge earned
+# recently" or "level N completed" -- both are derived from user_badges and
+# the existing tables on every read.
+
+
+class BadgeDefinition(Base):
+    """Catalog row for one Badge.
+
+    `code` is the stable program identifier (e.g. LEVEL_0, QUIZ_100). Names
+    shown to users can change without touching code; codes must not.
+
+    `is_secret` is the single boolean for "hidden until earned" semantics:
+    not-unlocked secret badges expose nothing in the API (name / description /
+    image all blanked), only `?`.
+
+    `image` is a web URL path (e.g. "/badges/level0.webp") relative to the
+    frontend `public/` directory. Vite serves these directly; we never
+    inline binary assets in SQLite.
+    """
+
+    __tablename__ = "badge_definitions"
+    __table_args__ = (UniqueConstraint("code", name="uq_badge_definitions_code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str]  # stable program id, e.g. "LEVEL_0", "QUIZ_100"
+    name: Mapped[str]  # display name (Chinese)
+    description: Mapped[str] = mapped_column(Text, default="")  # unlock condition
+    tier: Mapped[str]  # "journey" | "special"
+    image: Mapped[str]  # web path, e.g. "/badges/level0.webp"
+    sort_order: Mapped[int] = mapped_column(default=0)
+    is_secret: Mapped[bool] = mapped_column(default=False)
+
+
+class UserBadge(Base):
+    """One unlocked-badge record per (user, badge). Insert-only."""
+
+    __tablename__ = "user_badges"
+    __table_args__ = (UniqueConstraint("user_id", "badge_id", name="uq_user_badges_user_badge"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(default=DEFAULT_USER_ID, index=True)
+    badge_id: Mapped[int] = mapped_column(ForeignKey("badge_definitions.id"))
+    unlocked_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+
+class UserStats(Base):
+    """Lifetime event counters, one row per user.
+
+    All increments happen in the SAME transaction as the originating quiz /
+    review submit, so the counters can never drift from the actual events.
+
+    Backfill source notes (see `migrate.backfill_badges`):
+      - total_quiz_submitted   : SUM(lesson_mastery.attempts)   -- ACCURATE
+      - total_reviews_passed   : SUM(lesson_mastery.review_count) -- ACCURATE
+      - total_quiz_correct     : SUM(lesson_mastery.correct_count) -- LOWER BOUND
+        (only retains the most recent attempt per lesson; lifetime total is
+         >= this number)
+      - total_reviews_submitted: no field exists; lower bound =
+        SUM(lesson_mastery.review_count)
+      - total_debug_correct    : no historical record; starts at 0
+    """
+
+    __tablename__ = "user_stats"
+
+    user_id: Mapped[str] = mapped_column(primary_key=True)
+    total_quiz_correct: Mapped[int] = mapped_column(default=0)
+    total_quiz_submitted: Mapped[int] = mapped_column(default=0)
+    total_reviews_passed: Mapped[int] = mapped_column(default=0)
+    total_reviews_submitted: Mapped[int] = mapped_column(default=0)
+    total_debug_correct: Mapped[int] = mapped_column(default=0)

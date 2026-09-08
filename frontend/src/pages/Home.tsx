@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Dashboard } from "../types";
 import { ProgressRing, Badge, Icon } from "../components/ui";
+import StreakBadge from "../components/StreakBadge";
 import "./Home.css";
 
 export default function Home() {
@@ -64,13 +65,21 @@ export default function Home() {
           <span className="hero-level">{currentLevelTitle}</span>
           <span className="hero-lesson">Lesson {currentLessonNum} / {totalLessonsInLevel}</span>
         </div>
-        <ProgressRing
-          percentage={p!.percentage}
-          size={56}
-          showLabel
-          className="hero-ring"
-          aria-label={`总进度 ${p!.percentage}%`}
-        />
+        {/* Phase 9.1: 进度环与 Streak 同属「状态区」，窄屏时一起右对齐换行 */}
+        <div className="hero-metrics">
+          <ProgressRing
+            percentage={p!.percentage}
+            size={56}
+            showLabel
+            className="hero-ring"
+            aria-label={`总进度 ${p!.percentage}%`}
+          />
+          <StreakBadge
+            days={data.streak_days}
+            studiedToday={data.studied_today}
+            className="hero-streak"
+          />
+        </div>
       </header>
 
       {/* Primary Action: 今日任务 - 最强视觉焦点 */}
@@ -154,6 +163,11 @@ export default function Home() {
                 <dt>当前 Level</dt>
                 <dd><strong>{cl!.completed_count} / {cl!.total_count}</strong> · {cl!.percentage}%</dd>
               </div>
+              {/* Phase 9.1: 历史最长是只读统计，放摘要区，不占 hero 视觉焦点 */}
+              <div className="progress-row">
+                <dt>最长连续</dt>
+                <dd><strong>{data.longest_streak} 天</strong>{data.last_study_date ? ` · 最近 ${data.last_study_date}` : ""}</dd>
+              </div>
             </dl>
           </div>
 
@@ -165,6 +179,27 @@ export default function Home() {
               <Icon name="chevron" size={16} aria-hidden={true} />
             </Link>
           </div>
+
+          {/* Phase 9.2: 最近解锁的徽章 + 徽章墙入口 */}
+          {data.recent_badges && data.recent_badges.length > 0 && (
+            <div className="secondary-section badge-section">
+              <h2 className="section-title">
+                <span aria-hidden={true}>🏅</span> 最近解锁
+                <Link to="/badges" className="badge-all-link">查看全部 →</Link>
+              </h2>
+              <div className="recent-badges">
+                {data.recent_badges.slice(0, 6).map((b) => (
+                  <Link to="/badges" key={b.code} className="recent-badge" title={b.name || "徽章"}>
+                    {b.image ? (
+                      <img src={b.image} alt={b.name} loading="lazy" />
+                    ) : (
+                      <span className="recent-badge-q">?</span>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -172,6 +207,9 @@ export default function Home() {
       <footer className="footer-nav">
         <Link to="/map" className="footer-map-link">
           <Icon name="map" size={16} aria-hidden={true} /> 查看完整学习路线 →
+        </Link>
+        <Link to="/badges" className="footer-badge-link">
+          <span aria-hidden={true}>🏅</span> 最近解锁 →
         </Link>
       </footer>
     </div>

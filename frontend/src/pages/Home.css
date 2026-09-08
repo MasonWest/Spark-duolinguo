@@ -44,6 +44,14 @@
   flex-shrink: 0;
 }
 
+/* Phase 9.1: 进度环 + Streak 状态区（窄屏整组换行，不散开） */
+.hero-metrics {
+  display: flex;
+  align-items: center;
+  gap: var(--sq-space-3);
+  flex-shrink: 0;
+}
+
 /* Primary Action - 页面最强视觉焦点 */
 .primary-action {
   margin-bottom: var(--sq-space-6);
@@ -327,7 +335,12 @@
   .hero-ring {
     width: 48px;
     height: 48px;
+  }
+
+  /* 状态区整组右对齐，而不是把环和 Streak 拆成两行 */
+  .hero-metrics {
     align-self: flex-end;
+    gap: var(--sq-space-2);
   }
 
   .primary-card {
@@ -346,6 +359,63 @@
   .secondary-toggle {
     padding: var(--sq-space-2) var(--sq-space-3);
   }
+}
+
+/* Phase 9.2: 最近解锁徽章条 + 徽章墙入口 */
+.badge-section .badge-all-link {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sq-accent, #d68910);
+  text-decoration: none;
+}
+
+.recent-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.recent-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #fff7e8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid #ffe0a3;
+  transition: transform 0.15s ease;
+}
+
+.recent-badge:hover {
+  transform: translateY(-2px);
+}
+
+.recent-badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.recent-badge-q {
+  font-size: 22px;
+  font-weight: 800;
+  color: #b45309;
+}
+
+.footer-badge-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--sq-ink-muted, #6b7280);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.footer-badge-link:hover {
+  color: var(--sq-accent, #d68910);
 }
 
 @media (min-width: 421px) and (max-width: 720px) {

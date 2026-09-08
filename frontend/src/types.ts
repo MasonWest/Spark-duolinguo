@@ -79,7 +79,27 @@ export interface Dashboard {
   current_level: CurrentLevel | null;
   today_lesson: TodayLesson | null;
   streak_days: number;
+  // Phase 9.1: streak detail — all derived on the backend, never persisted.
+  studied_today: boolean;
+  longest_streak: number;
+  last_study_date: string | null;
   reviews_due: ReviewDue[]; // Phase 6b
+  // Phase 9.2: a few most-recently-unlocked badges for the dashboard strip.
+  recent_badges?: Badge[];
+}
+
+// ---- Phase 9.2: Badge 成就系统 ----
+
+export interface Badge {
+  code: string;
+  name: string;
+  description: string;
+  image: string; // web path under /badges/, e.g. "/badges/level0.webp"
+  tier: "journey" | "special" | "";
+  sort_order: number;
+  is_secret: boolean;
+  unlocked: boolean;
+  unlocked_at: string | null;
 }
 
 export const statusIcon: Record<LessonStatus, string> = {
@@ -175,6 +195,9 @@ export interface QuizAnswer {
 
 export interface QuizSubmit {
   answers: QuizAnswer[];
+  // Phase 9.2: client timestamp when the quiz screen opened (UTC ISO), used to
+  // evaluate the BLITZ (闪电战) badge server-side.
+  started_at?: string;
 }
 
 export interface QuizResultItem {
@@ -195,6 +218,8 @@ export interface QuizResult {
   results: QuizResultItem[];
   unlocked_next: boolean;
   next_lesson_id: number | null;
+  // Phase 9.2: badges newly unlocked by THIS submission (for the toast).
+  new_badges?: Badge[];
 }
 
 // ---- Phase 6b: 间隔复习 ----
@@ -225,4 +250,6 @@ export interface ReviewResult {
   next_review_at: string | null;
   next_interval_days: number;
   results: QuizResultItem[];
+  // Phase 9.2: badges newly unlocked by THIS review round (for the toast).
+  new_badges?: Badge[];
 }

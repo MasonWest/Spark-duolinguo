@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { ReviewFetch, ReviewResult, ReviewSubmit } from "../types";
+import type { Badge, ReviewFetch, ReviewResult, ReviewSubmit } from "../types";
+import BadgeUnlockToast from "../components/BadgeUnlockToast";
 // 复习页与测验页共用题目卡片 / 结果卡片样式，避免重复造一套 CSS。
 import "./QuizPage.css";
 import "./ReviewPage.css";
@@ -16,6 +17,8 @@ export default function ReviewPage() {
   const [notFound, setNotFound] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Phase 9.2: badges unlocked by the most recent review round (for the toast).
+  const [newBadges, setNewBadges] = useState<Badge[]>([]);
 
   const loadReview = useCallback(() => {
     setQuiz(null);
@@ -24,6 +27,7 @@ export default function ReviewPage() {
     setError(null);
     setNotFound(false);
     setForbidden(false);
+    setNewBadges([]);
     fetch(`/api/review/${id}`)
       .then((res) => {
         if (res.status === 404) {
@@ -75,7 +79,10 @@ export default function ReviewPage() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json() as Promise<ReviewResult>;
       })
-      .then(setResult)
+      .then((r) => {
+        setResult(r);
+        setNewBadges(r.new_badges ?? []);
+      })
       .catch((e) => setError(String(e)))
       .finally(() => setSubmitting(false));
   }
@@ -111,6 +118,7 @@ export default function ReviewPage() {
   if (result) {
     return (
       <div className="container review-container">
+        <BadgeUnlockToast badges={newBadges} onClose={() => setNewBadges([])} />
         <header className="review-header">
           <Link to="/" className="back-link">
             ← 返回首页

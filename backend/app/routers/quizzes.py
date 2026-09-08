@@ -23,15 +23,22 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
-from ..models import Lesson, LessonMastery, QuizQuestion
+from ..models import DEFAULT_USER_ID, Lesson, LessonMastery, QuizQuestion
 from ..schemas import (
+    BadgeOut,
     QuizFetchOut,
     QuizQuestionOut,
     QuizResultItem,
     QuizResultOut,
     QuizSubmitIn,
 )
-from ..services import compute_lesson_status, init_review_schedule, ordered_lessons
+from ..services import (
+    compute_lesson_status,
+    init_review_schedule,
+    ordered_lessons,
+    record_activity,
+)
+from ..badge_service import evaluate_badges, increment_user_stats
 
 router = APIRouter(prefix="/api")
 
@@ -182,6 +189,10 @@ def submit_quiz(lesson_id: int, payload: QuizSubmitIn, db: Session = Depends(get
     correct = 0
     weak_points: List[int] = []
     results: List[QuizResultItem] = []
+    # Phase 9.2: count debug-dimension questions answered correctly in THIS
+    # submission (feeds the BUG_HUNTER badge). A question is "debug" when its
+    # stored dimension tag equals "debug".
+    debug_correct = 0
 
     for qid in ordered_ids:
         q = q_by_id[qid]
@@ -189,6 +200,8 @@ def submit_quiz(lesson_id: int, payload: QuizSubmitIn, db: Session = Depends(get
         is_correct = selected == q.correct_index
         if is_correct:
             correct += 1
+            if (q.dimension or "") == "debug":
+                debug_correct += 1
         else:
             weak_points.append(q.id)
         results.append(
@@ -239,6 +252,48 @@ def submit_quiz(lesson_id: int, payload: QuizSubmitIn, db: Session = Depends(get
     if effective_status == "mastered" and existing.first_mastered_at is None:
         init_review_schedule(existing, now=now)
 
+    # Phase 9.1: mark today as a study day. Deliberately BEFORE the commit --
+    # same transaction as the mastery write, so a graded submission can never
+    # exist without its study-day row (or vice versa). Pass or fail both count;
+    # an empty submission was already rejected with 422 above.
+    record_activity(db, "quiz", now=now)
+
+    # Phase 9.2: update lifetime counters + evaluate badges in the SAME
+    # transaction as the mastery write. SessionLocal uses autoflush=False, so
+    # the explicit flush() inside record_activity (above) and
+    # increment_user_stats (below) is what makes the just-written mastery /
+    # study-day / counter rows visible to evaluate_badges' reads.
+    increment_user_stats(
+        db,
+        DEFAULT_USER_ID,
+        quiz_correct=correct,
+        quiz_submitted=True,
+        debug_correct=debug_correct,
+    )
+    new_badge_dicts = evaluate_badges(
+        db,
+        DEFAULT_USER_ID,
+        event_kind="quiz",
+        score=score,
+        total=total,
+        correct=correct,
+        started_at=payload.started_at,
+        debug_correct_in_event=debug_correct,
+        now=now,
+    )
+    new_badges = [
+        BadgeOut(
+            code=b["code"],
+            name=b["name"],
+            description=b["description"],
+            image=b["image"],
+            tier="",
+            unlocked=True,
+            unlocked_at=b["unlocked_at"],
+        )
+        for b in new_badge_dicts
+    ]
+
     db.commit()
     db.refresh(existing)
 
@@ -258,4 +313,5 @@ def submit_quiz(lesson_id: int, payload: QuizSubmitIn, db: Session = Depends(get
         results=results,
         unlocked_next=unlocked_next,
         next_lesson_id=next_lesson.id if next_lesson is not None else None,
+        new_badges=new_badges,
     )

@@ -25,8 +25,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
-from ..models import CourseLevel, Lesson, LessonMastery, QuizQuestion
+from ..models import DEFAULT_USER_ID, CourseLevel, Lesson, LessonMastery, QuizQuestion
 from ..schemas import (
+    BadgeOut,
     QuizQuestionOut,
     QuizResultItem,
     ReviewDueItem,
@@ -39,7 +40,9 @@ from ..services import (
     advance_review_schedule,
     defer_review_schedule,
     due_reviews,
+    record_activity,
 )
+from ..badge_service import evaluate_badges, increment_user_stats
 from .quizzes import _parse_options, _sample_quiz_questions
 
 router = APIRouter(prefix="/api")
@@ -200,6 +203,9 @@ def submit_review(lesson_id: int, payload: ReviewSubmitIn, db: Session = Depends
     correct = 0
     weak_points: List[int] = []
     results: List[QuizResultItem] = []
+    # Phase 9.2: count debug-dimension questions answered correctly in THIS
+    # review round (feeds the BUG_HUNTER badge alongside quiz submits).
+    debug_correct = 0
 
     for qid in ordered_ids:
         q = q_by_id[qid]
@@ -207,6 +213,8 @@ def submit_review(lesson_id: int, payload: ReviewSubmitIn, db: Session = Depends
         is_correct = selected == q.correct_index
         if is_correct:
             correct += 1
+            if (q.dimension or "") == "debug":
+                debug_correct += 1
         else:
             weak_points.append(q.id)
         results.append(
@@ -233,6 +241,46 @@ def submit_review(lesson_id: int, payload: ReviewSubmitIn, db: Session = Depends
     # touched here -- a review is scheduling, not re-learning. The 5-question
     # review score must never overwrite the 10-question learning-quiz score.
 
+    # Phase 9.1: a completed review round is a valid study day (pass or fail).
+    # Same transaction as the reschedule above -- flushed here, committed once
+    # below, so the schedule and the study-day row commit together or not at all.
+    record_activity(db, "review", now=now)
+
+    # Phase 9.2: update lifetime counters + evaluate badges in the SAME
+    # transaction as the reschedule. autoflush=False on the session, so the
+    # explicit flush() inside record_activity (above) + increment_user_stats
+    # (below) is what makes the new state visible to evaluate_badges' reads.
+    increment_user_stats(
+        db,
+        DEFAULT_USER_ID,
+        review_passed=passed,
+        review_submitted=True,
+        debug_correct=debug_correct,
+    )
+    new_badge_dicts = evaluate_badges(
+        db,
+        DEFAULT_USER_ID,
+        event_kind="review",
+        score=round(correct / total * 100) if total else 0,
+        total=total,
+        correct=correct,
+        started_at=None,
+        debug_correct_in_event=debug_correct,
+        now=now,
+    )
+    new_badges = [
+        BadgeOut(
+            code=b["code"],
+            name=b["name"],
+            description=b["description"],
+            image=b["image"],
+            tier="",
+            unlocked=True,
+            unlocked_at=b["unlocked_at"],
+        )
+        for b in new_badge_dicts
+    ]
+
     db.commit()
     db.refresh(mastery)
 
@@ -249,4 +297,5 @@ def submit_review(lesson_id: int, payload: ReviewSubmitIn, db: Session = Depends
         ),
         next_interval_days=interval_days,
         results=results,
+        new_badges=new_badges,
     )

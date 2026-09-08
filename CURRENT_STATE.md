@@ -19,14 +19,14 @@
 | 6b | Review / Spaced Repetition（Lesson 级间隔复习闭环） | 🟢 已完成并验收（37 项端到端全过） |
 | 7 | Parking Lot 防止思绪发散 | 🔒 规划中 |
 | 8 | 完整 Spark 课程（Level 2/3/4/5/6/7 **已全部落地**：DataFrame 核心 / Spark SQL / 执行计划 / 分区与 Shuffle / JOIN 深类型与 Broadcast / 性能调优）——课程主线完成 | 🟢 已完成（待验收） |
-| 9 | 游戏化 UI / Streak / Badge | 🔒 规划中 |
+| 9 | 游戏化 UI / Streak / Badge | 🟢 **9.1 Streak 已完成并验收**；🟡 **9.2 Badge 成就已完成（待验收）** |
 | 10 | AI Tutor | 🔒 规划中 |
 | Notes | Lesson 学习笔记（lesson_notes 表 + 笔记 API + 前端接入） | 🟢 已完成（V1.0 基线） |
 | **v1.1** | **Course Map 重做（区域化垂直旅程 / 三档时间叙事 / 5 态节点 / 列表兜底）** | **🟢 已完成并验收** |
 
-**当前进度：v1.1 Course Map 重做已实现完毕并通过 7 项端到端验收。**
+**当前进度：Phase 9.1 Streak（🔥 连续学习）已完成并验收；Phase 9.2 Badge 成就系统已实现完毕（20 枚徽章 + 读时解锁引擎 + 背填 + 前端徽章墙/解锁 toast），等待验收。**
 
-**下一个可做方向（尚未启动）**：Phase 7 Parking Lot 防发散 / Phase 9 游戏化（Streak·Badge）/ Phase 10 AI Tutor / Level 8「真实 ETL 毕业项目」（见 CHANGELOG 2026-08-29 结论：不再线性扩 Spark 内核，不引入 Flink）。
+**下一个可做方向**：Phase 7 Parking Lot 防发散 / Phase 10 AI Tutor / Level 8「真实 ETL 毕业项目」（见 CHANGELOG 2026-08-29 结论：不再线性扩 Spark 内核，不引入 Flink）。
 
 ## 运行端口（已统一）
 
@@ -90,6 +90,9 @@ lesson_mastery (id, lesson_id FK→lessons.id UNIQUE, status, score,
      │ 1:N
 lesson_notes (id, lesson_id FK→lessons.id ON DELETE CASCADE, content,
         created_at)   # V1.0 基线新增：append-only 学习笔记
+study_days (id, user_id, study_date, activity_count, lessons_done,
+        reviews_done, first_at, last_at)   # ↓ Phase 9.1 新增：Streak 数据源
+        UNIQUE(user_id, study_date)
 ```
 
 ### 表字段
@@ -156,6 +159,20 @@ lesson_notes (id, lesson_id FK→lessons.id ON DELETE CASCADE, content,
 | content | TEXT |
 | created_at | DATETIME (默认 datetime.now) |
 
+**study_days**（Phase 9.1 新增；Streak 的唯一数据源，一天一行）
+| 列 | 类型 |
+|----|------|
+| id | INTEGER (PK) |
+| user_id | VARCHAR (有索引；当前单用户恒为 `"local"`，见 `models.DEFAULT_USER_ID`) |
+| study_date | VARCHAR，**本地**日历日 `"YYYY-MM-DD"`（按 `LOCAL_UTC_OFFSET_HOURS` 折算，非 UTC 日期） |
+| activity_count | INTEGER default 0（当天有效学习动作总数） |
+| lessons_done | INTEGER default 0（学习测验提交次数） |
+| reviews_done | INTEGER default 0（间隔复习提交次数） |
+| first_at | DATETIME (nullable, UTC) |
+| last_at | DATETIME (nullable, UTC) |
+
+> 唯一键 `UNIQUE(user_id, study_date)`。全表**没有** `current_streak` / `longest_streak` 之类的持久化字段——Streak 一律读时计算。
+
 ### 种子数据
 
 - 课程：`backend/app/course_seed.json`，首次启动且表为空时自动播种（不重复插入）。
@@ -196,7 +213,7 @@ lesson_notes (id, lesson_id FK→lessons.id ON DELETE CASCADE, content,
 
 title / objective / estimated_minutes 仍为独立列；课程文本**不硬编码在 React 组件**。
 
-当前数据量：`course_levels = 8`，`lessons = 66`，全部 lesson.content 已回填（Level 2 新增 10 课、Level 3 新增 9 课、Level 4 新增 9 课、Level 5 新增 9 课、Level 6 新增 9 课、Level 7 新增 9 课）。
+当前数据量：`course_levels = 8`，`lessons = 66`，`quizzes = 660`，`lesson_mastery = 34`（用户真实进度，改代码时别碰），`study_days = 9`（Phase 9.1 由 mastery 时间戳回填，属下界估计）；Phase 9.2 新增 `badge_definitions = 20`（8 旅程 + 12 特别，种子幂等 upsert）、`user_badges = 6`（背填解锁：LEVEL_0–3 / QUIZ_100 / WANMEI，详见下方实现记录）、`user_stats = 1`（背填基线：quiz_correct=160 / quiz_submitted=68 / reviews_passed=42，均为下界估计）；全部 lesson.content 已回填（Level 2 新增 10 课、Level 3 新增 9 课、Level 4 新增 9 课、Level 5 新增 9 课、Level 6 新增 9 课、Level 7 新增 9 课）。
 
 > ✅ 全部 66 课均已补齐 Quiz 题库（每课 10 题，共 660 题）；Level 2/3/4/5/6/7 课程测试接口正常返回题目，且抽题已按维度多样性生效。
 
@@ -204,16 +221,16 @@ title / objective / estimated_minutes 仍为独立列；课程文本**不硬编�
 
 - `review_items`（Phase 6）
 - `parking_lot`（Phase 7）
-- `study_sessions`（后续）
+- ~~`study_sessions`（后续）~~ → **Phase 9.1 已引入，落地为 `study_days`（日粒度一行，而非逐次事件）**
 
-> Phase 4 已落地 `quizzes` 与 `lesson_mastery`（替代原规划的 `user_progress`）。
+> Phase 4 已落地 `quizzes` 与 `lesson_mastery`（替代原规划的 `user_progress`）；Phase 9.1 已落地 `study_days`。
 
 ## API 列表
 
 | 端点 | 说明 | 引入 Phase |
 |------|------|-----------|
 | `GET /api/health` | app / status / database 状态 | 0 |
-| `GET /api/dashboard` | 总进度(已完成数/total)、当前 Level、今日推荐 Lesson、streak_days | 2（Phase 4 改"已完成"语义为 mastered） |
+| `GET /api/dashboard` | 总进度(已完成数/total)、当前 Level、今日推荐 Lesson、`streak_days`；**Phase 9.1 起**新增 `studied_today` / `longest_streak` / `last_study_date`（全部读时计算） | 2（Phase 4 改"已完成"语义为 mastered；9.1 填充真 streak） |
 | `GET /api/levels` | 全部 Level，含嵌套 lessons 与**真实派生状态** | 1（Phase 4 状态改为派生） |
 | `GET /api/levels/{level_id}/lessons` | 单个 Level 的 lesson 列表 | 1 |
 | `GET /api/lessons/{lesson_id}` | 单课详情：基础信息 + 解析后的 content + 下一课指针 + 派生 status/mastery_score；404 on missing | 3 |
@@ -251,7 +268,7 @@ title / objective / estimated_minutes 仍为独立列；课程文本**不硬编�
 
 - `completed` = 状态为 `mastered` 的课数（不再是固定 0）
 - 今日课程 = 课程顺序中**第一个尚未 mastered** 的课（无论是 `available` 还是 `needs_review`），保证失败后仪表盘仍指向"下一步该做的课"而非空白
-- `streak_days` 固定 0（Phase 6 实现）
+- `streak_days` 曾固定为 0；**Phase 9.1 起由 `study_days` 读时计算**（见下方 Phase 9.1 实现记录）
 
 ## 前端页面
 
@@ -283,8 +300,10 @@ spark-quest-app/
 │   │       ├── lessons.py     # /api/lessons/{id}（Phase 3，返回派生 status/mastery_score）
 │   │       ├── quizzes.py     # Phase 4：/api/lessons/{id}/quiz、/api/lessons/{id}/quiz/submit（P6b：首次掌握时写入复习锚点）
 │   │       ├── review.py      # Phase 6b：/api/review/due、/api/review/{id}、/api/review/{id}/submit
-│   │       └── migrate.py     # 幂等迁移（P6.1 dimension；P6b lesson_mastery 五列 + 存量回填）
+│   │       └── migrate.py     # 幂等迁移（P6.1 dimension；P6b lesson_mastery 五列 + 存量回填；P9.1 study_days 回填）
 │   ├── _p6b_e2e_check.py      # Phase 6b 端到端验收脚本（跑在 DB 临时副本上，不污染真库）
+│   ├── _p91_e2e_check.py      # Phase 9.1 Streak 端到端验收脚本（28 项，跑临时库；真库只读）
+│   ├── _p91_smoke.py          # Phase 9.1 API 冒烟（真提交 → 快照 → 还原）
 │   ├── .venv/
 │   ├── requirements.txt
 │   └── spark_quest.db
@@ -293,6 +312,11 @@ spark-quest-app/
 │   │   ├── main.tsx           # 路由（/、/map、/lesson/:id、/lesson/:id/quiz）
 │   │   ├── index.css          # 全局样式
 │   │   ├── types.ts           # API 类型（LessonStatus = locked/available/mastered/needs_review；Quiz* 类型）
+│   │   └── components/
+│   │       ├── ui/                    # Badge / Icon / ProgressRing
+│   │       ├── RichText.tsx + .css    # 零依赖富文本渲染
+│   │       ├── map/                   # v1.1 课程地图（mapLayout.ts 纯函数 + 5 个组件 + map.css）
+│   │       └── StreakBadge.tsx + .css # Phase 9.1：🔥 三态（active / at-risk / broken）
 │   │   └── pages/
 │   │       ├── Home.tsx + Home.css       # Dashboard
 │   │       ├── MapPage.tsx + MapPage.css # 课程地图（Phase 4 状态词/图例更新）
@@ -557,7 +581,7 @@ spark-quest-app/
 - API 冒烟：`/api/levels` 返回 8 个 Level（末位为 Level 7：性能调优），L7 九课均可通过 `/api/lessons/{id}` 取到完整七要素与五小节；L7 课程 `status=locked` 是既有解锁规则（前置未 mastered），非缺陷。
 
 **未做 / 后续**：
-- Phase 8 课程主线已全部完成（Level 0–7）。后续可选方向：Level 0/1 早期课按 v1.0 补「⚠️ 比喻的边界」小节（案例库 §10 已标注）；Phase 6b 间隔重复、Phase 7 Parking Lot、Phase 9 游戏化、Phase 10 AI Tutor 仍规划中。
+- Phase 8 课程主线已全部完成（Level 0–7）。后续可选方向：Level 0/1 早期课按 v1.0 补「⚠️ 比喻的边界」小节（案例库 §10 已标注）；Phase 6b 间隔重复已完成；Phase 9.1 Streak 已完成（待验收），Badge 未启动；Phase 7 Parking Lot、Phase 10 AI Tutor 仍规划中。
 - Level 7 综合练习只验证「会诊断、知道优先级、能给方向」，不要求背参数值。
 
 ## Phase 5 实现记录 —— 完整 Progress Dashboard 动态化 + 状态系统（已完成并验收）
@@ -602,7 +626,7 @@ spark-quest-app/
 
 **未做 / 后续**：
 - 真正的 `review_items` / Spaced Repetition（原 Phase 6 主体，现为 Phase 6b）仍规划中；Phase 6.1/6.2 的 `dimension` 标签与随机抽题为其预留了能力。
-- 停车场（Phase 7）、游戏化 / Streak / Badge（Phase 9）、AI Tutor（Phase 10）仍按原规划。
+- 停车场（Phase 7）、Badge 成就（Phase 9.2）、AI Tutor（Phase 10）仍按原规划；**Streak（Phase 9.1）已完成待验收**。
 
 ## Phase 6.2 实现记录 —— Level 2 Quiz Bank 扩至 10 题（2026-08-27，L2 完成）
 
@@ -611,7 +635,7 @@ spark-quest-app/
 **明确不做（本期仍留给后续）**：
 - `review_items` / Spaced Repetition 调度（Phase 6b 主体）——首页的「复习测验 / 需复习」仅为 `needs_review` 状态驱动的整份重测，并非复习系统。
 - 停车场（Phase 7）
-- 游戏化 UI / Streak / Badge（Phase 9）
+- 游戏化 UI / Badge 成就（Phase 9.2）——**Streak（9.1）已完成，见下方实现记录**
 - AI Tutor（Phase 10）
 
 **已落地**：
@@ -820,6 +844,169 @@ v1.1 Course Map 重做上线后的两轮打磨，不引入新功能、不碰后�
 
 ### 教训（已记入项目记忆）
 - 写库接口冒烟前必须 `cp spark_quest.db` 快照。本轮验证完整复习推进了 lesson 1 的 SRS 且无真快照，已用 Python 还原为估算值（status/score/attempts 完好，仅下次复习排期可能早几天）。单用户本地库影响可忽略，但规矩不能破。
+
+---
+
+## Phase 9.1 实现记录 —— 🔥 Streak 连续学习（2026-09-07，已完成，待验收）
+
+### 有效学习日定义
+
+| 行为 | 是否计入 |
+|------|---------|
+| Quiz 提交（学习测验，过不过都算） | ✅ |
+| Review 提交（间隔复习，过不过都算） | ✅ |
+| Lesson 阅读 | ❌ |
+| Note 写笔记 | ❌ |
+| 打开 Dashboard | ❌ |
+
+空提交已被既有 422 拦截，因此不存在"刷空提交刷天数"的漏洞。
+
+### 数据模型
+
+新增 `study_days`（一天一行，UNIQUE(user_id, study_date)）。
+
+**为什么必须建表、不能从 `lesson_mastery` 派生**：`last_quiz_at` 是**每课最后一次**提交时间。9/1 学过第 3 课、9/5 又重做一次，9/1 就从记录里消失——历史会**回溯性损坏**，streak 越用越短。
+
+`user_id` 为未来用户系统预留，当前恒为 `DEFAULT_USER_ID = "local"`（无鉴权、无 user 表，与项目单用户定位一致）。
+
+### 时区（关键决策）
+
+全库时间戳是 UTC，但"一天"必须是**本地**日历日。若按 UTC 日期切天，UTC+8 用户的"一天"会变成 本地 08:00 → 次日 08:00，早上 7 点学完会被记到"昨天"。
+
+- 常量 `services.LOCAL_UTC_OFFSET_HOURS = 8` —— 按用户要求**不命名为 Streak 专属**，它是全应用业务时区
+- 不用 `zoneinfo`：Windows 无系统 tzdb，`ZoneInfo("Asia/Shanghai")` 会抛 `ZoneInfoNotFoundError`，需额外装 `tzdata`
+- `study_date` 直接存本地日期字符串，一次折算、后续零换算
+- `first_at` / `last_at` 仍按既有约定存 UTC
+
+### 核心 API（`app/services.py`）
+
+| 函数 | 职责 |
+|------|------|
+| `local_now(now)` | UTC → 本地墙钟（naive，**仅取日期/展示，禁止写库**） |
+| `local_today(now)` | 返回 `"YYYY-MM-DD"` |
+| `record_activity(db, kind, now, user_id)` | `kind ∈ {quiz, review}`；flush 不 commit，与调用方业务写入**同事务** |
+| `compute_streak(db, now, user_id)` | 返回 `StreakInfo(current, longest, studied_today, last_study_date)`，**纯读** |
+
+### 连续天数计算
+
+```
+today = local_today()
+if   today   ∈ days:  从 today   往前数
+elif today-1 ∈ days:  从 today-1 往前数   ← 今天还没到晚上，streak 仍存活
+else:                 current = 0         ← 昨天也没学 → 已断
+longest = 全表最长连续段
+```
+
+### Streak 中断逻辑（Duolingo 语义）
+
+**不是"没学就立刻清零"**，而是"过完一整天都没学才断"：
+- 今天已学 → `current` 含今天，徽章 Active
+- 今天没学、昨天学了 → `current` 保持 N 不变，`studied_today=false`，徽章 At Risk（「今天还没学」）
+- 昨天也没学（最后学习 ≤ 前天） → `current=0`，徽章 Broken（「重新开始」）
+- `longest` 是历史最高值，**断链不回退**
+
+### 事务约定（用户明确要求）
+
+`record_activity()` 在 `quizzes.py::submit_quiz` 与 `review.py::submit_review` 中，**在各自 `db.commit()` 之前调用**，只 `flush()`。因此：
+- 判分/调度写入与学习日记入**同事务**，成功同成功、失败同回滚
+- 不存在"mastery 写了但 streak 没记"或反之的割裂状态
+
+### 存量回填
+
+`migrate.backfill_study_days()`：从 `lesson_mastery.last_quiz_at / last_review_at` 折算本地日期，`INSERT OR IGNORE` 幂等写入，已回填 **9 天**：
+
+`2026-08-24 / 08-26 / 08-27 / 08-28 / 08-31 / 09-02 / 09-03 / 09-04 / 09-07`
+
+当前真值：`current=1`、`longest=3`、`studied_today=true`、`last=2026-09-07`。
+
+⚠️ **这是下界不是真相**：只能恢复"每课最后一次提交"落在哪天，早期重复刷同一课的日子已不可考。已在函数 docstring 中写明。
+
+### 前端
+
+- `components/StreakBadge.tsx` + `.css`：三态 `active / at-risk / broken`，状态由纯函数 `streakVariant(days, studiedToday)` 派生（与后端同源规则）
+- 色板走组件级 CSS 变量（`--streak-bg/border/fg`），三态各覆盖一次，不写死散落颜色
+- `Home.tsx` hero 新增 `.hero-metrics` 容器（进度环 + Streak 同一视觉层级），窄屏整组右对齐换行，不散开
+- 「最长连续 N 天 · 最近 YYYY-MM-DD」放在次要区「进度摘要」，**不占 hero 焦点**
+- 火焰呼吸用 CSS `@keyframes` + `prefers-reduced-motion` 关闭，**零新增依赖、无动画库、无倒计时、无后台任务**
+
+### 验收
+
+- `backend/_p91_e2e_check.py`：**28 项全绿**（空库 / 同日幂等 / 连续三天 / 宽限日不断链 / 隔整天断链 / 断链后重来 / 时区边界 UTC 23:30→本地次日 / 未知 kind 报错 / flush 未 commit 不落库 / 真库只读核对）
+- `backend/_p91_smoke.py`：真实 API 冒烟——提交 lesson 33 测验（score 40 失败）后 `study_days` 09-07 由 `activity_count=4` 增至 `5`、`lessons_done` 2→3，验证**失败提交同样计入有效学习日**且埋点生效
+- **冒烟前后快照 + 还原**：`study_days` 全表与 `lesson_mastery(33)` 已还原，复核 `lesson_mastery=32 行`、`lesson 33 mastery=0`、`study_days=9 行`、`09-07=(4,2,2)`、`lessons=66 / quizzes=660` 均未变
+- `tsc -b && vite build` 零错误
+
+### 明确不做
+
+Streak Freeze（断连保护卡）· 补签 · Badge 成就 · 每日目标 XP · 学习日历热力图 · 定时/后台任务 · 前端倒计时 · 多用户鉴权。
+
+---
+
+## Phase 9.2 实现记录 —— 🏅 Badge 成就系统（2026-09-08，已完成，待验收）
+
+> 游戏化第二阶段。产品意义：**Content（把学习内容系统化）→ Learning/Retention Loop（把学习过程闭环）→ Badge（把成就可视化、给正反馈）**。
+> 严格按用户确认的设计稿落地，**未扩大 Phase 9.2 范围**：无 XP / 金币 / 排行榜 / 商店 / 社交 / 多用户。
+
+### 数据模型（3 张表，职责分离）
+
+| 表 | 职责 | 关键约束 |
+| --- | --- | --- |
+| `badge_definitions` | 徽章目录（事实） | `code` 唯一；`is_secret` 单字段控制「解锁前隐藏」；`image` 是 `/badges/*.webp` 相对路径（Vite 静态托管，二进制不进 SQLite） |
+| `user_badges` | 每用户解锁记录（insert-only） | `UNIQUE(user_id, badge_id)` —— 幂等基石；解锁后绝不更新 |
+| `user_stats` | 终身事件计数器（事实） | 一行/用户；`total_quiz_correct / total_quiz_submitted / total_reviews_passed / total_reviews_submitted / total_debug_correct` |
+
+- **不新增任何「学习状态」列**到 `lesson_mastery` / `course_levels`——20 枚徽章全部由既有表 + `user_stats` 派生。
+- `user_id` 沿用 `DEFAULT_USER_ID = "local"`（单用户本地应用，无 auth 无 user 表）。
+
+### 解锁引擎（`backend/app/badge_service.py`）
+
+- `BADGE_RULES`：`code -> rule_fn(BadgeContext) -> bool` 字典，20 枚全量重算（用户明确认可「20 个全量检查完全 OK」）。
+- `evaluate_badges(...)`：**读时**对每条 badge 规则求值，新解锁的通过 `INSERT ... ON CONFLICT(user_id, badge_id) DO NOTHING` 写入 `user_badges`——天然幂等。返回本次**新解锁**列表。
+- `increment_user_stats(...)`：在同事务内加性累加 `user_stats`（与既有 `attempts` / `review_count` 语义一致：一次接受提交 = +1，不去重）。**永不递减**。
+- `build_context(...)`：一次性聚合所有求值所需事实（stats / 已掌握数 / 全部课程 / 完美通关 / 最长连续 / Level 维度 / 事件派生）。
+- `started_at` 解析 `_parse_started_at`：**统一转成 UTC 朴素时间戳**（与 `datetime.utcnow()` 同帧）。⚠️ 曾误转成本地时区，导致 UTC+8 机器上 BLITZ 时长变负、永不触发——已修。
+- `is_late_night` 仅在 `event_kind` 非空（真有提交事件）时判定，背填/只读路径不会误判。
+
+### 20 枚徽章
+
+- **8 旅程（LEVEL_0–7）**：由 `course_levels` 自动派生（非硬编码数量），每 Level 全课掌握即解锁。`LEVEL_NAMES` 手工映射 0–7 中文名。
+- **12 特别**：QUIZ_100/500/1000（累计答对）、STREAK_7/30/100（历史最长连续）、REVIEW_50（累计复习通过）、BUG_HUNTER（debug 维度累计答对 ≥20，原为 50，因全库仅 43 道 debug 题且前 4 Level 已掌握、永远够不到 → 改为 20）、BLITZ（5/5 且 ≤60s）、LATE_NIGHT / BUG_HUNTER 为 **SECRET**（解锁前 `name/description/image` 在 API 中置空，仅暴露 `?`）。
+- 背填（存量解锁）：**LEVEL_0–3 + QUIZ_100 + WANMEI** = 6 枚（其余因数据未达标不解锁，符合预期）。
+
+### 种子 + 背填（幂等、不改既有 Mastery/Progress/Quiz 数据）
+
+- `seed_badges(db)`：`ON CONFLICT(code) DO UPDATE` 保留 `id`，以免破坏 `user_badges.badge_id` 外键（曾用 `REPLACE` 会重排 rowid → 外键悬空，已规避）。
+- `backfill_badges()`：`user_stats` 仅当行不存在时写入一次（INSERT OR IGNORE，绝不覆盖线上累加），再由 `evaluate_badges` 解锁一切可派生徽章。SECRET 与事件型（BLITZ/LATE_NIGHT）在背填时不解锁（无真实事件归因）。**挂在 `init_db` 课程种子之后**（LEVEL 定义依赖 `course_levels`）。
+
+### 挂载点（与提交同事务）
+
+- `routers/quizzes.py::submit_quiz`：`record_activity` 之后、`db.commit()` 之前调用 `increment_user_stats(quiz_correct=..., quiz_submitted=True, debug_correct=...)` → `evaluate_badges(event_kind="quiz", started_at=payload.started_at, ...)`。
+- `routers/review.py::submit_review`：同上（`review_passed/review_submitted` + `debug_correct`）。
+- ⚠️ Session 用 `autoflush=False`，靠 `record_activity` / `increment_user_stats` 内部显式 `flush()` 让刚写入的 mastery / study_day / counter 对 `evaluate_badges` 的查询可见。
+- 响应 `QuizResultOut` / `ReviewResultOut` 新增 `new_badges` 供前端弹 toast。
+
+### API
+
+- `GET /api/badges`：20 枚完整目录 + 每用户解锁态；SECRET 未解锁时 `name/description/image` 置空（`is_secret` + `code` 仍暴露）。
+- `GET /api/dashboard`：新增 `recent_badges`（最近 6 枚，解密锁定的 SECRET 正常展示）。
+
+### 前端（React + Vite，零新增依赖）
+
+- `pages/BadgesPage.tsx` + `.css`：`/badges` 路由，按 `tier` 分「旅程徽章 / 特别成就」两组网格；未解锁灰度、SECRET 未解锁显示「神秘徽章 / ?」斜纹占位。
+- `Home.tsx`：次要区「最近解锁」徽章条 + 页脚「🏅 最近解锁 →」入口。
+- `components/BadgeUnlockToast.tsx` + `.css`：提交后 `new_badges.length>0` 时右下角轻量浮动提示（5.2s 自动消失，纯展示不阻塞），解锁的 SECRET 在此正常显示。
+- `QuizPage` / `ReviewPage`：提交带上 `started_at`（启动即记 `new Date().toISOString()`）供 BLITZ；结果页渲染 toast。
+- `types.ts`：新增 `Badge` 接口 + `QuizResult.new_badges` / `ReviewResult.new_badges` / `Dashboard.recent_badges` / `QuizSubmit.started_at`。
+
+### 验证
+
+- `backend/_p92_smoke.py` + `backend/_p92_e2e_check.py`：7 项端到端全过（目录形状 20=8+12、SECRET 置空、背填恰为 6 枚、背填幂等、BLITZ 快交触发/慢交抑制、BUG_HUNTER/LATE_NIGHT 保持锁定），均**快照→还原**不污染真库。
+- 真实 `uvicorn app.main:app --port 9000` 启动：`/api/health` ok、`/api/badges` 20 枚（6 解锁）、`/api/dashboard` 含 `recent_badges=6`，路由全部挂载正常。
+- `tsc -b` 与 `vite build` 零错误。
+
+### 明确不做
+
+XP / 金币 / 排行榜 / 商店 / 社交分享 / 每日目标 / 学习日历热力图 / 多用户鉴权 / 后台定时任务 / 前端倒计时。SECRET 仅「解锁前隐藏」，解锁后无特殊处理。
 
 ---
 

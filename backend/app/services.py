@@ -16,13 +16,31 @@ lesson is available only if its immediate predecessor is mastered. Because
 `mastered` is sticky (never downgraded in Phase 4), unlock is also sticky.
 """
 
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import CourseLevel, Lesson, LessonMastery
+from .models import DEFAULT_USER_ID, CourseLevel, Lesson, LessonMastery, StudyDay
+
+
+# ---- Local calendar day (Phase 9.1) ----
+#
+# Every timestamp in this database is UTC (written by `datetime.utcnow()`), but
+# a "study day" has to be the user's LOCAL calendar day. Using UTC dates would
+# put the day boundary at 08:00 local time for a UTC+8 user: finish a lesson at
+# 07:00 and it would be filed under "yesterday", silently breaking streaks.
+#
+# A fixed offset is used instead of `zoneinfo` on purpose: Windows ships no
+# system tz database, so `ZoneInfo("Asia/Shanghai")` would raise
+# ZoneInfoNotFoundError unless the extra `tzdata` package is installed. This is
+# a single-user local app -- one configurable constant is the honest trade-off.
+#
+# Deliberately NOT named "STREAK_UTC_OFFSET_HOURS": this is the app's business
+# timezone, and any future feature that needs a local date uses the same one.
+LOCAL_UTC_OFFSET_HOURS = 8
 
 
 # ---- Phase 6b: spaced-review schedule ----
@@ -232,3 +250,137 @@ def compute_level_status(level: CourseLevel, status_map: Dict[int, str]) -> str:
         return "available"
     
     return "locked"
+
+
+# ---- Phase 9.1: study-day recording + streak computation ----
+#
+# Streak is NEVER persisted. There is no `current_streak` column anywhere: it is
+# recomputed from `study_days` on every read, so it cannot drift out of sync and
+# there is nothing to migrate when the rules change.
+
+
+def local_now(now: Optional[datetime] = None) -> datetime:
+    """UTC `now` shifted to local wall-clock time.
+
+    WARNING: returns a naive LOCAL datetime. Use it to derive a calendar date
+    or for display -- never write it to the database, whose timestamps are UTC.
+    """
+    return (now or datetime.utcnow()) + timedelta(hours=LOCAL_UTC_OFFSET_HOURS)
+
+
+def local_today(now: Optional[datetime] = None) -> str:
+    """Today's LOCAL calendar date, "YYYY-MM-DD"."""
+    return local_now(now).strftime("%Y-%m-%d")
+
+
+def _shift_day(day: str, delta_days: int) -> str:
+    return (date.fromisoformat(day) + timedelta(days=delta_days)).isoformat()
+
+
+def _longest_run(dates: List[str]) -> int:
+    """Longest run of consecutive days in a sorted list of "YYYY-MM-DD"."""
+    best = run = 0
+    prev: Optional[date] = None
+    for raw in dates:
+        cur = date.fromisoformat(raw)
+        run = run + 1 if (prev is not None and (cur - prev).days == 1) else 1
+        best = max(best, run)
+        prev = cur
+    return best
+
+
+@dataclass
+class StreakInfo:
+    """Streak state, always derived -- never stored."""
+
+    current: int = 0
+    longest: int = 0
+    studied_today: bool = False
+    last_study_date: Optional[str] = None
+
+
+def record_activity(
+    db: Session,
+    kind: str,
+    now: Optional[datetime] = None,
+    user_id: str = DEFAULT_USER_ID,
+) -> StudyDay:
+    """Record one valid learning action on the caller's local day.
+
+    `kind` is "quiz" or "review". Called INSIDE the caller's transaction, right
+    before its `db.commit()`, so a graded submission and its study-day row can
+    never diverge (all-or-nothing). This function flushes but does not commit.
+
+    Idempotent per (user, day): repeated calls on the same day bump the
+    counters on the existing row instead of inserting a second one.
+    """
+    if kind not in ("quiz", "review"):
+        raise ValueError(f"record_activity: unknown kind {kind!r}")
+
+    now = now or datetime.utcnow()
+    day = local_today(now)
+
+    row = db.scalars(
+        select(StudyDay).where(StudyDay.user_id == user_id, StudyDay.study_date == day)
+    ).first()
+    if row is None:
+        row = StudyDay(
+            user_id=user_id,
+            study_date=day,
+            activity_count=0,
+            lessons_done=0,
+            reviews_done=0,
+            first_at=now,
+        )
+        db.add(row)
+
+    row.activity_count = (row.activity_count or 0) + 1
+    if kind == "quiz":
+        row.lessons_done = (row.lessons_done or 0) + 1
+    else:
+        row.reviews_done = (row.reviews_done or 0) + 1
+    row.last_at = now
+
+    db.flush()
+    return row
+
+
+def compute_streak(
+    db: Session,
+    now: Optional[datetime] = None,
+    user_id: str = DEFAULT_USER_ID,
+) -> StreakInfo:
+    """Derive the streak from `study_days`. No writes, no persistence.
+
+    Break rule (Duolingo semantics): not studying *today* does not break the
+    streak -- the day is not over yet, so the streak stays alive at its
+    yesterday-anchored length. It only breaks once a FULL day has been missed,
+    i.e. the most recent study day is older than yesterday.
+    """
+    now = now or datetime.utcnow()
+    today = local_today(now)
+    dates = sorted(
+        db.scalars(
+            select(StudyDay.study_date).where(StudyDay.user_id == user_id)
+        ).all()
+    )
+    if not dates:
+        return StreakInfo()
+
+    day_set = set(dates)
+    studied_today = today in day_set
+
+    anchor = today if studied_today else _shift_day(today, -1)
+    current = 0
+    if anchor in day_set:
+        cursor = date.fromisoformat(anchor)
+        while cursor.isoformat() in day_set:
+            current += 1
+            cursor -= timedelta(days=1)
+
+    return StreakInfo(
+        current=current,
+        longest=_longest_run(dates),
+        studied_today=studied_today,
+        last_study_date=dates[-1],
+    )

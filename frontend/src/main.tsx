@@ -7,6 +7,7 @@ import LessonPage from "./pages/LessonPage";
 import MapPage from "./pages/MapPage";
 import QuizPage from "./pages/QuizPage";
 import ReviewPage from "./pages/ReviewPage";
+import BadgesPage from "./pages/BadgesPage";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -18,6 +19,8 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/lesson/:id/quiz" element={<QuizPage />} />
         {/* Phase 6b: 间隔复习 */}
         <Route path="/review/:id" element={<ReviewPage />} />
+        {/* Phase 9.2: 徽章墙 */}
+        <Route path="/badges" element={<BadgesPage />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>

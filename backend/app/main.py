@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import check_database_connection, init_db
-from .routers import courses, dashboard, lessons, quizzes, review
+from .routers import badges, courses, dashboard, lessons, quizzes, review
 
 logger = logging.getLogger("spark_quest")
 
@@ -50,6 +50,7 @@ app.include_router(dashboard.router)
 app.include_router(lessons.router)
 app.include_router(quizzes.router)
 app.include_router(review.router)
+app.include_router(badges.router)
 
 
 @app.get("/api/health")

@@ -343,6 +343,93 @@ v1.1 Course Map 重做上线后，用户实机走查反馈三处地图交互问�
 
 ---
 
+## 2026-09-07 — Phase 9.1：🔥 Streak 连续学习
+
+Phase 8 课程主线（Level 0–7）与 Phase 6b 复习闭环建成后，游戏化第一阶段落地 Streak。产品意义上的第三阶段：**Content（把学习内容系统化）→ Learning/Retention Loop（把学习过程闭环）→ Streak（把学习行为持续化）**。
+
+### Added
+- **新表 `study_days`**（一天一行，`UNIQUE(user_id, study_date)`）：`user_id / study_date / activity_count / lessons_done / reviews_done / first_at / last_at`
+  - `user_id` 为未来用户系统预留，当前恒为 `DEFAULT_USER_ID = "local"`（无鉴权单用户本地应用）
+  - 必须建表的原因：`lesson_mastery.last_quiz_at` 是每课**最后一次**提交时间，重做旧课会让更早的学习日从记录中消失，历史会回溯性损坏
+- **Streak 内核**（`services.py`）：`LOCAL_UTC_OFFSET_HOURS` / `local_now()` / `local_today()` / `record_activity()` / `compute_streak()` → 返回 `StreakInfo(current, longest, studied_today, last_study_date)`
+- **存量回填** `migrate.backfill_study_days()`：从 `last_quiz_at / last_review_at` 折算本地日期，`INSERT OR IGNORE` 幂等写入 9 天（08-24 / 08-26 / 08-27 / 08-28 / 08-31 / 09-02 / 09-03 / 09-04 / 09-07）
+- **前端 `components/StreakBadge.tsx` + `.css`**：三态 `active / at-risk / broken`，状态由纯函数 `streakVariant(days, studiedToday)` 派生
+- **验收脚本**：`backend/_p91_e2e_check.py`（28 项，跑临时库）、`backend/_p91_smoke.py`（真 API 冒烟，快照 + 还原）
+
+### Changed
+- `GET /api/dashboard`：`streak_days` 由硬编码 `0` 改为真值，并新增 `studied_today` / `longest_streak` / `last_study_date`
+- `POST /api/lessons/{id}/quiz/submit` 与 `POST /api/review/{id}/submit`：成功后记一次有效学习行为
+- `Home.tsx` hero 新增 `.hero-metrics` 容器（进度环 + Streak 同层），窄屏整组右对齐换行；「最长连续 N 天 · 最近日期」进「进度摘要」次要区
+- `types.ts`：`Dashboard` 补 3 个 streak 字段
+
+### Fixed
+- **时区切天错误（预防性修复）**：全库存 UTC，若按 UTC 日期切天，UTC+8 用户的"一天"会是本地 08:00→次日 08:00，早上 7 点学完记到"昨天"。改为按 `LOCAL_UTC_OFFSET_HOURS` 折算本地日历日
+
+### Architecture
+- **Streak 永不持久化**：任何表都没有 `current_streak` / `longest_streak` 列，一律读时计算，无法与活动日志失同步，规则变更无需迁移
+- **同事务埋点**（用户明确要求）：`record_activity()` 只 `flush()` 不 `commit()`，在两个提交接口的 `db.commit()` 之前调用——判分/调度写入与学习日记入同事务，成功同成功、失败同回滚
+- **常量通用化**：偏移量命名为 `LOCAL_UTC_OFFSET_HOURS` 而非 Streak 专属，作为全应用业务时区
+- **中断语义（Duolingo 式）**：不是"没学立刻清零"，而是"过完一整天没学才断"；今天没学但昨天学了 → streak 保持 N（At Risk），最后学习 ≤ 前天 → 归零（Broken）；`longest` 断链不回退
+- **有效学习行为口径**：Quiz 提交 ✅ / Review 提交 ✅（过不过都算，空提交已被既有 422 拦截）；Lesson 阅读 ❌ / Note ❌ / 打开 Dashboard ❌
+- **零新增依赖**：不用 `zoneinfo`（Windows 缺 tzdb，需额外装 `tzdata`），不用动画库；火焰呼吸仅 CSS `@keyframes` + `prefers-reduced-motion` 关闭
+
+### RedLines（未抢跑）
+- 不做 Streak Freeze（断连保护卡）/ 补签 / Badge 成就 / 每日目标 XP / 学习日历热力图 / 定时与后台任务 / 前端倒计时
+- 不做多用户鉴权（`user_id` 只预留列位，不建 user 表）
+
+### 验收
+- `_p91_e2e_check.py` 28 项全绿：空库 / 同日幂等 / 连续三天 / 宽限日不断链 / 隔整天断链 / 断链后重来 / 时区边界（UTC 09-06 23:30 → 本地 09-07）/ 未知 kind 报错 / flush 未 commit 不落库 / 真库只读核对
+- API 冒烟：提交 lesson 33 测验（score 40 失败）后 `study_days` 09-07 `activity_count` 4→5、`lessons_done` 2→3，证明**失败提交同样计入有效学习日**
+- 冒烟前后快照 + 还原并复核：`lesson_mastery=32`、`lesson 33 mastery=0`、`study_days=9`、`09-07=(4,2,2)`、`lessons=66 / quizzes=660` 全部未变（备份 `spark_quest.db.bak_before_streak`）
+- `tsc -b && vite build` 零错误
+
+---
+
+## 2026-09-08 — Phase 9.2：🏅 Badge 成就系统
+
+Phase 9.1 Streak 之后，游戏化第二阶段落地 Badge。产品意义：**Content → Learning/Retention Loop → Badge（成就可视化、给正反馈）**。严格按设计稿落地，未扩大范围（无 XP/金币/排行榜/商店/社交/多用户）。
+
+### Added
+- **3 张表**：`badge_definitions`（目录，20 枚：`code` 唯一 + `is_secret` 单字段 + `image` 为 `/badges/*.webp` 相对路径）、`user_badges`（`UNIQUE(user_id, badge_id)`，insert-only，幂等基石）、`user_stats`（终身事件计数器：quiz_correct / quiz_submitted / reviews_passed / reviews_submitted / debug_correct）
+- **解锁引擎 `badge_service.py`**：`BADGE_RULES` 字典（20 枚全量重算）+ `evaluate_badges()`（读时求值，新解锁 `ON CONFLICT(user_id, badge_id) DO NOTHING`）+ `increment_user_stats()`（同事务加性累加，永不递减）+ `build_context()` 一次聚合
+- **20 枚徽章**：8 旅程 `LEVEL_0–7`（由 `course_levels` 自动派生，非硬编码数量）+ 12 特别（QUIZ_100/500/1000、STREAK_7/30/100、REVIEW_50、BUG_HUNTER、BLITZ、LATE_NIGHT、WANMEI、QUANJING）；`LEVEL_NAMES` 手工映射 0–7 中文名
+- **种子 `seed_badges.py`**：`ON CONFLICT(code) DO UPDATE` 保留 `id`（规避 `REPLACE` 重排 rowid 破坏 `user_badges.badge_id` 外键）
+- **背填 `migrate.backfill_badges()`**：`user_stats` 仅当行不存在时写一次（绝不覆盖线上累加），再 `evaluate_badges` 解锁一切可派生徽章；挂 `init_db` 课程种子之后（LEVEL 定义依赖 `course_levels`）
+- **前端**：`pages/BadgesPage.tsx`（`/badges` 路由，按 tier 分两组网格，未解锁灰度、SECRET 未解锁显示「神秘徽章 / ?」）、`Home.tsx`「最近解锁」条 + 页脚入口、`components/BadgeUnlockToast.tsx`（提交后右下角轻量浮动提示，5.2s 自动消失，解锁的 SECRET 正常显示）
+- **验收脚本**：`backend/_p92_smoke.py`、`backend/_p92_e2e_check.py`（7 项，均快照 + 还原）
+
+### Changed
+- `POST /api/lessons/{id}/quiz/submit` 与 `POST /api/review/{id}/submit`：`record_activity` 之后、`db.commit()` 之前调用 `increment_user_stats` → `evaluate_badges`（同事务；`autoflush=False` 靠两者内部 `flush()` 让刚写状态对引擎可见）；响应新增 `new_badges`
+- `GET /api/badges`（新增）：20 枚目录 + 解锁态，SECRET 未解锁时 `name/description/image` 置空
+- `GET /api/dashboard`：新增 `recent_badges`（最近 6 枚，解锁的 SECRET 正常显示）
+- `QuizPage` 提交带 `started_at`（`new Date().toISOString()`）供 BLITZ；`types.ts` 补 `Badge` / `new_badges` / `recent_badges` / `started_at`
+
+### Fixed
+- **BLITZ 时区 bug**：`_parse_started_at` 曾把客户端 UTC 时间戳转成本地时区，与 `datetime.utcnow()`（UTC）对比导致 UTC+8 机器上时长变负、BLITZ 永不触发 → 改为统一转 UTC 朴素时间戳
+- `badge_service.evaluate_badges` 误把 `select(UserBadge.badge_id)` 的标量结果当实体取 `.badge_id` → 改为 `set(scalars(...))`
+- `is_late_night` 仅在 `event_kind` 非空时判定，背填/只读路径不会因运行时间误判深夜徽章
+
+### 决策与修正（用户拍板）
+- Bug 猎手阈值 50→**20**（全库仅 43 道 debug 题，且前 4 Level 已掌握，50 永远够不到）
+- 背填 `user_stats` 精度：quiz_submitted=SUM(attempts)=68、reviews_passed=SUM(review_count)=42 为**准确值**；quiz_correct=SUM(correct_count)=160 为**下界**（lesson_mastery 只存每课最近一次）；debug_correct 无历史起点 0
+- SECRET 仅单字段 `is_secret`（去掉多余的隐藏开关）；计数器语义跟随既有 submit/attempt；背填按字段区分精度
+
+### Architecture
+- **不新增任何学习状态列**：20 枚徽章全由既有表 + `user_stats` 派生
+- **幂等**：`user_badges` 唯一约束 + `ON CONFLICT DO NOTHING`；背填 `user_stats` 用 INSERT OR IGNORE 仅写基线一次
+- **零新增依赖**：前端纯 CSS 动画，不引动画库；二进制 webp 由 Vite 静态托管
+- **背填恰为 6 枚**：LEVEL_0–3（已全掌握）+ QUIZ_100（160≥100）+ WANMEI（34 课全部 100%）；REVIEW_50(42<50) / STREAK_7(最长 3) / QUIZ_500(160<500) / 事件型（无真实事件）均不解锁，符合预期
+
+### RedLines（未抢跑）
+- 不做 XP / 金币 / 排行榜 / 商店 / 社交分享 / 每日目标 / 学习日历热力图 / 多用户鉴权 / 后台定时任务 / 前端倒计时
+
+### 验收
+- `_p92_e2e_check.py` 7 项全绿：目录形状 20=8+12、SECRET 置空、背填恰 6 枚、背填幂等、BLITZ 快交触发/慢交抑制、BUG_HUNTER/LATE_NIGHT 保持锁定
+- 真实 `uvicorn --port 9000` 启动：`/api/health` ok、`/api/badges` 20 枚（6 解锁）、`/api/dashboard` 含 `recent_badges=6`，路由全部挂载正常
+- `tsc -b` 与 `vite build` 零错误
+
+---
+
 ## 模板（后续阶段直接复制此结构，改日期与内容）
 
 ## YYYY-MM-DD — <阶段标题>

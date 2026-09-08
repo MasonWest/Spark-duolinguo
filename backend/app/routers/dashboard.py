@@ -17,8 +17,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
-from ..models import CourseLevel, Lesson
+from ..models import DEFAULT_USER_ID, BadgeDefinition, CourseLevel, Lesson, UserBadge
 from ..schemas import (
+    BadgeOut,
     CurrentLevelOut,
     DashboardOut,
     ProgressOut,
@@ -26,11 +27,13 @@ from ..schemas import (
     TodayLessonOut,
 )
 from ..services import (
+    compute_streak,
     due_reviews,
     lesson_status_map,
     ordered_lessons,
     recommend_today_lesson,
 )
+from .badges import build_badge_out
 
 router = APIRouter(prefix="/api")
 
@@ -107,10 +110,32 @@ def get_dashboard(db: Session = Depends(get_db)):
             )
         )
 
+    # Phase 9.1: streak is derived on read from `study_days` -- nothing is
+    # stored, so it can never drift out of sync with the activity log.
+    streak = compute_streak(db, now=now)
+
+    # Phase 9.2: a few most-recently-unlocked badges for the dashboard strip.
+    # Secret badges that are unlocked are shown normally (build_badge_out only
+    # blanks secrets that are still locked).
+    recent_rows = db.execute(
+        select(BadgeDefinition, UserBadge.unlocked_at)
+        .join(UserBadge, UserBadge.badge_id == BadgeDefinition.id)
+        .where(UserBadge.user_id == DEFAULT_USER_ID)
+        .order_by(UserBadge.unlocked_at.desc())
+        .limit(6)
+    ).all()
+    recent_ids = {b.id for b, _ in recent_rows}
+    recent_at = {b.id: (ua.isoformat() if ua is not None else None) for b, ua in recent_rows}
+    recent_badges = [build_badge_out(b, recent_ids, recent_at) for b, _ in recent_rows]
+
     return DashboardOut(
         progress=ProgressOut(completed=completed, total=total, percentage=percentage),
         current_level=current_level,
         today_lesson=today_out,
-        streak_days=0,  # Phase 6
+        streak_days=streak.current,
+        studied_today=streak.studied_today,
+        longest_streak=streak.longest,
+        last_study_date=streak.last_study_date,
         reviews_due=reviews_due,
+        recent_badges=recent_badges,
     )

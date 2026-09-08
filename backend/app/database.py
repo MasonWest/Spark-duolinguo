@@ -59,6 +59,17 @@ def init_db() -> None:
     _seed_course_data()
     _seed_quizzes()
 
+    # Phase 9.2: badge catalog must exist before the historical unlock, and
+    # the LEVEL_* definitions are derived from course_levels -- so this runs
+    # AFTER course/quiz seeding. backfill_badges then unlocks anything
+    # derivable from the user's existing lesson_mastery rows.
+    from .seed_badges import seed_badges
+    from .migrate import backfill_badges
+
+    with SessionLocal() as db:
+        seed_badges(db)
+    backfill_badges()
+
 
 def _seed_course_data() -> None:
     """Insert seed levels/lessons only when course_levels is empty.

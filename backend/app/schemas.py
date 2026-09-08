@@ -84,13 +84,42 @@ class ReviewDueItem(BaseModel):
     overdue_days: int = 0
 
 
+# ---- Phase 9.2: Badge 成就系统 ----
+
+class BadgeOut(BaseModel):
+    """One Badge as seen by the client.
+
+    `unlocked` is the live unlock state for the single local user. Secret
+    badges (`is_secret=True`) that are NOT yet unlocked expose nothing but
+    `code` + `is_secret` -- name / description / image are blanked by the
+    router so the catalog can't leak what a hidden badge is.
+    """
+
+    code: str
+    name: str = ""
+    description: str = ""
+    image: str = ""
+    tier: str = ""  # "journey" | "special"
+    sort_order: int = 0
+    is_secret: bool = False
+    unlocked: bool = False
+    unlocked_at: Optional[str] = None
+
+
 class DashboardOut(BaseModel):
     progress: ProgressOut
     current_level: Optional[CurrentLevelOut] = None
     today_lesson: Optional[TodayLessonOut] = None
-    streak_days: int = 0  # Phase 6
+    streak_days: int = 0  # Phase 9.1: derived from study_days, never persisted
+    # Phase 9.1: streak detail. All four fields are computed on read; there is
+    # no streak column on any table.
+    studied_today: bool = False
+    longest_streak: int = 0
+    last_study_date: Optional[str] = None
     # Phase 6b: lessons whose scheduled review date has arrived.
     reviews_due: List["ReviewDueItem"] = []
+    # Phase 9.2: a few most-recently-unlocked badges for the dashboard strip.
+    recent_badges: List[BadgeOut] = []
 
 
 # ---- Phase 4: Quiz + Lesson Mastery ----
@@ -119,6 +148,10 @@ class QuizAnswerIn(BaseModel):
 
 class QuizSubmitIn(BaseModel):
     answers: List[QuizAnswerIn] = []
+    # Phase 9.2: client timestamp (ISO 8601) when the quiz screen opened, used
+    # to evaluate the BLITZ (闪电战) badge. Defensive server-side parse; ignored
+    # if malformed / in the future / >3h old.
+    started_at: Optional[str] = None
 
 
 class QuizResultItem(BaseModel):
@@ -141,6 +174,8 @@ class QuizResultOut(BaseModel):
     results: List[QuizResultItem] = []
     unlocked_next: bool
     next_lesson_id: Optional[int] = None
+    # Phase 9.2: badges newly unlocked by THIS submission (for the toast).
+    new_badges: List[BadgeOut] = []
 
 
 # ---- Phase 3: Lesson detail / learning page ----
@@ -233,3 +268,5 @@ class ReviewResultOut(BaseModel):
     next_review_at: Optional[str] = None
     next_interval_days: int = 0
     results: List[QuizResultItem] = []
+    # Phase 9.2: badges newly unlocked by THIS review round (for the toast).
+    new_badges: List[BadgeOut] = []

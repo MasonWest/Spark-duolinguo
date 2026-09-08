@@ -1,0 +1,92 @@
+/* Phase 9.1 — Streak badge (three states: active / at-risk / broken) */
+
+.streak-badge {
+  --streak-bg: #f3f4f6;
+  --streak-border: var(--sq-border);
+  --streak-fg: var(--sq-text-subtle);
+
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: var(--sq-space-2) var(--sq-space-3);
+  background: var(--streak-bg);
+  border: 1px solid var(--streak-border);
+  border-radius: var(--sq-radius-badge);
+  color: var(--streak-fg);
+  line-height: 1;
+}
+
+.streak-line {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sq-space-1);
+}
+
+.streak-flame {
+  font-size: 15px;
+}
+
+.streak-count {
+  font-size: var(--sq-text-h3);
+  font-weight: 800;
+  color: var(--streak-fg);
+}
+
+.streak-label {
+  font-size: 10px;
+  color: var(--streak-fg);
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+/* --- Active: studied today, streak alive and growing --- */
+.streak-badge.is-active {
+  --streak-bg: #fff7ed;
+  --streak-border: #fdba74;
+  --streak-fg: #ea580c;
+}
+
+/* --- At risk: today not done yet, but the day is not over — streak survives --- */
+.streak-badge.is-at-risk {
+  --streak-bg: var(--sq-warning-light);
+  --streak-border: var(--sq-warning-border);
+  --streak-fg: #b45309;
+}
+
+/* --- Broken: a full day was missed --- */
+.streak-badge.is-broken {
+  --streak-bg: #f3f4f6;
+  --streak-border: var(--sq-border);
+  --streak-fg: var(--sq-text-subtle);
+}
+
+.streak-badge.is-at-risk .streak-flame {
+  filter: grayscale(0.5) opacity(0.8);
+}
+
+.streak-badge.is-broken .streak-flame {
+  filter: grayscale(1) opacity(0.5);
+}
+
+/* Breathing flame — CSS only, no animation library. */
+.streak-badge.is-active .streak-flame {
+  animation: streak-flame-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes streak-flame-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.14);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streak-badge.is-active .streak-flame {
+    animation: none;
+  }
+}
