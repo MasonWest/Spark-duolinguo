@@ -8,6 +8,7 @@ import MapPage from "./pages/MapPage";
 import QuizPage from "./pages/QuizPage";
 import ReviewPage from "./pages/ReviewPage";
 import BadgesPage from "./pages/BadgesPage";
+import WeakQuestionsPage from "./pages/WeakQuestionsPage";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -21,6 +22,8 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/review/:id" element={<ReviewPage />} />
         {/* Phase 9.2: 徽章墙 */}
         <Route path="/badges" element={<BadgesPage />} />
+        {/* Phase 10.1: 薄弱题 */}
+        <Route path="/wrong-questions" element={<WeakQuestionsPage />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>

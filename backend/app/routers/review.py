@@ -25,7 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
-from ..models import DEFAULT_USER_ID, CourseLevel, Lesson, LessonMastery, QuizQuestion
+from ..models import DEFAULT_USER_ID, CourseLevel, Lesson, LessonMastery, QuizAnswerLog, QuizQuestion
 from ..schemas import (
     BadgeOut,
     QuizQuestionOut,
@@ -280,6 +280,19 @@ def submit_review(lesson_id: int, payload: ReviewSubmitIn, db: Session = Depends
         )
         for b in new_badge_dicts
     ]
+
+    # Phase 10.1: append one QuizAnswerLog fact row per graded question (same
+    # transaction as the reschedule above). source="review". Practice is written
+    # separately and touches nothing else.
+    for r in results:
+        db.add(QuizAnswerLog(
+            lesson_id=lesson_id,
+            question_id=r.question_id,
+            source="review",
+            selected_index=r.selected_index,
+            correct_index=r.correct_index,
+            is_correct=1 if r.is_correct else 0,
+        ))
 
     db.commit()
     db.refresh(mastery)

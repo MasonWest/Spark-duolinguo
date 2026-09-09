@@ -10,7 +10,7 @@ parking_lot / study_sessions.
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import ForeignKey, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -284,3 +284,64 @@ class UserStats(Base):
     total_reviews_passed: Mapped[int] = mapped_column(default=0)
     total_reviews_submitted: Mapped[int] = mapped_column(default=0)
     total_debug_correct: Mapped[int] = mapped_column(default=0)
+
+
+# ---- Phase 10.1: 薄弱题 / Weak Questions —— 逐题作答事实层（append-only） ----
+#
+# 这是「事实层」，不是「状态层」。只记录：某时刻、某用户、对某题、选了什么、
+# 对错与否。所有「薄弱度 / 错几次 / 是否修复 / 哪些进 Review」都是读取时从本表
+# 派生，绝不在此存任何聚合或状态列。
+#
+# 为什么是 quiz_answer_log 而不是 wrong_questions：
+#   一旦叫 wrong_questions，后续极易往里塞 status / mastery / wrong_count /
+#   review_count / next_review_at / is_fixed，最终造出第二套 Mastery。本表刻意
+#   只存事件，把一切派生交给查询（与项目「事实存库、状态派生」原则一致）。
+#
+# source 只是事件来源标签（'quiz' | 'review' | 'practice'），不是三套独立错题
+# 体系——Quiz/Review/Practice 对同一题的历史记录统一聚合。
+
+
+class QuizAnswerLog(Base):
+    """One append-only fact row per (user, question, attempt).
+
+    Only facts, never state:
+        at <submitted_at>, <user_id> answered <question_id> with
+        <selected_index>, and the result was is_correct (against the
+        <correct_index> snapshot taken at submit time).
+
+    `correct_index` is an EVENT SNAPSHOT, not derived state: if the question's
+    true answer is later revised in the seed, this row still records what the
+    system judged at the time. That is exactly what an event log should do.
+
+    `source` is a label only. Practice rows are written by a standalone commit
+    that touches NOTHING else (no mastery / SRS / streak / badge / stats) — a
+    re-practice is just one more fact.
+    """
+
+    __tablename__ = "quiz_answer_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Sentinel column, same as study_days / user_badges. Not a state field.
+    user_id: Mapped[str] = mapped_column(default=DEFAULT_USER_ID)
+    lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id"))
+    question_id: Mapped[int] = mapped_column(ForeignKey("quizzes.id"))
+    # 'quiz' | 'review' | 'practice' — label only, not state.
+    source: Mapped[str] = mapped_column(default="quiz")
+    selected_index: Mapped[int]  # what the user actually picked
+    # EVENT SNAPSHOT: the correct option index at submit time.
+    correct_index: Mapped[int]
+    is_correct: Mapped[int] = mapped_column(default=0)  # 0/1
+    submitted_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    # The fact table's dominant access path is: one user -> one question ->
+    # all historical attempts -> ordered by time. This composite index also
+    # covers the (user_id) and (user_id, question_id) prefixes, replacing three
+    # single-column indexes. A standalone lesson_id index is not worth it.
+    __table_args__ = (
+        Index(
+            "ix_quiz_answer_log_user_question_time",
+            "user_id",
+            "question_id",
+            "submitted_at",
+        ),
+    )

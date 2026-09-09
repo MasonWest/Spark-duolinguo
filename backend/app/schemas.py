@@ -270,3 +270,51 @@ class ReviewResultOut(BaseModel):
     results: List[QuizResultItem] = []
     # Phase 9.2: badges newly unlocked by THIS review round (for the toast).
     new_badges: List[BadgeOut] = []
+
+
+# ---- Phase 10.1: 薄弱题 / Weak Questions（事实层派生，非状态） ----
+
+
+class WeakQuestionOut(BaseModel):
+    """One weak question in the derived list.
+
+    `wrong_count` / `last_wrong_at` / `last_attempt_correct` are ALL computed on
+    read from `quiz_answer_log` (across every source: quiz + review + practice).
+    This schema carries NO persisted state — it is a query result.
+    """
+
+    question_id: int
+    lesson_id: int
+    lesson_title: str = ""
+    level_order: int  # course_levels.order_index -> displayed as "L{n}"
+    dimension: Optional[str] = None
+    prompt: str
+    wrong_count: int
+    last_wrong_at: Optional[str] = None
+    last_attempt_at: Optional[str] = None
+    # Computed label only: did the MOST RECENT attempt (any source) get it right?
+    # True does NOT remove the question from the list. Weak = "ever wrong", not
+    # "currently not mastered".
+    last_attempt_correct: bool = False
+
+
+class WeakQuestionDetailOut(BaseModel):
+    """A single weak question's prompt for re-practice (NO answer leaked)."""
+
+    id: int
+    type: str
+    prompt: str
+    options: List[str]
+    dimension: Optional[str] = None
+
+
+class WeakQuestionPracticeIn(BaseModel):
+    selected_index: int
+
+
+class WeakQuestionPracticeOut(BaseModel):
+    """Result of a practice attempt. Server grades against quizzes.correct_index."""
+
+    is_correct: bool
+    correct_index: int
+    explanation: str = ""

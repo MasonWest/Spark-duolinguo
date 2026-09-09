@@ -253,3 +253,33 @@ export interface ReviewResult {
   // Phase 9.2: badges newly unlocked by THIS review round (for the toast).
   new_badges?: Badge[];
 }
+
+// ---- Phase 10.1: 薄弱题 / Weak Questions（事实层 quiz_answer_log 派生） ----
+
+export interface WeakQuestion {
+  question_id: number;
+  lesson_id: number;
+  lesson_title: string;
+  level_order: number; // course_levels.order_index -> 显示为 "L{n}"
+  dimension: string | null;
+  prompt: string;
+  wrong_count: number;
+  last_wrong_at: string | null;
+  last_attempt_at: string | null;
+  // 计算标签：最近一次尝试（跨来源）是否做对。true 不代表移出列表。
+  last_attempt_correct: boolean;
+}
+
+export interface WeakQuestionDetail {
+  id: number;
+  type: QuizType;
+  prompt: string;
+  options: string[];
+  dimension: string | null;
+}
+
+export interface WeakQuestionPracticeResult {
+  is_correct: boolean;
+  correct_index: number;
+  explanation: string;
+}

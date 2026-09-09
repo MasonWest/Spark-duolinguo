@@ -23,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
-from ..models import DEFAULT_USER_ID, Lesson, LessonMastery, QuizQuestion
+from ..models import DEFAULT_USER_ID, Lesson, LessonMastery, QuizAnswerLog, QuizQuestion
 from ..schemas import (
     BadgeOut,
     QuizFetchOut,
@@ -293,6 +293,21 @@ def submit_quiz(lesson_id: int, payload: QuizSubmitIn, db: Session = Depends(get
         )
         for b in new_badge_dicts
     ]
+
+    # Phase 10.1: append one QuizAnswerLog fact row per graded question. This is
+    # the missing "fact layer" — every attempt's per-question outcome is now
+    # persisted (previously discarded after the HTTP response). Same transaction
+    # as the mastery write above. Practice is written separately and does NOT
+    # touch mastery / streak / badge (see routers/weak_questions.py).
+    for r in results:
+        db.add(QuizAnswerLog(
+            lesson_id=lesson_id,
+            question_id=r.question_id,
+            source="quiz",
+            selected_index=r.selected_index,
+            correct_index=r.correct_index,
+            is_correct=1 if r.is_correct else 0,
+        ))
 
     db.commit()
     db.refresh(existing)

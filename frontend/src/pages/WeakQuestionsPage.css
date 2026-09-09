@@ -1,0 +1,238 @@
+/* Phase 10.1: 薄弱题页面（最小版，对齐 BadgesPage 视觉） */
+
+.weak-page {
+  max-width: 760px;
+}
+
+.weak-header {
+  margin-bottom: 18px;
+}
+
+.weak-title {
+  font-size: 28px;
+  margin: 6px 0 4px;
+}
+
+.weak-sub {
+  color: #6b7280;
+  margin: 0;
+  font-size: 14px;
+}
+
+.weak-empty {
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+/* 列表 */
+.weak-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.weak-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.weak-card-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.weak-prompt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.weak-x {
+  flex-shrink: 0;
+  color: #dc2626;
+}
+
+.weak-prompt-text {
+  /* 题干最多两行 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.weak-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: #6b7280;
+}
+
+.weak-dim {
+  background: #f3f4f6;
+  border-radius: 6px;
+  padding: 1px 8px;
+}
+
+.weak-recovered {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.weak-practice-btn {
+  flex-shrink: 0;
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.weak-practice-btn:hover {
+  background: #1d4ed8;
+}
+
+/* 重新练习弹层 */
+.practice-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+}
+
+.practice-panel {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 86vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.practice-prompt {
+  font-size: 17px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.practice-options {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.practice-option {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14.5px;
+  color: #1f2937;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.practice-option:hover:not(:disabled) {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.practice-option.correct {
+  border-color: #16a34a;
+  background: #dcfce7;
+  color: #14532d;
+  font-weight: 600;
+}
+
+.practice-option.wrong {
+  border-color: #dc2626;
+  background: #fee2e2;
+  color: #7f1d1d;
+  font-weight: 600;
+}
+
+.practice-option:disabled {
+  cursor: default;
+}
+
+.practice-verdict {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.practice-verdict.ok {
+  color: #16a34a;
+}
+
+.practice-verdict.bad {
+  color: #dc2626;
+}
+
+.practice-explanation {
+  background: #f8fafc;
+  border-left: 3px solid #94a3b8;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #334155;
+  margin-bottom: 16px;
+}
+
+.practice-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.practice-retry,
+.practice-close {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.practice-retry {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.practice-retry:hover {
+  background: #1d4ed8;
+}
+
+.footer-weak-link {
+  text-decoration: none;
+  color: #374151;
+  font-size: 14px;
+}

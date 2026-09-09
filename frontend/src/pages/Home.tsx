@@ -211,6 +211,9 @@ export default function Home() {
         <Link to="/badges" className="footer-badge-link">
           <span aria-hidden={true}>🏅</span> 最近解锁 →
         </Link>
+        <Link to="/wrong-questions" className="footer-weak-link">
+          <span aria-hidden={true}>🧠</span> 薄弱题 →
+        </Link>
       </footer>
     </div>
   );
