@@ -58,3 +58,5 @@ Thumbs.db
 # ===== Local verification scratch (needs dev-only deps, not product) =====
 backend/_quiz_dump.json
 backend/_p6b_e2e_check.py
+# 生成物：由 backend/preview_level4_narrative.py 重新生成
+backend/_l4_narrative_preview.html

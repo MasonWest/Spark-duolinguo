@@ -430,6 +430,103 @@ Phase 9.1 Streak 之后，游戏化第二阶段落地 Badge。产品意义：**C
 
 ---
 
+## 2026-09-08 — Phase 10.1：🧠 薄弱题 / Weak Questions（事实层 + 单题重练）
+
+Phase 9.2 Badge 之后，把核心学习闭环补完整：**学习 → 测试 → 犯错 → 记录 → 再做 → 修复 → 再验证**。此前 Quiz/Review 每次提交的逐题结果（含解析）只回传前端即丢弃，`weak_points` 仅存每课"最近一次"错题 id（覆盖写）；"马马虎虎看一眼解析就过去"的题从此无据可查。本阶段以**专项架构审计**（2026-09-08）定性为 Level B（基础数据够、缺一个很小的事实记录）后实施。设计稿 `Spark_Quest_Phase10_薄弱题_执行计划_设计.md` 经用户验收通过（含 4 点修订）。
+
+### Added
+- **事实层 `quiz_answer_log`（append-only）**：`user_id(哨兵) / lesson_id / question_id / source('quiz'|'review'|'practice') / selected_index / correct_index(事件快照) / is_correct / submitted_at`；复合索引 `ix_quiz_answer_log_user_question_time(user_id, question_id, submitted_at)` 替代 3 个单列索引（事实表典型访问路径：一个用户 → 某道题 → 全部历史 → 按时间排序）；**零状态列**（无 wrong_count/status/mastery/is_fixed）
+- **写入点**：Quiz submit（source='quiz'）与 Review submit（source='review'）在 `db.commit()` 前同事务逐题追加；新端点 Practice（source='practice'）独立事务追加
+- **`routers/weak_questions.py`（3 端点）**：`GET /api/weak-questions`（跨来源派生：wrong_count=COUNT / last_wrong_at=MAX / last_attempt_correct=最近一行，过滤 wrong_count≥1，排序 wrong_count DESC + last_wrong_at DESC）、`GET /api/weak-questions/{id}`（题面**不含 correct_index**）、`POST /api/weak-questions/{id}/practice`（服务端判分 + 返回对错/解析）
+- **前端 `/wrong-questions`（最小版）**：`WeakQuestionsPage.tsx`（总数 + 卡片列表：题干/维度·L{n}/错误 N 次·相对时间/「最近一次已做对」标签；「重新练习」弹单题面板 → 独立作答 → 对错高亮 + 解析 → 可重试，**无强制勾选**）+ `Home.tsx` 页脚「🧠 薄弱题 →」入口 + 路由/类型
+- **验收脚本**：`backend/_p101_smoke.py`（23 项，快照 → 测 → 还原）
+
+### Changed
+- `lesson_mastery.weak_points` 语义保留不动（继续作为 Review 维度提示）；Review 调度、5/5 门槛、Quiz 判分全部不变
+- `schemas.py` 新增 `WeakQuestionOut / WeakQuestionDetailOut / WeakQuestionPracticeIn / WeakQuestionPracticeOut`
+
+### 决策与修正（用户验收拍板，4 点）
+- **复合索引替代 3 单列索引**：结构设计问题，不是性能优化；`lesson_id` 不单建索引
+- **`correct_index` 保留**：是"作答事件当时正确答案的快照"，非状态非聚合——题库日后修订，历史仍准确回答"当时如何判定"
+- **Practice 绝不触碰 mastery/SRS/streak/badge stats**（来源 × 副作用矩阵写死）：一次重练就是一条新事实，不能因"答对了"偷偷影响学习状态
+- **"薄弱"定义写死**：= "历史上至少出现过一次错误作答"，不代表当前未掌握；`wrong_count=2` 且 `last_attempt_correct=true` 仍在列表是设计语义
+- **跨来源统一聚合**：Quiz ❌ + Review ❌ + Practice ✅ → `{wrong_count:2, last_attempt_correct:true}`，`source` 只是事件标签
+
+### Architecture
+- **不叫 `wrong_questions`**：命名会诱导塞入 status/mastery/wrong_count/is_fixed，最终造出第二套 Mastery；"事实存库、状态派生"原则的正面落地
+- **不做历史 backfill**：Phase 10.1 前的逐题尝试已丢弃不可恢复，强行回填=制造伪历史；日志自实施日起累积，越用越有价值
+- **不强制阅读解析**：真正的"懂了没"靠之后重新独立遇到并作答，不是勾选"我看过了"
+
+### RedLines（未抢跑）
+- 无错题状态表 / 无错题 Mastery / 无"已修复"状态机 / 无强制阅读解析 / 不重建 Review / 不引入新 SRS / 不一次做全 UX（筛选/归档/薄弱度升级留 Phase 10.2+）
+
+### 验收
+- `_p101_smoke.py` 23/23 全绿：quiz 错→入列(wrong_count=1)、practice 错→2、review 错→3（跨来源合并）、practice 对→count 不变+last_attempt_correct=true、practice 对 study_days(行数+行内容)/user_badges/user_stats/lesson_mastery 零污染、log 表无状态列
+- 真实 `uvicorn --port 9000`：health ok、新表由 init_db 自动创建、干净库 `/api/weak-questions` 返回 `[]`、不存在题 404
+- `tsc -b` 与 `vite build` 零错误；测后 DB 从快照还原（quiz_answer_log=0 行就绪，用户进度零触碰）
+
+---
+
+## 2026-09-09 — Level 4（执行计划）全面技术修复
+
+起因：学员学到 L4-6「WholeStageCodegen 与 Tungsten」时发现 `*(N)` 概念错误。据此先出《Spark Quest Level 4 技术审查报告（2026-09-09）》（四维：技术事实准确性 / 示例真实性 / 概念边界 / 版本敏感性），结论 **P0 1 项、P1 6 项、P2 6 项、P3 5 项**，随后按报告逐项落地。审查对象：Level 4 全部 9 课（lesson id 31–39）+ 90 道 quiz，数据以 `backend/spark_quest.db` 真库为准。
+
+### Fixed — P0：`*(N)` 语义完全说反
+- 课文与题库原写「`*(N)` = WholeStageCodegen 融合的算子数」，**实为 codegen stage 编号（codegenStageId）**
+- 证据 SPARK-23032（Fix 2.3.0）官方输出：`*(1)` 下有 2 个算子、`*(3)` 下只有 1 个；Exchange 之后编号继续 `(4)(5)(6)`、**不归零**
+- 正确读法：数「带相同 N 的行数」= 该 stage 的算子数；数「不同 N 的个数」= 这条查询有几个 codegen stage
+- 涉及 L4-4 / L4-6 / L4-9 课文 + **q379 / q397 / q403 / q404 / q433 —— 5 道题原本在考错误答案**
+
+### Fixed — P1（6 项）
+- `explain(mode="formatted")` 版本：2.3+ → **3.0+**（SPARK-27395；勿与 SPARK-23032 混为一谈）
+- **join 非必然宽依赖**：shuffle-based join（SortMergeJoin / ShuffleHashJoin）才需要 Exchange；**Broadcast Join 不 Shuffle、不切 Stage**（与 Level 6 教学对齐，消除跨 Level 自相矛盾）
+- **groupBy 非必然 Shuffle**：上游已按该 key 分区时 `EnsureRequirements` 判定满足，不插 Exchange
+- L4-8 `repartition(200)` 示例漏算一次 Shuffle：repartition 自身即 Exchange，实为 **2 个 Shuffle 边界 / 3 个 Stage**
+- **Action ≠ 恰好一个 Job**：`show()` 底层是 `take(21)` 逐轮扩大，可能触发多个 Job
+- **Job 内 Stage 非必然串行**：有依赖的等父 Stage，无依赖的可并行提交
+
+### Fixed — P2（6 项）
+- 3 处 `df.select('city').filter(df.amount>0)` 会抛 AnalysisException → 改为 `select('city','amount')` 或 filter 前置
+- **UDF 下推失效的因果讲反了**：不是「优化器看不懂 UDF」，而是含 UDF 的过滤条件依赖 UDF 输出值、顺序上无法前移；且**列裁剪照常发生**，只是 UDF 依赖的列必须保留
+- 等价改写补非确定性表达式边界：`rand()` / `current_timestamp()` / `monotonically_increasing_id()`
+- 宽依赖容错：「重算整个上游重排」是 RDD 论文（2012）的叙述 → 改为「Shuffle 输出丢失时可能需重新执行相关上游 map task」
+- 「Stage 数 = Shuffle 数 + 1」降格为**单条线性链**的快速估算，多分支 DAG 不套用
+- 列裁剪：Parquet/ORC 可跳过整列数据；**csv 等行式文本通常仍需读取并解析整行**
+
+### Added — P3（版本敏感性）
+- L4-3 补 Spark 3.0+ 五档 explain 模式（simple / extended / codegen / cost / formatted），并说明 `mode="codegen"` 可直接看生成的 Java 代码
+- **AQE 版本提示**：Spark 3.2+ 默认开启，`explain()` 只给初始计划（常显示 `AdaptiveSparkPlan isFinalPlan=false`、整棵树看不到 `*(N)`）；教学演示需 `spark.conf.set("spark.sql.adaptive.enabled","false")`，最终计划结合 Spark UI 看
+- FileScan parquet 在 Spark 3.x 常不带 `*`（向量化读取后 codegen 从 ColumnarToRow 开始），不代表没优化
+- 版本注：WholeStageCodegen 2.0 引入 / `*(N)` 编号 2.3 引入 / formatted 3.0 引入 / AQE 3.2 默认开启
+- **Tungsten 重新定义**：紧凑二进制内存表示 + cache-aware 算法与数据结构 + 代码生成；**WholeStageCodegen 属于其中「代码生成」一支，是包含关系而非并列两层**
+
+### Changed
+- 措辞统一：「生成一个手写 Java 方法」→「生成 Java 代码并编译执行」；「回退到解释执行」→「回退为逐算子 iterator（Volcano 式）执行，Spark 没有解释器」
+- **答案位置重排**：L4 90 题 correct_index 原为 A38/B45/C6/D1（学员凭位置即可猜中约 70%）→ **A22/B24/C22/D22**。只动**无 `quiz_answer_log` 作答记录**的题（38 题）；15 道已作答题 + q427（选项为 0/1/2/3 天然序列）冻结不动
+- **`lessons.objective` 补修**：该字段是独立列（前端渲染为「🎯 学完后，你应该能回答」），不在 content JSON 内，首轮修复漏扫 → 9 条中 8 条重写；`description` 同源 2 处一并修
+- **三段引导文案重写**（review / problem / preview）：原每段仅 60~110 字、读起来像目录摘要 → 对齐 Level 0/1 调性重写为 review 160~313 字 / problem 98~170 字 / preview 193~249 字（承接已知 → 转折悬念 → 固定「下一课：XXX」）
+
+### Architecture
+- 不改表结构、不新增持久化状态；全部改动落在现有 lessons / quizzes 行内
+- `app/course_seed.json` / `app/quiz_seed.json` 已用真库回写（否则删库重建会把错误内容重新种回）；`seed_level4.py` 加「已过期、勿执行」警告
+- 《心智模型与比喻边界案例库》§5 Level 4 九条目 + L2/L3 四处同源口径一并更正 —— **该文档是写新课时参考的源头，也是本次 Level 4 出错的根因**
+
+### RedLines（未抢跑）
+- 不改 Level 4 课程结构与课时数；不顺手重构 UI / DB；不修改用户学习进度（`lesson_mastery` / `study_days` / `user_stats`）
+
+### 遗留技术债（用户决定暂不修）
+- **L2 / L3 课文与题库仍是旧口径**（orderBy 必 Shuffle / 聚合必 Shuffle / JOIN 必 Shuffle），与已更正的设计文档存在**已知的不一致**；当前收益低，登记为技术债
+- L4 lesson 31 因 5 道冻结题中有 4 道固定在 B，该课答案分布只能做到 A2/B4/C2/D2
+
+### 验收
+- 真库核实：Level 4 仍 9 课 / 90 题 / 每课 10 题 / 无重复题干 / 无 orphan quiz
+- 关键词扫描剩 11 处命中，逐条人工确认均为合法文本（纠错句、否定句、以及干扰项里故意保留的旧说法）
+- 答案重排正确性：与重排前备份逐题比对 —— 正确答案**文本** 0 改动、选项集合 0 异常、已作答题位置 0 移动
+- 脚本（均支持 dry-run 与自动备份）：`backend/fix_level4_20260909.py`、`fix_level4_20260909_round2.py`、`fix_level4_objective_20260909.py`、`rebalance_l4_answers_20260909.py`、`rewrite_level4_narrative_20260909.py`、`sync_seed_from_db_20260909.py`、`preview_level4_narrative.py`
+- 文档：`spark_quest/docs/Spark_Quest_Level4_技术审查报告_20260909.md`、`Spark_Quest_Level4_修复报告_20260909.md`（含附录 A 重排 / B objective 补修 / C 文案重写 / D 比喻库更正）
+
+---
+
 ## 模板（后续阶段直接复制此结构，改日期与内容）
 
 ## YYYY-MM-DD — <阶段标题>

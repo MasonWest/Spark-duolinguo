@@ -4,6 +4,15 @@
 不修改 Level 0/1/2/3 与已有的 lesson_mastery 进度数据。
 
 运行：cd backend && python seed_level4.py
+
+⚠️ 已过期（2026-09-09）：Level 4 的课文与题库已按《Spark Quest Level 4 全面技术
+审查报告（2026-09-09）》修订——包括 `*(N)` 的真实语义（codegen stage 编号，不是融合
+算子数）、join / groupBy 的 Shuffle 边界、AQE 版本提示、Tungsten 定义等。
+正确内容现在以 spark_quest.db（真库）以及 app/course_seed.json / app/quiz_seed.json
+为准，那两个文件已同步（见 sync_seed_from_db_20260909.py）。
+
+**不要再执行本脚本**：下面的 LEVEL4 常量是修订前的旧内容，执行会把修复结果覆盖回去。
+如需重建 Level 4，请删库后让 init_db 从上述两个 json 重新播种。
 """
 import sqlite3, json, os
 

@@ -1,6 +1,6 @@
 # Spark Quest — 当前项目状态
 
-> 最后更新：2026-09-07（v1.1 Product Experience Polish — Course Map 重做已验收；与 `CHANGELOG.md` 同步）
+> 最后更新：2026-09-09（Level 4 全面技术修复已验收并推送；与 `CHANGELOG.md` 同步）
 > 代码目录：`E:\MMMason\Spark_dlg\spark-quest-app\`
 > 代码仓库：`https://github.com/MasonWest/Spark-duolinguo`（分支 `main`）
 > 文档目录（通常只读）：`E:\MMMason\Spark_dlg\spark_quest\`
@@ -20,13 +20,14 @@
 | 7 | Parking Lot 防止思绪发散 | 🔒 规划中 |
 | 8 | 完整 Spark 课程（Level 2/3/4/5/6/7 **已全部落地**：DataFrame 核心 / Spark SQL / 执行计划 / 分区与 Shuffle / JOIN 深类型与 Broadcast / 性能调优）——课程主线完成 | 🟢 已完成（待验收） |
 | 9 | 游戏化 UI / Streak / Badge | 🟢 **9.1 Streak 已完成并验收**；🟡 **9.2 Badge 成就已完成（待验收）** |
-| 10 | AI Tutor | 🔒 规划中 |
+| 10 | ~~AI Tutor~~ → **10.1 薄弱题 / Weak Questions**（`quiz_answer_log` 事实层 + 派生薄弱题列表 + 单题重练） | 🟡 **10.1 已完成（待验收）**；10.2+ / AI Tutor 规划中 |
 | Notes | Lesson 学习笔记（lesson_notes 表 + 笔记 API + 前端接入） | 🟢 已完成（V1.0 基线） |
+| **技术修复** | **Level 4（执行计划）全面技术修复（2026-09-09）**：P0 `*(N)` 语义 + P1×6 / P2×6 / P3×5；9 课课文 + 27 道题 + objective + 答案位置重排 + 三段文案重写 + 比喻库口径更正 | 🟢 **已完成并验收并推送**（遗留 L2/L3 旧口径已登记为技术债，暂不修） |
 | **v1.1** | **Course Map 重做（区域化垂直旅程 / 三档时间叙事 / 5 态节点 / 列表兜底）** | **🟢 已完成并验收** |
 
-**当前进度：Phase 9.1 Streak（🔥 连续学习）已完成并验收；Phase 9.2 Badge 成就系统已实现完毕（20 枚徽章 + 读时解锁引擎 + 背填 + 前端徽章墙/解锁 toast），等待验收。**
+**当前进度：Phase 9.1 Streak 已完成并验收；Phase 9.2 Badge 已实现完毕（待验收）；Phase 10.1 薄弱题 / Weak Questions 已实现完毕（`quiz_answer_log` 事实层 + 跨来源派生薄弱题 + `/wrong-questions` 重练页，待验收）。**
 
-**下一个可做方向**：Phase 7 Parking Lot 防发散 / Phase 10 AI Tutor / Level 8「真实 ETL 毕业项目」（见 CHANGELOG 2026-08-29 结论：不再线性扩 Spark 内核，不引入 Flink）。
+**下一个可做方向**：Phase 7 Parking Lot 防发散 / Phase 10.2（薄弱度启发式升级：连续做对才移出列表）/ Level 8「真实 ETL 毕业项目」（见 CHANGELOG 2026-08-29 结论：不再线性扩 Spark 内核，不引入 Flink）。
 
 ## 运行端口（已统一）
 
@@ -213,7 +214,7 @@ study_days (id, user_id, study_date, activity_count, lessons_done,
 
 title / objective / estimated_minutes 仍为独立列；课程文本**不硬编码在 React 组件**。
 
-当前数据量：`course_levels = 8`，`lessons = 66`，`quizzes = 660`，`lesson_mastery = 34`（用户真实进度，改代码时别碰），`study_days = 9`（Phase 9.1 由 mastery 时间戳回填，属下界估计）；Phase 9.2 新增 `badge_definitions = 20`（8 旅程 + 12 特别，种子幂等 upsert）、`user_badges = 6`（背填解锁：LEVEL_0–3 / QUIZ_100 / WANMEI，详见下方实现记录）、`user_stats = 1`（背填基线：quiz_correct=160 / quiz_submitted=68 / reviews_passed=42，均为下界估计）；全部 lesson.content 已回填（Level 2 新增 10 课、Level 3 新增 9 课、Level 4 新增 9 课、Level 5 新增 9 课、Level 6 新增 9 课、Level 7 新增 9 课）。
+当前数据量：`course_levels = 8`，`lessons = 66`，`quizzes = 660`，`lesson_mastery = 34`（用户真实进度，改代码时别碰），`study_days = 10`（Phase 9.1 由 mastery 时间戳回填，属下界估计）；Phase 9.2 新增 `badge_definitions = 20`（8 旅程 + 12 特别，种子幂等 upsert）、`user_badges = 6`（背填解锁：LEVEL_0–3 / QUIZ_100 / WANMEI，详见下方实现记录）、`user_stats = 1`（背填基线：quiz_correct=160 / quiz_submitted=68 / reviews_passed=42，均为下界估计）；Phase 10.1 新增 `quiz_answer_log = 0`（逐题作答事实层，append-only，自实施日起累积——历史不可回填，这是有意接受的事实缺口）；全部 lesson.content 已回填（Level 2 新增 10 课、Level 3 新增 9 课、Level 4 新增 9 课、Level 5 新增 9 课、Level 6 新增 9 课、Level 7 新增 9 课）。
 
 > ✅ 全部 66 课均已补齐 Quiz 题库（每课 10 题，共 660 题）；Level 2/3/4/5/6/7 课程测试接口正常返回题目，且抽题已按维度多样性生效。
 
@@ -242,6 +243,9 @@ title / objective / estimated_minutes 仍为独立列；课程文本**不硬编�
 | `GET /api/review/due` | **Phase 6b**：到期的复习列表（mastered 且 `next_review_at <= now`），按课程顺序；含 `overdue_days` | 6b |
 | `GET /api/review/{lesson_id}` | **Phase 6b**：取一轮复习（该课题库抽 5 题，不泄露答案；弱维度优先 + 维度多样性）；只要 `mastered` 即可取题（含失败后立即重试）；非 mastered → 403 | 6b |
 | `POST /api/review/{lesson_id}/submit` | **Phase 6b**：批改并重新调度。**5/5 才算通过**（4/5 判失败）；通过 → stage+1 且间隔按阶梯延长；失败 → stage 不变、`next_review_at = now+3d`、写 `weak_points`；提交题数 ≠5 → 422；**不改动 status / score / attempts / last_quiz_at** | 6b |
+| `GET /api/weak-questions` | **Phase 10.1**：从 `quiz_answer_log` **跨来源（quiz+review+practice）派生**薄弱题列表：`wrong_count` / `last_wrong_at` / `last_attempt_at` / `last_attempt_correct` 全部读时计算，不持久化；过滤 `wrong_count>=1`；排序 wrong_count DESC, last_wrong_at DESC | 10.1 |
+| `GET /api/weak-questions/{question_id}` | **Phase 10.1**：单题题面（id/type/prompt/options/dimension），**不含 correct_index**（答案不泄露）；404 on missing | 10.1 |
+| `POST /api/weak-questions/{question_id}/practice` | **Phase 10.1**：单题重练。服务端按 `quizzes.correct_index` 判分，追加一行 `quiz_answer_log(source='practice')`（独立事务）；**绝不触碰** mastery / SRS / streak / badge / user_stats | 10.1 |
 
 > Phase 6b 的 `/api/dashboard` 新增 `reviews_due`（与 `/api/review/due` 同源同序）；`/api/levels` 的 lesson 新增 `due_for_review`（布尔，纯视觉提示，**不是第 5 种状态**）。
 
@@ -280,6 +284,7 @@ title / objective / estimated_minutes 仍为独立列；课程文本**不硬编�
 | `/lesson/:id/quiz` | **Phase 4 新增**：测验页——拉取题目 → 单选作答 → 提交 → 显示得分 / 每题解释 / 通过则提示解锁下一课、未通过提示复习 | 4 |
 | `/review/:id` | **Phase 6b 新增**：间隔复习页——5 题（第 n/5 题进度）→ 5/5 显示「🎉 复习通过 + 下次复习 N 天后」；<5/5 显示「还需巩固」→「重新阅读本课」（跳 `/lesson/:id?from=review`）或「直接再挑战一次」 | 6b |
 | `/lesson/:id?from=review` | **Phase 6b 新增**：学习页在复习失败入口下显示「先重读一遍，再挑战复习」提示条 + 「再次复习」按钮 | 6b |
+| `/wrong-questions` | **Phase 10.1 新增**：薄弱题页——顶部薄弱题总数 + 卡片列表（题干 / `维度 · L{n}` / 错误 N 次 · 最近一次相对时间 / 「最近一次已做对」标签）；点「重新练习」弹单题面板 → 独立作答 → 对错 + 解析（不强制勾选）→ 可重试；提交即写入 `quiz_answer_log(source='practice')` | 10.1 |
 
 ## 目录结构
 
@@ -1007,6 +1012,103 @@ Streak Freeze（断连保护卡）· 补签 · Badge 成就 · 每日目标 XP �
 ### 明确不做
 
 XP / 金币 / 排行榜 / 商店 / 社交分享 / 每日目标 / 学习日历热力图 / 多用户鉴权 / 后台定时任务 / 前端倒计时。SECRET 仅「解锁前隐藏」，解锁后无特殊处理。
+
+---
+
+## Phase 10.1 实现记录 —— 🧠 薄弱题 / Weak Questions（2026-09-08，已完成，待验收）
+
+> 学习闭环补全：学习 → 测试 → **犯错 → 记录 → 再做 → 修复 → 再验证**。产品意义：第一次错了"马马虎虎看过去"的题，之后会被系统重新摆到你面前，**独立重做**才是真正检验"懂了没有"。
+> 设计稿：`spark_quest/docs/Spark_Quest_Phase10_薄弱题_执行计划_设计.md`（2026-09-08 用户验收通过，含 4 点修订）。**未扩大范围**：无错题状态表 / 无错题 Mastery / 无"已修复"状态机 / 无强制阅读解析 / 不重建 Review / 不引入新 SRS。
+
+### 核心架构决策（验收写死）
+
+- **`quiz_answer_log` = 事实层，不是状态层**：只记"某时刻、某用户、对某题、选了什么、对错与否"。不叫 `wrong_questions`——那个名字会诱导塞入 `status/mastery/wrong_count/is_fixed`，最终造出第二套 Mastery。
+- **一切派生**：错几次=COUNT / 最近错=MAX / 是否后来做对=查其后是否有 correct / 哪些进列表=过滤+排序。全部读时计算，零持久化状态。
+- **"薄弱"定义**：= "历史上至少出现过一次错误作答"，**不代表当前未掌握**。`wrong_count=2` 且 `last_attempt_correct=true` 仍留在列表（曾暴露薄弱点、最近一次已答对）——这是设计语义，不是 Bug。
+- **跨来源统一聚合**：`source` 只是事件标签（quiz/review/practice），同一题三来源记录合并统计，不是三套体系。
+- **不做历史 backfill**：Phase 10.1 之前的逐题尝试已丢弃、不可恢复；强行回填=制造伪历史。日志从实施日起累积，越用越有价值。
+
+### 数据模型（1 张表）
+
+`quiz_answer_log`（append-only）：`id / user_id(哨兵) / lesson_id / question_id / source / selected_index / correct_index(事件快照) / is_correct / submitted_at`。
+- **复合索引** `ix_quiz_answer_log_user_question_time (user_id, question_id, submitted_at)` 替代 3 个单列索引（事实表典型访问路径：一个用户 → 某道题 → 全部历史 → 按时间排序；`lesson_id` 不单建索引）。
+- `correct_index` 是**事件快照**：题库日后修订正确答案，历史记录仍准确回答"当时系统如何判定"。
+- 无任何 `wrong_*` / `status` / `mastery` / `is_fixed` 列（冒烟断言过）。
+
+### 写入点（来源 × 副作用矩阵，逐格核对）
+
+| 来源 | 写 answer log | 改 mastery | 改 SRS | 改 streak | 改 badge stats |
+|---|---|---|---|---|---|
+| Quiz | ✅（同事务） | ✅ | ❌ | ✅ | ✅ |
+| Review | ✅（同事务） | 仅 reschedule | ✅ | ✅ | ✅ |
+| Practice | ✅（独立事务） | ❌ | ❌ | ❌ | ❌ |
+
+Practice 端点**绝不调用** `record_activity / increment_user_stats / evaluate_badges`——一次重练就是一条新事实，仅此而已。
+
+### API（3 个端点，`routers/weak_questions.py`）
+
+- `GET /api/weak-questions`：跨来源派生列表（wrong_count / last_wrong_at / last_attempt_correct 计算标签），join 出 `lesson_title / level_order / dimension / prompt`
+- `GET /api/weak-questions/{id}`：单题题面，**不含 correct_index**（答案不泄露）
+- `POST /api/weak-questions/{id}/practice`：服务端判分 + 追加 practice 事实 + 返回对错/correct_index/explanation
+
+### 前端（`/wrong-questions` 最小版）
+
+- `WeakQuestionsPage.tsx`：薄弱题总数 + 卡片列表（题干两行截断 / `维度 · L{n}` / 错误 N 次 · 相对时间 / 「最近一次已做对」绿标）→「重新练习」弹单题面板（选项作答 → 对错高亮 + 解析块 → 可重试/返回），**无强制勾选**
+- `Home.tsx` 页脚新增「🧠 薄弱题 →」入口；`main.tsx` 路由 `/wrong-questions`；`types.ts` 新增 3 个接口
+
+### 验证（快照 → 测 → 还原，`_p101_smoke.py` 23/23 全过）
+
+1. Quiz 错 1 题 → 列表出现、wrong_count=1；单题端点无 correct_index
+2. Practice 错 → wrong_count=2；Review 错 → wrong_count=3（**跨来源合并**）
+3. Practice 对 → wrong_count 保持 3、`last_attempt_correct=true`、仍在列表
+4. Practice 不污染：study_days 行数+行内容 / user_badges / user_stats / lesson_mastery 全部零变化（对照矩阵逐格断言）
+5. `quiz_answer_log` 无任何状态列；真 uvicorn 实测 health ok、新表自动创建、干净库返回 `[]`、不存在题 404
+6. `tsc -b` + `vite build` 零错误；测后 DB 从快照还原（quiz_answer_log=0 行就绪，用户进度零触碰）
+
+### 明确不做（Phase 10.2+ 候选）
+
+筛选/分类/归档、"连续做对 N 次才移出列表"的薄弱度升级、与 Review 的来源切换联动、错题 SRS、强制阅读解析。
+
+---
+
+## Level 4 技术修复记录 —— 执行计划（2026-09-09，已完成并验收）
+
+起因：学员学到 L4-6「WholeStageCodegen 与 Tungsten」时发现 `*(N)` 概念错误。据此先出审查报告（四维：技术事实准确性 / 示例真实性 / 概念边界 / 版本敏感性），再按报告逐项落地。详见同目录 `CHANGELOG.md` 的 2026-09-09 条目。
+
+### 核心事实（本项目口径以此为准）
+
+| 项 | 正确口径 |
+|---|---|
+| `*(N)` | N 是 **codegen stage 编号**（codegenStageId），**不是**融合算子数。数「同编号行数」= 该 stage 算子数，数「不同编号个数」= codegen stage 数；Exchange 后编号**继续递增、不归零** |
+| `explain(mode="formatted")` | **Spark 3.0+**（SPARK-27395）；`*(N)` 编号 2.3 起（SPARK-23032）；WholeStageCodegen 2.0 起；**AQE 3.2.0 起默认开启** |
+| join | shuffle-based join（SMJ / SHJ）需 Exchange；**Broadcast Join 不 Shuffle、不切 Stage**（与 Level 6 一致） |
+| groupBy | 通常需要 Exchange；**上游已按该 key 分区时可省** |
+| Action → Job | 通常 1:1；`take` / `show` 可能触发多个 Job |
+| Stage 执行 | 有依赖串行、**无依赖可并行**；Stage 数 = Shuffle 边界 + 1 **只对单条线性链成立** |
+| UDF 下推 | 过滤条件依赖 UDF 输出值、顺序上不能前移（**不是「优化器看不懂」**）；列裁剪照常，UDF 依赖列保留 |
+| Tungsten | 紧凑二进制内存表示 + cache-aware 算法 + **代码生成**；WholeStageCodegen 是其中一支（**包含关系**） |
+| 回退执行 | 逐算子 iterator（Volcano 式）—— **Spark 没有「解释器」**，不要说「回退到解释执行」 |
+
+### 改动范围
+
+- **9 课课文**：L4-6 整字段重写（改用真实可信的 explain 示例）；其余按点修补
+- **27 道 quiz**（题干 / 选项 / 正确答案 / 解析四要素同步）：含 5 道原本在考错误答案的 `*(N)` 题
+- **`lessons.objective` 8 条 + `description` 2 条**（objective 是独立列，不在 content JSON 里，首轮漏扫）
+- **答案位置重排**：A38/B45/C6/D1 → A22/B24/C22/D22；只动无 `quiz_answer_log` 记录的 38 题
+- **三段引导文案**（review / problem / preview）按 Level 0/1 调性重写
+- **《心智模型与比喻边界案例库》**：§5 Level 4 九条目 + L2/L3 四处同源口径更正
+
+### 技术债（已知、暂不修）
+
+- **L2 / L3 课文与题库仍是旧口径**（orderBy 必 Shuffle / 聚合必 Shuffle / JOIN 必 Shuffle），与已更正的设计文档不一致。收益低，暂挂
+- L4 lesson 31 答案分布 A2/B4/C2/D2（5 道冻结题有 4 道固定在 B），无法进一步优化
+
+### 防回退
+
+- `app/course_seed.json` / `app/quiz_seed.json` 已用真库回写；`seed_level4.py` 已标注「已过期、勿执行」
+- 修复脚本全部支持 dry-run 与自动备份，位于 `backend/`：
+  `fix_level4_20260909.py` / `fix_level4_20260909_round2.py` / `fix_level4_objective_20260909.py` /
+  `rebalance_l4_answers_20260909.py` / `rewrite_level4_narrative_20260909.py` / `sync_seed_from_db_20260909.py` / `preview_level4_narrative.py`
 
 ---
 

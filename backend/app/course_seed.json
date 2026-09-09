@@ -1682,7 +1682,7 @@
           "order_index": 0,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n你已经能写 DataFrame / SQL 跑出正确结果了。但「结果对」和「跑得快」是两件事。比如同样一段聚合，写得好 Spark 只读需要的列、尽早过滤；写得不好它老老实实扫描全表、搬运全部字段。问题来了：你怎么知道它实际是怎么算的？答案就是「执行计划」——它是 Spark 在动手前，把你的代码翻译成的「施工说明书」。\n\n【一个直观的心智模型】\n\n把执行计划想成开车时的「导航路线单」。你只说了目的地（一段代码），但真正上路要走哪条路、过几个高架、在哪里并线，是导航（Catalyst 优化大脑）替你算好的「最终路线单」。不懂看路线单，你就永远不知道为什么这次「堵在高速上」（慢），只能干等。执行计划就是 Catalyst 给你的那张单。\n\n⚠️ 比喻的边界（很重要）：\n① 执行计划看不出「运行时」的真实耗时与数据倾斜——那些是 Job 跑起来后的指标（Stage 实跑时间、shuffle 字节数），属于 Level 5/L7 的运行时观测。计划只描述「打算怎么算」。\n② 计划是「静态蓝图」，不是「已经跑过一遍」。同一段代码今天和明天计划可能一样，但真实耗时天差地别（数据量、集群状态不同）。\n③ 看计划不会让代码变快，它只是「诊断工具」——看见问题，再决定要不要改写（调优是 Level 5 之后的事）。\n\n【正式的技术定义】\n\n执行计划（Execution Plan）是 Spark 把用户代码（Transformation/Action）经过 Catalyst 优化后生成的逻辑/物理算子树，描述了「数据从哪读、经过哪些算子、怎么在节点间重分布、最终怎么输出」。可通过 `explain()` 查看。它是理解性能、排查「为什么这么慢」的第一手视角。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写完一段 DataFrame 代码时，Spark 还没算——它只是把你的意图登记成未优化的逻辑计划。当你调用 `explain()`，Spark 会把「经过 Catalyst 四阶段（解析→分析→优化→物理化）」之后的算子树打印出来，但**不会真正执行**数据计算。也就是说，`explain()` 是「在动手前先给你看一眼施工单」，是诊断而非执行。",
+            "explanation": "【先用人话理解】\n\n你已经能写 DataFrame / SQL 跑出正确结果了。但「结果对」和「跑得快」是两件事。比如同样一段聚合，写得好 Spark 只读需要的列、尽早过滤；写得不好它老老实实扫描全表、搬运全部字段。问题来了：你怎么知道它实际是怎么算的？答案就是「执行计划」——它是 Spark 在动手前，把你的代码翻译成的「施工说明书」。\n\n【一个直观的心智模型】\n\n把执行计划想成开车时的「导航路线单」。你只说了目的地（一段代码），但真正上路要走哪条路、过几个高架、在哪里并线，是导航（Catalyst 优化大脑）替你算好的「最终路线单」。不懂看路线单，你就永远不知道为什么这次「堵在高速上」（慢），只能干等。执行计划就是 Catalyst 给你的那张单。\n\n⚠️ 比喻的边界（很重要）：\n① 执行计划看不出「运行时」的真实耗时与数据倾斜——那些是 Job 跑起来后的指标（Stage 实跑时间、shuffle 字节数），属于 Level 5/L7 的运行时观测。计划只描述「打算怎么算」。\n② 计划是「静态蓝图」，不是「已经跑过一遍」。同一段代码今天和明天计划可能一样，但真实耗时天差地别（数据量、集群状态不同）。\n③ 看计划不会让代码变快，它只是「诊断工具」——看见问题，再决定要不要改写（调优是 Level 5 之后的事）。\n\n【正式的技术定义】\n\n执行计划（Execution Plan）是 Spark 把用户代码（Transformation/Action）经过 Catalyst 优化后生成的逻辑/物理算子树，描述了「数据从哪读、经过哪些算子、怎么在节点间重分布、最终怎么输出」。可通过 `explain()` 查看。它是理解性能、排查「为什么这么慢」的第一手视角。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写完一段 DataFrame 代码时，Spark 还没算——它只是把你的意图登记成未优化的逻辑计划。当你调用 `explain()`，Spark 会先把 Catalyst 四阶段（解析→分析→优化→物理化）全部走完，然后默认只把**最终物理计划**打印出来（想看前三段要用 `explain(True)`，下一课讲），但**不会真正执行**数据计算。也就是说，`explain()` 是「在动手前先给你看一眼施工单」，是诊断而非执行。",
             "examples": [
               {
                 "title": "为什么结果对但可能很慢",
@@ -1724,9 +1724,9 @@
                 "fix": "区分「必要 Shuffle」和「本可避免的冗余 Shuffle」，后者才是优化点（Level 5）。"
               }
             ],
-            "review": "从 Level 0 到 Level 3，你已经能用 DataFrame API 和 SQL 写出正确的分析。你也知道 Catalyst 会在背后做优化（谓词下推、列裁剪），但那些优化对你来说是「黑盒」——你从没真正看见过。",
-            "problem": "为什么「代码能跑出正确结果」不等于「代码跑得快」？当你怀疑一段聚合特别慢时，第一件该做的事是什么？怎么「看见」Spark 内部到底打算怎么算？",
-            "preview": "下集我们正式拆开执行计划的「四段结构」——逻辑计划和物理计划到底差在哪，为什么一个叫「想做什么」、一个叫「怎么用 Spark 算子做」。"
+            "review": "从 Level 0 到 Level 3，你已经能写出「跑得通、结果还对」的 Spark 程序了：RDD、Transformation、Action、DataFrame API、常用的聚合和连接，你都用过。\n\n但有个挺尴尬的事实：写了这么多代码，你其实一次都没真正「看见」过 Spark 内部是怎么算的。\n\n你知道有个叫 Catalyst 的「优化大脑」在背后替你改计划（谓词下推、列裁剪），可它到底改成了什么样？为什么看起来一模一样的两段聚合，别人跑 30 秒、你跑 5 分钟？\n\n这一课，我们先把灯打开。",
+            "problem": "为什么「代码能跑出正确结果」和「代码跑得快」完全是两件事？当你怀疑一段聚合特别慢的时候，第一件该做的事是什么——凭感觉改代码，还是先去找证据？更重要的是：Spark 内部那份「打算怎么算」的方案，到底藏在哪儿、要怎么看出来？",
+            "preview": "现在我们达成了一个共识：执行计划就是 Spark 出发前算好的那张「路线单」。遇到性能问题，第一件事是把它调出来看，而不是拍脑袋改代码。\n\n可等你真把 explain() 打印出来，多半会愣住：这一大坨缩进文本，一会儿叫 Logical、一会儿叫 Physical，中间还夹着 Analyzed、Optimized——它们到底是同一张图的四个名字，还是四张不同的图？\n\n为什么非得分这么多层？每一层各自管什么？\n\n下一课：逻辑计划 vs 物理计划。"
           }
         },
         {
@@ -1752,8 +1752,8 @@
               },
               {
                 "title": "Optimized 的等价改写",
-                "code": "# 列裁剪：你只选 city，优化器让 Scan 只读 city 一列\ndf.select('city').filter(df.amount > 0).explain(True)",
-                "note": "在 Optimized 段能看到 Project/Filter 被下推、列被裁剪，逻辑上「读更少」。"
+                "code": "# 列裁剪：你只选 city，优化器让 Scan 只读 city 一列\ndf.select('city', 'amount').filter(df.amount > 0).explain(True)",
+                "note": "在 Optimized 段能看到 Filter 被下推到 Scan 附近、未用到的列被裁掉（Scan 的 ReadSchema 里只保留 city/amount）。"
               }
             ],
             "key_points": [
@@ -1780,9 +1780,9 @@
                 "fix": "理解这是正常演进，不是错误。"
               }
             ],
-            "review": "上一课我们建立了「执行计划是诊断性能第一视角」的直觉，也知道 explain() 能把它打印出来。但打印出来那一大坨，到底是什么？",
-            "problem": "为什么执行计划要分「逻辑」和「物理」？Parsed/Analyzed/Optimized/Physical 四段各自干啥？为什么很多「表不存在」的报错要等运行/ explain 才爆出来？",
-            "preview": "知道了四段长什么样，下集就学怎么把这张「施工单」真正调出来——explain() / explain(True) / explain(mode=\"formatted\") 三者到底差在哪。"
+            "review": "上一课我们立了个规矩：遇到性能问题，先看执行计划，别急着改代码。\n\n可第一次把计划打印出来时，最扎眼的往往不是某个算子看不懂，而是——它为什么要分成好几段？Parsed、Analyzed、Optimized、Physical 四段堆在一起，看起来像同一张图被印了四遍。\n\n你可能还撞见过一件很气人的事：表名明明写错了，它却不在你敲回车的那一刻报错，非得等你运行、甚至等你 explain 才炸出来。\n\n这两件事，其实指向同一个答案。",
+            "problem": "为什么执行计划非要分「逻辑」和「物理」两层？Parsed / Analyzed / Optimized / Physical 这四段各自干了什么？为什么「表不存在」这种看着写代码时就该发现的错误，非要拖到 Analyzed 才报？",
+            "preview": "现在我们手里有了四段结构：逻辑计划是「想做什么」，物理计划是「怎么用 Spark 算子做」，中间夹着 Analyzed（校验）和 Optimized（等价改写）两道工序。\n\n于是问题变得很实际：这四段不会自动摊在你面前，得你自己「调」出来。\n\n而 explain() 有好几种调法——默认只给你一截、有的能给你完整四段、还有一种缩进排得漂漂亮亮的树状版。它们分别怎么用？还有个更要紧的问题：既然它把计划都打印了，会不会顺手把你 2TB 的数据也真算一遍？\n\n下一课：explain() 怎么用。"
           }
         },
         {
@@ -1794,7 +1794,7 @@
           "order_index": 2,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n执行计划要「调出来」才能看，调它的扳机就是 `explain()`。但它有三个「档位」：简版（默认）、全四段版（True）、树状可读版（formatted）。就像你要查一张施工单，可以只要「最终施工图」（简版），要「从草图到施工图全过程」（True），或要「缩进排好、一眼看清层级」的精装版（formatted）。\n\n【一个直观的心智模型】\n\n把 explain 想成「向工厂要施工排程单」：\n- 默认 `explain()` = 只给你最终施工图（Physical Plan），最常用、最聚焦。\n- `explain(True)` = 把草图、审图、优化图、施工图四张全给你（extended）。\n- `explain(mode=\"formatted\")` = 给一张「缩进树状、节点层级一目了然」的精装施工图，适合人眼扫读。\n\n⚠️ 比喻的边界（很重要）：\n① `explain()` 本身**不触发执行**——它只是「窥视」 Catalyst 已经规划好的计划，数据不会真正算。所以它便宜、安全，可以随便看。\n② `mode=\"formatted\"` 需要 Spark 2.3+（老版本没有这个模式）；现代 Spark 都支持。\n③ `explain(True)` 就是 `explain(\"extended\")` 的快捷写法，二者等价；它多打出的 Parsed/Analyzed/Optimized 三段是「规划过程」，不是「额外干活」。\n\n【正式的技术定义】\n\n`DataFrame.explain()` 打印执行计划。`explain()`（无参）默认打印 Physical Plan；`explain(True)` 或 `explain(\"extended\")` 打印 Parsed/Analyzed/Optimized/Physical 四段；`explain(\"formatted\")` 以缩进树状结构打印（Spark 2.3+），更易读。它是诊断 API，不触发 Action。\n\n【写下代码后，Spark 内部发生了什么】\n\n你调用 `df.explain()`，Spark 走完 Catalyst 的分析与优化（但不会去读数据、不会起 Task），然后把「规划结果」打印到控制台。因为没遇到真正的 Action（如 show/count/write），整条数据流水线不会执行——这正是它「安全可反复看」的原因。",
+            "explanation": "【先用人话理解】\n\n执行计划要「调出来」才能看，调它的扳机就是 `explain()`。它有好几个「档位」：简版（默认）、全四段版（True）、树状可读版（formatted），以及能直接看生成代码的 codegen 版。就像你要查一张施工单，可以只要「最终施工图」（简版），要「从草图到施工图全过程」（True），或要「缩进排好、一眼看清层级」的精装版（formatted）。\n\n【一个直观的心智模型】\n\n把 explain 想成「向工厂要施工排程单」：\n- 默认 `explain()` = 只给你最终施工图（Physical Plan），最常用、最聚焦。\n- `explain(True)` = 把草图、审图、优化图、施工图四张全给你（extended）。\n- `explain(mode=\"formatted\")` = 给一张「缩进树状、节点层级一目了然」的精装施工图，适合人眼扫读。\n\n⚠️ 比喻的边界（很重要）：\n① `explain()` 本身**不触发执行**——它只是「窥视」 Catalyst 已经规划好的计划，数据不会真正算。所以它便宜、安全，可以随便看。\n② `mode=\"formatted\"` 需要 **Spark 3.0+**（老版本没有这个模式）。⚠️ 别把两个版本号记混：**`*(N)` 编号是 Spark 2.3 引入的（SPARK-23032），formatted 模式是 Spark 3.0 引入的（SPARK-27395）**。\n③ `explain(True)` 就是 `explain(\"extended\")` 的快捷写法，二者等价；它多打出的 Parsed/Analyzed/Optimized 三段是「规划过程」，不是「额外干活」。\n④ ⚠️ 版本提示：Spark 3.2+ 默认开启 Adaptive Query Execution（AQE）。开启 AQE 时 `explain()` 可能显示 `AdaptiveSparkPlan isFinalPlan=false`，你看到的是**初始计划**，运行过程中 Spark 会根据运行时统计信息调整它（比如把 sort-merge join 改成 broadcast join、合并 shuffle 分区）。想看本课这种经典输出，可先 `spark.conf.set(\"spark.sql.adaptive.enabled\", \"false\")`；想看最终实际执行的计划，去 Spark UI 的 SQL 详情页。\n\n【正式的技术定义】\n\n`DataFrame.explain()` 打印执行计划。Spark 3.0+ 共支持五种模式：`simple`（默认，仅物理计划）、`extended`（四段全貌）、`codegen`（打印生成的 Java 代码）、`cost`（逻辑计划 + 统计量）、`formatted`（缩进树状 + 节点详情）。`explain()` 无参 ≡ `simple`；`explain(True)` ≡ `explain(\"extended\")`；`explain(\"formatted\")` 以缩进树状结构打印（**Spark 3.0+**），最易读。它是诊断 API，不触发 Action。\n\n【写下代码后，Spark 内部发生了什么】\n\n你调用 `df.explain()`，Spark 走完 Catalyst 的分析与优化（但不会去读数据、不会起 Task），然后把「规划结果」打印到控制台。因为没遇到真正的 Action（如 show/count/write），整条数据流水线不会执行——这正是它「安全可反复看」的原因。",
             "examples": [
               {
                 "title": "默认简版（仅 Physical）",
@@ -1809,15 +1809,15 @@
               {
                 "title": "树状可读版",
                 "code": "df.groupBy('city').count().explain(mode='formatted')\n# 缩进树状，层级清晰",
-                "note": "formatted 适合人眼扫读；Spark 2.3+ 才支持。"
+                "note": "formatted 适合人眼扫读；Spark 3.0+ 才支持（SPARK-27395）。"
               }
             ],
             "key_points": [
               "explain() 默认只打印 Physical Plan",
               "explain(True) ≡ explain('extended')，打印四段全貌",
-              "explain(mode='formatted') 缩进树状、易读，需 Spark 2.3+",
+              "explain(mode='formatted') 缩进树状、易读，需 Spark 3.0+",
               "explain() 不触发执行，是惰性「窥视」，可安全反复看",
-              "真正执行要 show/count/write 等 Action"
+              "真正执行要 show/count/write 等 Action\nSpark 3.0+ 共五种模式：simple / extended / codegen / cost / formatted；`explain(mode=\"codegen\")` 能直接看生成的 Java 代码，是理解 WholeStageCodegen 最直观的工具"
             ],
             "common_mistakes": [
               {
@@ -1826,8 +1826,8 @@
                 "fix": "记住它只打印计划；要结果用 show/count。"
               },
               {
-                "mistake": "在老 Spark（<2.3）用 mode='formatted' 报错。",
-                "why": "该模式 2.3 才引入。",
+                "mistake": "在老 Spark（<3.0）用 mode='formatted' 报错。",
+                "why": "该模式 3.0 才引入（SPARK-27395）；`*(N)` 编号才是 2.3 引入的（SPARK-23032），别混。",
                 "fix": "老版本用 explain(True) 看四段即可。"
               },
               {
@@ -1836,9 +1836,9 @@
                 "fix": "想看 Catalyst 优化了什么，用 explain(True)。"
               }
             ],
-            "review": "上一课我们拆开了「逻辑计划 vs 物理计划」的四段结构，知道 Analyzed 才校验、Optimized 才改写。可那四段到底怎么「调出来」看？",
-            "problem": "explain() 默认给你什么？想看完整四段该用哪个档位？树状易读版怎么调？为什么 explain 不会让你的数据真的算一遍？",
-            "preview": "调出了计划，下集就学怎么「读」它——Scan / Filter / Project / Aggregate / Exchange 这些节点分别是什么，尤其认出 Exchange 这个「必 Shuffle」的信号。"
+            "review": "上一课我们拆开了四段结构，也接受了「逻辑是想做什么、物理是怎么做」这个设定。\n\n但那四段当时只是讲给你听的，你还没亲手调出来过。\n\n好消息是，Spark 把「看计划」做成了一个随手可得的动作：不用等作业跑完，不用盯着进度条等几分钟，一行代码就能把方案摊在你面前。\n\n坏消息是，这一行代码有好几种写法，输出的信息量差得很远。",
+            "problem": "explain() 默认给你什么？想看完整的四段该用哪个档位？想要那种缩进整齐、一眼能看出先后关系的树状版，又要怎么调？还有个关键问题：既然它把计划都打印出来了，它会不会顺手把你的数据也真算一遍？",
+            "preview": "现在你已经能把计划调出来了，而且知道 explain() 只是「偷看图纸」——它不会真的开工，你不必担心它把你那张 2TB 的表跑一遍。\n\n可当你真的盯着那一坨文本，新的问题马上来了：Scan、Filter、Project、Aggregate、Exchange 这些名字，哪个是读数据、哪个是洗数据、哪个是在花钱？\n\n尤其是那个 Exchange——老手一看到它就皱眉，它到底意味着什么？\n\n下一课：怎么读执行计划文本。"
           }
         },
         {
@@ -1850,16 +1850,16 @@
           "order_index": 3,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n计划打印出来是一棵「算子树」，每个节点是一个工序。你得学会认这几个常客：哪里进货（Scan）、哪里筛（Filter）、哪里选列（Project）、哪里汇总（Aggregate）、哪里「货在空中飞」（Exchange）。读懂这棵「工厂车间布局图」，你就知道数据走了哪些弯路。\n\n【一个直观的心智模型】\n\n把计划当成「工厂车间布局图」：\n- Scan = 进货口（从文件/表读数据）\n- Filter = 入口筛（拦下不合格行）\n- Project = 选列（只挑要的字段装箱）\n- Aggregate = 水果分拣派对（按 key 分组汇总，复用 L2）\n- Exchange = 货在空中飞（复用 L2/L3 的 Shuffle 信号）——**这就是最该警惕的节点**\n\n⚠️ 比喻的边界（很重要）：\n① Exchange 节点 = 必 Shuffle：数据要序列化、走网络、反序列化，重新按 key 分布。它是性能成本的主要来源之一，看到它就心里有数「这里要花钱」。\n② `*(N)` 是 Stage 内算子融合标记（WholeStageCodegen，下节课讲），表示相邻 N 个算子被融合成一个 Java 方法——不是「第 N 阶段」。\n③ 计划里的行数 / 字节是 Catalyst 的「**估计**」，不是实测；真实量要看 Spark UI 的 Stage 指标。别拿计划数字当真相。\n\n【正式的技术定义】\n\n执行计划由算子节点组成：Scan（数据源读取）、Filter（行过滤）、Project（列投影/表达式）、Aggregate（分组聚合）、Exchange（按 key 重分布 = Shuffle）、Sort（排序）等。`*(N)` 前缀表示 WholeStageCodegen 融合的算子数。Exchange 是宽依赖/Stage 边界的物理信号；计划中的统计量是优化器估计值。\n\n【写下代码后，Spark 内部发生了什么】\n\n当你 print 出计划，每个缩进层级是一个算子在「等上游喂数据」。Spark 从最底层的 Scan 开始读，向上经过 Filter/Project 做本地处理，遇到 Exchange 就把数据按 key 洗牌到别的节点，再向上 Aggregate。读懂这棵树，你就能指着一个 Exchange 说「这里是 Shuffle，是潜在瓶颈」。",
+            "explanation": "【先用人话理解】\n\n计划打印出来是一棵「算子树」，每个节点是一个工序。你得学会认这几个常客：哪里进货（Scan）、哪里筛（Filter）、哪里选列（Project）、哪里汇总（Aggregate）、哪里「货在空中飞」（Exchange）。读懂这棵「工厂车间布局图」，你就知道数据走了哪些弯路。\n\n【一个直观的心智模型】\n\n把计划当成「工厂车间布局图」：\n- Scan = 进货口（从文件/表读数据）\n- Filter = 入口筛（拦下不合格行）\n- Project = 选列（只挑要的字段装箱）\n- Aggregate = 水果分拣派对（按 key 分组汇总，复用 L2）\n- Exchange = 货在空中飞（复用 L2/L3 的 Shuffle 信号）——**这就是最该警惕的节点**\n\n⚠️ 比喻的边界（很重要）：\n① Exchange 节点 = 一次 Shuffle：数据要序列化、走网络、反序列化，重新按 key 分布。它是性能成本的主要来源之一，看到它就心里有数「这里要花钱」。（出现 Exchange 就一定有 Shuffle；但反过来，不是所有聚合/join 都必然产生 Exchange，见本课 key_points。）\n② `*(N)` 中的 N 是 **codegen stage 的编号**（WholeStageCodegen，下节课细讲），不是「融合了几个算子」，也不是「第 N 个 Stage」。同一个 codegen stage 里的每个算子都带**相同**的 `*(N)`：想数「这个 stage 融合了几个算子」要数**相同 N 的行数**，想数「有几个 codegen stage」要数**不同 N 的个数**。N 从 1 开始递增，遇到 Exchange 也不会归零。\n③ 计划里的行数 / 字节是 Catalyst 的「**估计**」，不是实测；真实量要看 Spark UI 的 Stage 指标。别拿计划数字当真相。\n\n【正式的技术定义】\n\n执行计划由算子节点组成：Scan（数据源读取）、Filter（行过滤）、Project（列投影/表达式）、Aggregate（分组聚合）、Exchange（按 key 重分布 = Shuffle）、Sort（排序）等。`*(N)` 前缀里的 N 是 codegen stage 的编号（codegenStageId），带相同编号的算子属于同一个 WholeStageCodegen stage。Exchange 是宽依赖/Stage 边界的物理信号；计划中的统计量是优化器估计值。\n\n【写下代码后，Spark 内部发生了什么】\n\n当你 print 出计划，每个缩进层级是一个算子在「等上游喂数据」。Spark 从最底层的 Scan 开始读，向上经过 Filter/Project 做本地处理，遇到 Exchange 就把数据按 key 洗牌到别的节点，再向上 Aggregate。读懂这棵树，你就能指着一个 Exchange 说「这里是 Shuffle，是潜在瓶颈」。",
             "examples": [
               {
                 "title": "认出 Exchange（Shuffle）",
-                "code": "df.groupBy('city').count().explain()\n# 计划里会出现 Exchange 节点（groupBy 必 Shuffle）",
-                "note": "任何 groupBy/distinct/orderBy/join 都会引入 Exchange，认准它就是认准 Shuffle。"
+                "code": "df.groupBy('city').count().explain()\n# 计划里通常会出现 Exchange 节点（groupBy 按 key 重分布）",
+                "note": "groupBy / distinct / orderBy 与 shuffle-based join（sort-merge、shuffle-hash）通常会引入 Exchange；但 broadcast join 不产生 ShuffleExchange，上游已按该 key 分区的聚合也可能省掉 Exchange。"
               },
               {
                 "title": "认出 Scan / Filter / Project",
-                "code": "df.select('city').filter(df.amount > 0).explain()\n# Scan -> Filter -> Project 链路清晰",
+                "code": "df.select('city', 'amount').filter(df.amount > 0).explain()\n# Scan -> Filter -> Project 链路清晰",
                 "note": "三者顺序体现「先读、再筛、最后选列」的本地流水线。"
               },
               {
@@ -1870,16 +1870,16 @@
             ],
             "key_points": [
               "Scan=进货口，Filter=入口筛，Project=选列，Aggregate=分组汇总，Exchange=Shuffle",
-              "Exchange 节点 = 必 Shuffle（序列化+网络+反序列化开销），是性能重点信号",
-              "*(N) 是 Stage 内算子融合标记（WholeStageCodegen），不是阶段编号",
+              "Exchange 节点 = 一次 Shuffle（序列化+网络+反序列化开销），是性能重点信号",
+              "*(N) 的 N 是 codegen stage 编号；同编号 = 同 stage，数「同编号行数」才知道融合了几算子",
               "计划里的行数/字节是「估计」值，非真实，真实看 Spark UI",
-              "读懂算子树 = 能指出「数据走了哪些弯路、哪里 Shuffle」"
+              "读懂算子树 = 能指出「数据走了哪些弯路、哪里 Shuffle」\n但 Exchange 并非必然出现：groupBy/orderBy/distinct 通常有，上游已按 key 分区时可省略；broadcast join 不产生 ShuffleExchange"
             ],
             "common_mistakes": [
               {
-                "mistake": "把 *(N) 当成「第 N 个 Stage」。",
-                "why": "它是融合算子数标记。",
-                "fix": "Stage 由 Exchange 切分，不是 *(N)。"
+                "mistake": "把 *(N) 的 N 当成「融合的算子数」或「第 N 个 Stage」。",
+                "why": "N 是 codegen stage 的编号，与算子个数无关；Shuffle 的 Stage 又是另一套编号。",
+                "fix": "Stage 由 Exchange 切分；*(N) 是 codegen stage 编号——数同编号行数才是算子数，数不同编号个数才是 codegen stage 数。"
               },
               {
                 "mistake": "看到计划里「行数很大」就恐慌。",
@@ -1892,9 +1892,9 @@
                 "fix": "Exchange 是重点但非唯一，综合看。"
               }
             ],
-            "review": "上一课我们学会了三个 explain 档位，能把计划调出来。可面对那一坨缩进文本，第一眼还是懵——到底看哪里？",
-            "problem": "计划文本里 Scan/Filter/Project/Aggregate/Exchange 各代表什么？为什么 Exchange 是最该警惕的节点？*(N) 和计划里的「行数」到底是什么意思？",
-            "preview": "认出了 Exchange（Shuffle），下集就讲 Catalyst 在 Optimized 段到底做了哪些「等价省工」的改写——谓词下推、列裁剪、常量折叠都是啥。"
+            "review": "上一课我们学会了几个档位，能把整张施工单摊在桌上。\n\n可第一次读的人几乎都卡在同一个地方：这些节点名单看都认识——Scan、Filter、Project——连起来却不知道数据是怎么流的；更别提那些 `*(1)` `*(2)` 的星号，和括号里标着的「行数：xxx」，看着像答案，其实全是猜的。\n\n这一课，我们一个一个认。",
+            "problem": "Scan / Filter / Project / Aggregate / Exchange 分别代表什么动作？为什么老手说「看到 Exchange 就要警惕」——它背后到底发生了什么、贵在哪？那些带星号的 `*(N)` 又是什么意思（提前提醒：它**不是**「融合了 N 个算子」，这个误解非常普遍）？还有计划里那些行数和字节数，能信吗？",
+            "preview": "现在我们能认节点了：Scan 进货、Filter 筛、Project 挑列、Aggregate 聚、而 Exchange 就是那次「货在空中飞」的 Shuffle——看到它，基本就等于看到钱在飞。\n\n不过你大概也察觉到了一件事：Optimized 这一段，好像总比你写代码时想的要「聪明」。你明明是聚合之后才过滤的，它却好像把过滤提前了；你明明读了一整张宽表，它却只读了你真正要的那几列。\n\n这些「自作主张」的改写，是谁做的？一共做了哪几件？\n\n下一课：Catalyst 优化规则。"
           }
         },
         {
@@ -1906,7 +1906,7 @@
           "order_index": 4,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\nCatalyst 在 Optimized 段干的事，本质就是「等价省工」——在不改变结果的前提下，让 Spark 少读、少算、少搬。你不用手动优化，它就自动帮你做了。读懂这几条规则，你看计划时才知道「它为什么这么聪明」。\n\n【一个直观的心智模型】\n\n把 Catalyst 总工想想成做「等价省工」改写：\n- 谓词下推 = 把末端的滤网**瞬移到河口**（复用 L2 select-filter 边界「开天眼」）：本来读完所有列再筛，改成「读的时候就只让合格行进来」。\n- 列裁剪 = 只搬清单上列的箱子：你没选的列，压根不读。\n- 常量折叠 = 先算好 `1+1=2`：编译期能定的值，不拖到运行时算。\n\n⚠️ 比喻的边界（很重要）：\n① 优化是「等价」的：结果和没优化完全一致，只是更省。它不是魔法，不改语义。\n② 优化器非神仙：遇到 UDF（L3 讲的「外聘手艺人」）或复杂嵌套，它「看不懂」内部逻辑，下推/裁剪就失效——所以能不用 UDF 就不用（也呼应 L3 的 L7 伏笔）。\n③ 下推能否真正发生，**取决于数据源**：Parquet 这类列式存储能配合做列裁剪/谓词下推；普通 csv 做不到按列跳过，下推收益有限。\n\n【正式的技术定义】\n\nCatalyst 优化规则是作用于 Analyzed Logical Plan 的一组等价变换，常见包括：Predicate Pushdown（谓词下推，把过滤推到读取端）、Column Pruning（列裁剪，去掉不需要的列）、Constant Folding（常量折叠）、Null Propagation（null 传播）、算子合并等。它们在 Optimized 段输出更精简的等价逻辑计划，降低后续物理执行成本。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.select('city').filter(df.amount>0)`，Catalyst 在 Optimized 段会把 Filter 下推到 Scan 之前、把 Project 的列裁剪合并进 Scan——最终物理计划「读数据时就已经只取 city、只留 amount>0 的行」。你没写任何优化代码，全部是 Catalyst 自动完成的等价改写。",
+            "explanation": "【先用人话理解】\n\nCatalyst 在 Optimized 段干的事，本质就是「等价省工」——在不改变结果的前提下，让 Spark 少读、少算、少搬。你不用手动优化，它就自动帮你做了。读懂这几条规则，你看计划时才知道「它为什么这么聪明」。\n\n【一个直观的心智模型】\n\n把 Catalyst 总工想想成做「等价省工」改写：\n- 谓词下推 = 把末端的滤网**瞬移到河口**（复用 L2 select-filter 边界「开天眼」）：本来读完所有列再筛，改成「读的时候就只让合格行进来」。\n- 列裁剪 = 只搬清单上列的箱子：你没选的列，压根不读。\n- 常量折叠 = 先算好 `1+1=2`：编译期能定的值，不拖到运行时算。\n\n⚠️ 比喻的边界（很重要）：\n① 优化是「等价」的：对**确定性**表达式，改写后语义与未优化时一致，只是更省。它不是魔法，不改语义。\n② 优化器非神仙：过滤条件如果**依赖 UDF 的输出值**，就**不能**被移动到 UDF 计算之前，自然也推不到 Scan 端——这不是「优化器看不懂 UDF」，而是**表达式的数据依赖顺序决定的**。列裁剪仍然会发生，只是 UDF 依赖的那些列必须保留。所以能不用 UDF 就不用（也呼应 L3 的 L7 伏笔）。\n③ 下推/裁剪**真正能省下多少，取决于数据源**：Parquet/ORC 这类列式存储能配合做列裁剪/谓词下推，真正跳过不需要的列数据；普通 csv/json 是行式文本，做不到按列跳过（整行仍要读进来解析），下推收益有限。\n④ 「等价」也有边界：非确定性表达式（如 `rand()`、`current_timestamp()`、`monotonically_increasing_id()`）不会被随意折叠或重排——否则同一条查询两次跑出来的结果会不一样。别把「等价改写」理解成「任何表达式都能随便挪」。\n\n【正式的技术定义】\n\nCatalyst 优化规则是作用于 Analyzed Logical Plan 的一组等价变换，常见包括：Predicate Pushdown（谓词下推，把过滤推到读取端）、Column Pruning（列裁剪，去掉不需要的列）、Constant Folding（常量折叠）、Null Propagation（null 传播）、算子合并等。它们在 Optimized 段输出更精简的等价逻辑计划，降低后续物理执行成本。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.select('city').filter(df.amount>0)`，Catalyst 在 Optimized 段会把 Filter 下推到 Scan 之前、把 Project 的列裁剪合并进 Scan——最终物理计划「读数据时就已经只取 city、只留 amount>0 的行」。你没写任何优化代码，全部是 Catalyst 自动完成的等价改写。",
             "examples": [
               {
                 "title": "谓词下推",
@@ -1916,7 +1916,7 @@
               {
                 "title": "列裁剪",
                 "code": "df.select('city', 'amount').filter(df.amount > 0).explain(True)\n# 未选的列不会进入 Scan",
-                "note": "你没选的列，优化器在 Scan 就裁掉，少读少搬。"
+                "note": "你没选的列不会出现在 Scan 的 ReadSchema / 输出中；Parquet/ORC 这类列式格式能真正跳过这些列的数据，csv/json 这类行式文件仍要整行读取解析（省的是内存与后续搬运，不是 IO）。"
               },
               {
                 "title": "常量折叠",
@@ -1925,11 +1925,11 @@
               }
             ],
             "key_points": [
-              "优化是「等价改写」，结果不变只更省",
+              "优化是「等价改写」：对确定性表达式语义不变、只更省（非确定性表达式除外）",
               "谓词下推：过滤尽早发生（复用 L2「开天眼」）",
               "列裁剪：没选的列不读",
               "常量折叠：编译期能定的值提前算好",
-              "UDF/复杂嵌套下推不了；下推收益看数据源（Parquet 强、csv 弱）"
+              "含 UDF 的过滤条件无法下推（依赖顺序不允许），UDF 依赖的列仍会保留；下推收益看数据源（Parquet 强、csv 弱）"
             ],
             "common_mistakes": [
               {
@@ -1944,13 +1944,13 @@
               },
               {
                 "mistake": "在 UDF 里做过滤指望被下推。",
-                "why": "Catalyst 看不懂 UDF 内部。",
+                "why": "过滤条件依赖 UDF 的输出值，顺序上必须先算 UDF 才能过滤，推不到数据源端。",
                 "fix": "能用内置函数/SQL 表达的就别用 UDF（呼应 L3）。"
               }
             ],
-            "review": "上两课我们认出了计划里的 Scan/Filter/Project/Exchange，也知道 Optimized 段会做改写。但具体改了什么？为什么同样的代码计划总「更聪明」？",
-            "problem": "Catalyst 在 Optimized 段做了哪些等价省工的改写？谓词下推、列裁剪、常量折叠分别是什么？为什么 UDF 会「骗不过」优化器？",
-            "preview": "知道了优化器会融合算子、提前算常量，下集就讲 WholeStageCodegen——相邻算子怎么被「焊成一台机器」，以及 Tungsten 这个紧凑零件标准。"
+            "review": "前面几课我们一直在读 Optimized 这一段，也隐约发现它和你的写法不太一样：顺序被换过、列被裁过、常量被提前算掉了。\n\n干这些事的，就是 Catalyst——Spark 的「总工程师」。它不动你的结果，只动你的流程。\n\n但「优化」这个词特别容易被人误会成玄学：它到底能改哪些、不能改哪些？为什么有人兴冲冲地写了个 UDF 指望它帮忙优化，结果反而更慢？",
+            "problem": "Catalyst 在 Optimized 段到底做了哪些「等价省工」的改写——谓词下推、列裁剪、常量折叠、null 传播，各自省在哪？为什么这些改写能保证结果不变（真的一直能保证吗）？以及最实际的一个问题：为什么包在 UDF 里的过滤条件，往往推不下去？",
+            "preview": "现在我们知道了：在你写代码和 Spark 真正执行之间，Catalyst 会插进去一层「等价改写」——能提前过滤的提前、用不上的列不读、能先算的常量先算。\n\n可到这里为止，省的全是「少干活」。还有一类更快，不是少干，而是**换一种干法**：把好几个相邻的工位焊成一台连轴转的机器，连中间的交接都省了。\n\n这种「焊起来」的加速，就藏在你已经见过的那些 `*(N)` 里。它到底怎么做到？为什么一遇到 Shuffle 就焊不下去了？\n\n下一课：WholeStageCodegen 与 Tungsten。"
           }
         },
         {
@@ -1962,51 +1962,61 @@
           "order_index": 5,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n普通流水线每道工序都是独立工位：上一道算完，打包成对象交给下一道，下一道再拆包——中间反复「打包/拆包」和函数调用有开销。Spark 有个绝活：把相邻几道工序「焊成一台一体化机器」，一次开机连续加工，省掉中间所有交接损耗。这就是 WholeStageCodegen。\n\n【一个直观的心智模型】\n\n- 普通流水线：每工位单独开关、逐件交接（每次交接都有虚函数调用 overhead、产生中间对象）。\n- WholeStageCodegen：把相邻工位「焊成一体化机器」，一次开机连加工，中间不拆不包。\n- Tungsten = 这套机器的「紧凑零件标准」（复用 L2 的 Tungsten 边界：底层二进制紧凑布局，省内存、Cache 友好）。\n\n⚠️ 比喻的边界（很重要）：\n① codegen **不是全融合**：遇到 Exchange（Shuffle）边界，融合必然被打断——因为数据要跨节点重分布，无法在同一个本地机器方法里连续跑。Exchange 是 Stage 边界，也是融合的「断点」。\n② 某些复杂表达式 / 不支持的算子会导致回退（fallback）到逐算子解释执行，融合标记消失。\n③ 内存布局、堆外、编码字节级细节是 Level 7 性能调优的内容，本课只把 Tungsten 当「紧凑零件标准」复用，不深挖。\n\n【正式的技术定义】\n\nWholeStageCodegen（全阶段代码生成）是 Tungsten 执行引擎的特性：将同一个 Stage 内相邻的多个算子（如 Scan+Filter+Project+Aggregate）编译成一个手写的 Java 方法，消除逐算子虚函数调用与中间对象分配，数据以二进制行格式在算子间流转。计划中以 `*(N)` 标记融合的算子数。Exchange 会切断融合。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.select('city').filter(df.amount>0).groupBy('city').count()`，若这些算子在同一 Stage 内（无 Exchange 隔断），Spark 会把它们生成一个 `*(4)` 的融合方法：数据从 Scan 出来直接在同一个方法里被过滤、投影、聚合，全程不拆成对象。一旦中间出现 Exchange（如 groupBy 的 Shuffle），融合在此断开，后面的算子另起一段。",
+            "explanation": "【先用人话理解】\n\n普通流水线每道工序都是独立工位：上一道算完，把行交给下一道，下一道再处理——每道工序之间都有一次「函数调用 + 中间行交接」的开销（Spark 里这叫 Volcano / iterator 模型）。Spark 有个绝活：把一段可以连续执行的算子流水线**生成 Java 代码并编译执行**，让它们在同一份生成的代码里连续加工，省掉中间大部分交接损耗。这就是 WholeStageCodegen。\n\n【一个直观的心智模型】\n\n- 普通流水线：每工位单独开关、逐件交接（每次交接都是一次虚函数调用 + 中间行的传递）。\n- WholeStageCodegen：Spark 把一段连续的算子流水线生成 Java 代码并编译执行，让它们在同一份生成代码里连续加工。\n- Tungsten = Spark 为提高 CPU / 内存效率而做的一整套底层执行优化方向（紧凑二进制内存表示 + cache 感知算法 + **代码生成**）。注意：**WholeStageCodegen 本身就是 Tungsten 的一部分**，不是「另一个用到了 Tungsten 格式的特性」。\n\n⚠️ 比喻的边界（很重要）：\n① codegen **不是全融合**：遇到 Exchange（Shuffle）边界，连续的代码生成必然被打断——因为数据要跨节点重分布，无法在同一段本地生成代码里连续跑。Exchange 是 Stage 边界，也是融合的「断点」。此外，不支持 codegen 的算子/表达式（例如 Python UDF）也会打断它——这也是 UDF 性能开销的重要来源之一。\n② 不适用 WholeStageCodegen 的部分，会以传统的**逐算子 iterator / Volcano 方式**执行（**不是「解释执行」**——Spark 没有解释器，只是走回归常的迭代器模型）。\n③ 计划里的 `*(N)` 是 **codegen stage 的编号**，不是「融合了几个算子」，也不是「第 N 个 Stage」。同一个 codegen stage 里的每个算子都带**相同**的 `*(N)`。\n④ ⚠️ 版本提示：Spark 3.2+ 默认开启 Adaptive Query Execution（AQE）。开启 AQE 时 `explain()` 可能显示 `AdaptiveSparkPlan isFinalPlan=false`，你看到的是**初始计划**、且**看不到 `*(N)`**（代码生成折叠还没发生）。想看本课这种经典输出，先 `spark.conf.set(\"spark.sql.adaptive.enabled\", \"false\")`；要看最终实际执行的计划，去 Spark UI 的 SQL 详情页。\n⑤ 内存布局、堆外、UnsafeRow 字节级细节是 Level 7 性能调优的内容，本课只把 Tungsten 当「底层执行优化方向」复用，不深挖。\n\n【正式的技术定义】\n\nWholeStageCodegen（全阶段代码生成）是 Project Tungsten 中「代码生成」这一支的产物：Spark 把一段可以连续 codegen 的物理算子流水线（如 Scan+Filter+Project+Aggregate）生成 Java 代码并编译执行，以减少逐算子调用以及中间对象/数据转换带来的开销，数据在算子间以紧凑的二进制行格式流转。计划中，属于同一个 codegen stage 的每个算子都会被标上相同的 `*(N)`，**N 是 codegen stage 的编号（codegenStageId），不是算子个数**。Exchange 会切断连续的代码生成。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.select('city', 'amount').filter(df.amount > 0).groupBy('city').count()`，这些算子会被 `CollapseCodegenStages` 折叠成若干个 codegen stage：数据在生成的代码里连续地被过滤、投影、聚合，中间不再逐算子交接待处理的行。一旦中间出现 Exchange（groupBy 的 Shuffle），连续的代码生成在此断开，Exchange 之后的算子另起一个新的 codegen stage。注意：**新 stage 的编号会继续递增，不会回到 1。**",
             "examples": [
               {
-                "title": "看 *(N) 融合标记",
-                "code": "df.select('city').filter(df.amount > 0).explain()\n# 节点前缀 *(2) 表示两个算子融合",
-                "note": "*(N) 即 WholeStageCodegen 融合的算子数，越大说明本地融合越充分。"
+                "title": "真实计划长什么样（重点）",
+                "code": "df = spark.read.parquet('sales')\ndf.filter(df.amount > 0).groupBy('city').sum('amount').explain()\n# 典型输出（Spark 3.x，已关闭 AQE）：\n# *(3) HashAggregate(keys=[city#10], functions=[sum(amount#11)])\n# +- Exchange hashpartitioning(city#10, 200)\n#    +- *(2) HashAggregate(keys=[city#10], functions=[partial_sum(amount#11)])\n#       +- *(2) Project [city#10, amount#11]\n#          +- *(2) Filter (isnotnull(amount#11) AND (amount#11 > 0))\n#             +- *(1) ColumnarToRow\n#                +- FileScan parquet [city#10, amount#11]",
+                "note": "怎么读：*(3) 是 codegen stage 3 的编号（并不代表 3 个算子）；三个 *(2) 说明 Filter / Project / HashAggregate 属于同一个 codegen stage（这个 stage 融合了 3 个算子）；Exchange 没有星号，它是 Shuffle，也是 codegen 断点；FileScan parquet 不带 *(N) 同样正常——Spark 3.x 默认开启 Parquet 向量化读取，FileScan 输出 ColumnarBatch，行式 codegen 从 ColumnarToRow 才开始。"
               },
               {
-                "title": "Exchange 打断融合",
-                "code": "df.groupBy('city').count().explain()\n# groupBy 的 Exchange 之后，融合重新从 1 计数",
-                "note": "Shuffle 边界必然切断融合，这是性能与 Stage 划分的关键。"
+                "title": "数「不同 N 的个数」= codegen stage 数",
+                "code": "# 接上例：出现了 *(1) / *(2) / *(3) 三种编号\n# => 这条计划里共有 3 个 codegen stage\n# 数「同一个 N 出现几次」= 该 stage 融合了几个算子\n# => *(2) 出现 3 次，说明 stage 2 里融合了 3 个算子",
+                "note": "这两种数法才可靠；直接把 N 当成算子数是错的（*(3) 下面只有 1 个算子，*(2) 下面却有 3 个）。"
               },
               {
-                "title": "Tungsten 二进制布局（概念）",
-                "code": "# Tungsten 用紧凑二进制行格式，而非 Java 对象\ndf.filter(df.amount > 0).explain()",
-                "note": "本课只把 Tungsten 当「紧凑零件标准」；堆外/编码细节留 Level 7。"
+                "title": "codegen 的断点",
+                "code": "df.groupBy('city').count().explain()\n# Exchange 之后不会出现 *(1)，而是出现更大的编号",
+                "note": "Exchange（Shuffle）会切断 codegen；Python UDF、部分不支持的表达式也会切断它。被切断的部分走传统的逐算子 iterator 方式执行，而不是「解释执行」。"
+              },
+              {
+                "title": "explain(mode='codegen') 直接看生成的代码",
+                "code": "df.filter(df.amount > 0).groupBy('city').count().explain(mode='codegen')\n# 直接打印 Spark 生成的 Java 代码（Spark 3.0+）",
+                "note": "这是理解「融合」最直观的工具：生成的代码按 codegen stage 分段，每一段正好对应一个 WholeStageCodegen。"
               }
             ],
             "key_points": [
-              "WholeStageCodegen：相邻算子融合成单个 Java 方法，省虚函数/中间对象开销",
-              "*(N) 标记 = 融合的算子数",
-              "Exchange（Shuffle）边界必然打断融合，是 Stage 边界也是融合断点",
-              "部分复杂表达式不支持会回退到解释执行",
-              "Tungsten = 紧凑二进制零件标准；内存细节留 Level 7"
+              "WholeStageCodegen：把一段连续的算子流水线生成 Java 代码并编译执行，减少逐算子调用与中间数据转换开销",
+              "*(N) 的 N = codegen stage 编号；同编号 = 同 stage，数「同编号行数」= 算子数，数「不同编号个数」= codegen stage 数",
+              "Exchange（Shuffle）切断 codegen；Python UDF、不支持的表达式也会切断（回退为逐算子 iterator 执行）",
+              "编号在一个查询内从 1 递增，Exchange 之后继续递增，不会回到 1",
+              "Tungsten = 紧凑二进制内存表示 + cache 感知算法 + 代码生成；WholeStageCodegen 属于其中的代码生成部分，内存细节留 Level 7"
             ],
             "common_mistakes": [
               {
-                "mistake": "看到 *(1) 以为「没优化」。",
-                "why": "单算子本身也可能 codegen，只是没融合邻居。",
-                "fix": "看是否受 Exchange 隔断，而非看数字大小。"
+                "mistake": "把 *(N) 的 N 当成「融合了几个算子」。",
+                "why": "N 是 codegen stage 的编号（codegenStageId），与算子个数无关。",
+                "fix": "数「相同 N 出现几次」才是该 stage 的算子数；数「有几种不同的 N」才是 codegen stage 数。"
               },
               {
-                "mistake": "以为所有算子都能无限融合。",
-                "why": "Exchange 必断、部分表达式回退。",
-                "fix": "理解融合有边界。"
+                "mistake": "以为所有算子都能无限融合，或以为 Exchange 之后编号会回到 1。",
+                "why": "Exchange 必断、Python UDF 也会断；编号在整个查询内只增不重置。",
+                "fix": "理解融合有边界；看到 Shuffle 之后的编号更大是正常的。"
               },
               {
-                "mistake": "把 Tungsten 当本课深挖对象。",
-                "why": "内存/堆外是 L7 内容。",
-                "fix": "本课只复用「紧凑零件标准」口径。"
+                "mistake": "看到 FileScan 不带 *(N) 就以为「这里没做 codegen」。",
+                "why": "Spark 3.x 的 Parquet 向量化读取输出 ColumnarBatch，codegen 从 ColumnarToRow 开始，FileScan 本就不带编号。",
+                "fix": "看 ColumnarToRow 及其之上的算子有没有编号。"
+              },
+              {
+                "mistake": "把 Tungsten 只当成「紧凑二进制格式」。",
+                "why": "Tungsten 是包含内存表示、cache 感知算法与代码生成的一整套方向，WholeStageCodegen 本身就是其中一支。",
+                "fix": "记住 codegen ⊂ Tungsten，不是两套并列的东西。"
               }
             ],
-            "review": "上一课我们讲了 Catalyst 的等价改写（下推/裁剪/折叠）。但光「少读少算」还不够快——Spark 还有一层执行层的加速，藏在计划里的 *(N) 标记里。",
-            "problem": "计划里的 *(N) 是什么？为什么相邻算子能被「焊成一台机器」？为什么 Shuffle 会打断这种融合？Tungsten 又是什么角色？",
-            "preview": "知道了融合与 Stage 边界，下集就讲「窄依赖 vs 宽依赖」——为什么某些算子在一个 Stage 内、某些必须切开，根源就在依赖类型。"
+            "review": "上一课我们看 Catalyst 怎么「少干活」：提前过滤、裁掉不用的列、常量先算掉。\n\n但 Spark 的快，不只来自少干活，还有一个更狠的手段——**换一种干法**。\n\n你早就注意到计划里那些 `*(1)` `*(2)` 的星号了吧？前面我们一直说「先别管」，现在该揭晓了：它标记的是 Spark 把一整段算子流水线生成到同一份代码里、编译成一台连轴转的机器。\n\n顺带一句提醒：这个数字的含义，几乎每个人都猜错过。",
+            "problem": "计划里的 `*(N)` 到底是什么编号？（提示：它**不是**「融合了 N 个算子」——这是个极其普遍的误解）为什么相邻的算子能被生成到同一段代码里，而一遇到 Shuffle 就断？断掉以后 Spark 又退回成什么样在执行？还有，Tungsten 和 WholeStageCodegen 到底是什么关系？",
+            "preview": "现在我们知道了：WholeStageCodegen 会把一段能连续 codegen 的流水线焊成一台机器，而 Exchange（Shuffle）就是那把必然落下的铡刀——焊到这儿必须断，断开处就是 Stage 的边界。\n\n于是问题自然往前一步：为什么偏偏是 Shuffle 必须断开？为什么有些算子天生能和邻居待在同一个 Stage 里，有些却非得跨 Stage 不可？\n\n答案藏在一个更底层的概念里：依赖的类型。\n\n下一课：窄依赖 vs 宽依赖。"
           }
         },
         {
@@ -2018,7 +2028,7 @@
           "order_index": 6,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\nRDD 把数据切成很多分区。一个算子处理完，数据怎么流向子算子，决定了「要不要跨节点搬运」。如果子分区只依赖父分区里「同一小撮」，那搬运在车间内部搞定；如果子分区要「凑齐所有节点上同 key 的数据」，那就得把货运到空中重排。前者便宜，后者贵——这就是窄/宽依赖。\n\n【一个直观的心智模型】\n\n- 窄依赖 = 车间内部传递：上游一摞货直接交给同车间的同一个工人，不搬出车间（无 Shuffle）。\n- 宽依赖 = 把货空运到别车间按 key 重排（复用 L2/L3 的 Shuffle=空中飞货）：每个子分区要等「所有上游分区里同 key 的货」到齐。\n- **宽依赖即 Stage 的「断点」**——这正是上一课说的 Exchange 打断融合的根源。\n\n⚠️ 比喻的边界（很重要）：\n① 窄依赖失败，只需重算那个**局部**分区，恢复便宜（血缘短、数据就在本地）。\n② 宽依赖失败，要重算**整个上游重排**——因为下游依赖「全局按 key 汇聚」，上游任何分区丢了都得整体重算，贵。\n③ map/filter/select 是窄；groupBy/join/orderBy/distinct 是宽（其中 groupBy 的「部分聚合」是窄+宽两阶段：本地先聚合是窄，跨节点合并是宽）。\n\n【正式的技术定义】\n\n依赖描述子 RDD 分区对父 RDD 分区的依赖关系。Narrow Dependency（窄依赖）：子分区只依赖父的有限个（通常 1 个或同节点）分区，如 map/filter/select，无 Shuffle。Wide Dependency（宽依赖 / Shuffle Dependency）：子分区依赖父的**所有**分区中同 key 的数据，需跨节点重分布，如 groupBy/join/orderBy/distinct。宽依赖是 Stage 边界与容错成本的分水岭。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.filter(...).select(...)`（窄），Spark 能在同一个 Stage 内把这几个算子融合连续执行，任何分区失败只在本地重算。你写 `df.groupBy('city').count()`（宽），Spark 必须在 Shuffle 处切一刀分成两个 Stage：Stage1 本地预聚合（窄），Stage2 跨节点合并（宽）。宽依赖这刀，就是 Exchange 节点、也是融合断点。",
+            "explanation": "【先用人话理解】\n\nRDD 把数据切成很多分区。一个算子处理完，数据怎么流向子算子，决定了「要不要跨节点搬运」。如果子分区只依赖父分区里「同一小撮」，那搬运在车间内部搞定；如果子分区要「凑齐所有节点上同 key 的数据」，那就得把货运到空中重排。前者便宜，后者贵——这就是窄/宽依赖。\n\n【一个直观的心智模型】\n\n- 窄依赖 = 车间内部传递：上游一摞货直接交给同车间的同一个工人，不搬出车间（无 Shuffle）。\n- 宽依赖 = 把货空运到别车间按 key 重排（复用 L2/L3 的 Shuffle=空中飞货）：每个子分区要等「所有上游分区里同 key 的货」到齐。\n- **宽依赖即 Stage 的「断点」**——这正是上一课说的 Exchange 打断融合的根源。\n\n⚠️ 比喻的边界（很重要）：\n① 窄依赖失败，通常只需沿本地依赖链重算受影响的分区（不一定只有一个，但都在本地/局部），恢复便宜。\n② 宽依赖失败，恢复成本通常明显更高：Shuffle 输出丢失时，可能需要重新执行相关的上游 map task，而不像窄依赖那样只重算少数本地分区。（早期 RDD 论文说「上游任何分区丢失都要整体重算」，那是更保守的表述；现代 Spark 有 shuffle 文件与 External Shuffle Service，实际只重跑真正失败的那部分。）\n③ map/filter/select 是窄；groupBy/orderBy/distinct 和 **shuffle-based join** 是宽（其中 groupBy 的「部分聚合」是窄+宽两阶段：本地先聚合是窄，跨节点合并是宽）。但 **broadcast join 不 Shuffle，是宽依赖里最重要的例外**；`coalesce`（不 shuffle 的合并分区）也是窄。\n\n【正式的技术定义】\n\n依赖描述子 RDD 分区对父 RDD 分区的依赖关系。Narrow Dependency（窄依赖）：子分区只依赖父的有限个（通常 1 个或同节点）分区，如 map/filter/select，无 Shuffle。Wide Dependency（宽依赖 / Shuffle Dependency）：子分区依赖父的**所有**分区中同 key 的数据，需跨节点重分布，如 groupBy/orderBy/distinct，以及 **shuffle-based join**（sort-merge join、shuffle-hash join）。**Broadcast join 是重要例外：它靠广播小表避免 Shuffle，不产生 ShuffleExchange，也不产生 Stage 边界**（Level 6 会细讲）。另外，若上游数据已满足所需分区（例如已经按该 key 分过区），groupBy 也可以省掉 Exchange。宽依赖是 Stage 边界与容错成本的分水岭。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.filter(...).select(...)`（窄），Spark 能在同一个 Stage 内把这几个算子融合连续执行，任何分区失败只在本地重算。你写 `df.groupBy('city').count()`（宽），Spark 必须在 Shuffle 处切一刀分成两个 Stage：Stage1 本地预聚合（窄），Stage2 跨节点合并（宽）。宽依赖这刀，就是 Exchange 节点、也是融合断点。",
             "examples": [
               {
                 "title": "窄依赖（无 Exchange）",
@@ -2032,15 +2042,15 @@
               },
               {
                 "title": "容错成本差异",
-                "code": "# 窄：某分区丢只重算该分区\n# 宽：上游全重排，代价大\ndf.join(other, 'id').explain()   # join 也是宽依赖",
-                "note": "宽依赖失败恢复贵，这是设计容错与调优时要记牢的。"
+                "code": "# 窄：沿本地依赖链重算受影响的分区\n# 宽：Shuffle 输出丢失时可能要重新执行相关上游 map task，代价更大\ndf.join(other, 'id').explain()   # 走 sort-merge 时是宽依赖；若小表被广播则是 broadcast join，没有 ShuffleExchange",
+                "note": "宽依赖的恢复成本通常更高，这是设计容错与调优时要记牢的。"
               }
             ],
             "key_points": [
               "窄依赖：子分区只依赖父局部分区，无 Shuffle（map/filter/select）",
-              "宽依赖：子分区依赖父全部分区同 key 数据，必 Shuffle（groupBy/join/orderBy/distinct）",
+              "宽依赖：子分区依赖父多个/全部分区的同 key 数据，需 Shuffle（groupBy/orderBy/distinct、shuffle-based join）",
               "宽依赖即 Stage 断点（也是 Exchange / 融合断点）",
-              "窄失败只重算局部分区（便宜）；宽失败重算整个上游重排（贵）",
+              "窄失败沿本地依赖链重算受影响分区（便宜）；宽失败可能要重跑相关上游 map task（贵）\n例外：broadcast join 不 Shuffle、不切 Stage；groupBy 在上游已按该 key 分区时可省掉 Exchange",
               "groupBy 部分聚合是窄+宽两阶段"
             ],
             "common_mistakes": [
@@ -2050,9 +2060,9 @@
                 "fix": "窄算子在同一 Stage 融合。"
               },
               {
-                "mistake": "把 join 当窄依赖。",
-                "why": "join 按 key 重分布，是宽。",
-                "fix": "记住 join/聚合/排序/去重都是宽。"
+                "mistake": "以为 join 一定都是宽依赖。",
+                "why": "shuffle-based join（sort-merge / shuffle-hash）按 key 重分布才是宽；broadcast join 广播小表，大表侧不重分布，没有 ShuffleExchange。",
+                "fix": "记住「聚合/排序/去重是宽，join 要看策略」——broadcast 是例外（Level 6 细讲）。"
               },
               {
                 "mistake": "以为宽依赖能「避免失败」。",
@@ -2060,9 +2070,9 @@
                 "fix": "理解宽依赖的容错代价，调优时尽量减少不必要宽依赖。"
               }
             ],
-            "review": "上一课我们看计划里的 *(N) 融合，发现 Shuffle 会打断融合、切出 Stage。可为什么会切？根源在「依赖类型」——有些算子天生在一个 Stage 内，有些必须跨 Stage。",
-            "problem": "窄依赖和宽依赖到底差在哪？为什么宽依赖必然是 Stage 的「断点」？失败恢复时二者成本差多少？哪些算子是宽、哪些是窄？",
-            "preview": "知道了依赖决定 Stage 边界，下集就把 Job / Stage / Task 三层模型一次讲清——一次 Action 怎么变成一个 Job、怎么按宽依赖切 Stage、怎么按分区切 Task 并行。"
+            "review": "上一课我们看到，WholeStageCodegen 焊好的流水线一碰到 Exchange 就被切断，切出来的每一段，正好就是一个 Stage。\n\n可为什么偏偏在这里切？总得有个更根本的理由，而不是「Spark 就是这么写的」。\n\n这个理由就是依赖类型：有的算子，每个分区只靠自己那份数据就能算完；有的算子，必须先把所有分区里同 key 的货凑到一起才能开工。前者在车间内部就能解决，后者只能把货抛到空中、运去别人的车间。",
+            "problem": "窄依赖和宽依赖到底差在哪？为什么宽依赖天然就是 Stage 的「断点」？这两种依赖在失败恢复时的代价差多少？map / filter / groupBy / join / orderBy 里，哪些是窄、哪些是宽——又有没有例外？",
+            "preview": "现在我们手里有了判断 Stage 边界的尺子：宽依赖处必切一刀，因为那里必须等所有同 key 的货都到齐。\n\n那把视角往上抬一层：你点下运行之后，Spark 究竟是怎么把这件事组织起来的？你听过的 Job、Stage、Task 这三个词，到底谁是老大、谁包着谁？为什么大家都说 Task 数等于分区数，那 Stage 数又该怎么数？\n\n这一课，把三层模型一次讲清。\n\n下一课：Job / Stage / Task 层级。"
           }
         },
         {
@@ -2074,41 +2084,41 @@
           "order_index": 7,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\nSpark 跑一次，不是「一个整体」在动，而是分了三层：你下一个执行命令（Action）叫一次「出货指令」（Job）；这个指令里被 Shuffle 切成几段连续工序（Stage）；每段工序又因为数据被分了很多分区，分给很多工人各干一份（Task）。理解这三层，你看 Spark UI 才不会迷路。\n\n【一个直观的心智模型】\n\n- Job = 接到「出货指令」（一次 Action，如 `count()`/`show()`/`write`）。\n- Stage = 中间几个「不跨车间的连续工序段」，被 Exchange（宽依赖）切开。\n- Task = 每车间分到的一摞活（每个分区一个 Task，Executor 工人并行干）。\n层级：**Job ⊃ Stage ⊃ Task**。\n\n⚠️ 比喻的边界（很重要）：\n① Task 数 = 该 Stage 的分区数（即并行度）；分区越多 Task 越多，但太多反而调度开销大——并行度调优是 Level 5 的内容。\n② Stage 数 = 宽依赖数 + 1：每多一次 Shuffle 就多切一个 Stage。\n③ Job 内 Stage **顺序**执行（前一个 Stage 的 Shuffle 输出是后一个的输入），但**单个 Stage 内 Task 并行**（多个 Executor 同时干各自分区）。这是「宏观串行、微观并行」。\n\n【正式的技术定义】\n\nSpark 执行层级：一个 Action 触发一个 Job；Job 的 DAG 按宽依赖（Shuffle）切分为多个 Stage（Stage 数 = 宽依赖数 + 1）；每个 Stage 按输出 RDD 的分区数切分为多个 Task（每分区一个），由 Executor 并行执行。Task 是最小执行单元。Job/Stage/Task 是理解 Spark UI 与性能调度的核心模型。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.groupBy('city').count().show()`：`show()` 是 Action → 触发 1 个 Job。这个 Job 里 groupBy 产生 1 次宽依赖 → 切成 2 个 Stage（Stage0：本地读+预聚合；Stage1：跨节点合并+输出）。假设数据有 200 分区 → 每个 Stage 约 200 个 Task，由集群 Executor 并行执行。你在 Spark UI 看到的，就是这棵 Job→Stage→Task 的树。",
+            "explanation": "【先用人话理解】\n\nSpark 跑一次，不是「一个整体」在动，而是分了三层：你下一个执行命令（Action）叫一次「出货指令」（Job）；这个指令里被 Shuffle 切成几段连续工序（Stage）；每段工序又因为数据被分了很多分区，分给很多工人各干一份（Task）。理解这三层，你看 Spark UI 才不会迷路。\n\n【一个直观的心智模型】\n\n- Job = 接到「出货指令」（一次 Action，如 `count()`/`show()`/`write`；`show`/`take` 这类带 limit 的可能分多轮起多个 Job）。\n- Stage = 中间几个「不跨车间的连续工序段」，被 Exchange（宽依赖）切开。\n- Task = 每车间分到的一摞活（每个分区一个 Task，Executor 工人并行干）。\n层级：**Job ⊃ Stage ⊃ Task**。\n\n⚠️ 比喻的边界（很重要）：\n① Task 数 = 该 Stage 的分区数（即并行度）；分区越多 Task 越多，但太多反而调度开销大——并行度调优是 Level 5 的内容。\n② 对**单条线性依赖链**，可以用「Shuffle 边界数 + 1」快速估算 Stage 数；遇到多分支 / Union / 多数据源这类 DAG 结构，要按实际依赖关系数，别硬套公式。\n③ Stage 按依赖关系组成 DAG：**有依赖的 Stage 必须等父 Stage 完成**（前一个 Stage 的 Shuffle 输出是后一个的输入），**没有依赖关系的 Stage 可以并行提交执行**；**单个 Stage 内 Task 并行**（多个 Executor 同时干各自分区）。简单说：依赖处串行、无依赖可并行、Stage 内 Task 并行。\n\n【正式的技术定义】\n\nSpark 执行层级：一个 Action 通常触发一个 Job（`take`/`show` 这类带 limit 的 Action 可能多轮提交多个 Job）；Job 的 DAG 按宽依赖（Shuffle）切分为多个 Stage（单条线性链上可用「Shuffle 边界数 + 1」快速估算）；每个 Stage 按输出 RDD 的分区数切分为多个 Task（每分区一个），由 Executor 并行执行。Task 是最小执行单元。Job/Stage/Task 是理解 Spark UI 与性能调度的核心模型。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.groupBy('city').count().show()`：`show()` 是 Action → 通常触发 1 个 Job（底层是 `take`，数据不够时可能分多轮提交多个 Job）。这个 Job 里 groupBy 产生 1 次宽依赖 → 切成 2 个 Stage（Stage0：本地读+预聚合；Stage1：跨节点合并+输出）。假设数据有 200 分区 → 每个 Stage 约 200 个 Task，由集群 Executor 并行执行。你在 Spark UI 看到的，就是这棵 Job→Stage→Task 的树。",
             "examples": [
               {
-                "title": "一次 Action = 一个 Job",
-                "code": "df.groupBy('city').count().show()   # 触发 1 个 Job",
-                "note": "每遇到一个 Action（show/count/write）就起一个 Job；Transformation 不触发。"
+                "title": "通常一次 Action = 一个 Job",
+                "code": "df.groupBy('city').count().show()   # 通常触发 1 个 Job",
+                "note": "通常每遇到一个 Action（show/count/write）就起一个 Job；Transformation 不触发。注意 show() 底层是 take，数据不够时可能分多轮、产生多个 Job。"
               },
               {
                 "title": "宽依赖数 → Stage 数",
                 "code": "# groupBy 一次 Shuffle → 2 个 Stage\ndf.groupBy('city').count().explain()",
-                "note": "计划里 Exchange 的个数 + 1 = Stage 数。"
+                "note": "单条线性链上：Exchange 个数 + 1 = Stage 数。多分支 / Union 的计划要按 DAG 数，不能套这个公式。"
               },
               {
                 "title": "分区数 → Task 数",
-                "code": "df = spark.read.parquet('sales').repartition(200)\ndf.groupBy('city').count().show()\n# 每 Stage 约 200 个 Task",
-                "note": "Task 数由该 Stage 分区数决定，即并行度（调优留 L5）。"
+                "code": "df = spark.read.parquet('sales').repartition(200)\ndf.groupBy('city').count().show()\n# 注意：repartition(200) 自己就是一次 Exchange（RoundRobinPartitioning）\n# 再叠加 groupBy 的 Exchange（hashpartitioning）\n# => 一共 2 个 Shuffle 边界、3 个 Stage",
+                "note": "别漏数 repartition：它自身也算一次 Shuffle。Task 数由该 Stage 分区数决定，即并行度（调优留 L5）。"
               }
             ],
             "key_points": [
-              "一次 Action = 一个 Job；Job ⊃ Stage ⊃ Task",
-              "Stage 数 = 宽依赖数 + 1（每多一次 Shuffle 多切一个）",
+              "通常一次 Action = 一个 Job（take/show 可能多个）；Job ⊃ Stage ⊃ Task",
+              "单条线性链：Stage 数 ≈ Shuffle 边界数 + 1；多分支 DAG 要按实际依赖关系数",
               "Task 数 = 该 Stage 分区数（并行度）",
-              "Job 内 Stage 顺序执行；单 Stage 内 Task 并行（宏观串行、微观并行）",
+              "Stage 按依赖 DAG 执行：有依赖的串行、无依赖的可并行；单 Stage 内 Task 并行",
               "并行度/分区数调优留 Level 5"
             ],
             "common_mistakes": [
               {
                 "mistake": "以为一个 DataFrame 程序 = 一个 Job。",
-                "why": "几个 Action 就几个 Job。",
-                "fix": "数 Action 数 = Job 数。"
+                "why": "通常几个 Action 就几个 Job。",
+                "fix": "数 Action 数 ≈ Job 数；show/take 可能因分批而多出几个。"
               },
               {
-                "mistake": "以为 Stage 内也并行出多个 Stage。",
-                "why": "Stage 间是顺序的，只有 Task 层并行。",
-                "fix": "区分「Stage 顺序」与「Task 并行」。"
+                "mistake": "以为一个 Job 里的 Stage 只能一个接一个串行。",
+                "why": "有依赖的才需要等；没有依赖关系的 Stage 可以并行提交。",
+                "fix": "区分「依赖导致的串行」与「无依赖的并行」；真正的并行主力在 Task 层。"
               },
               {
                 "mistake": "把 Task 数当固定值。",
@@ -2116,9 +2126,9 @@
                 "fix": "想调并行度改分区数（Level 5）。"
               }
             ],
-            "review": "上一课我们讲了窄/宽依赖，知道宽依赖会把执行切成 Stage。可「Stage」之上、「Stage」之内，Spark 还分了几层？一次点击到底发生了什么？",
-            "problem": "Job / Stage / Task 三层到底怎么对应？为什么一次 Action 是一个 Job？Stage 为什么按宽依赖切、Task 为什么按分区切？它们谁串行、谁并行？",
-            "preview": "学完三层模型，下集做综合练习——给你一段真实代码，你能独立读出它的计划、数出 Stage、认出 Shuffle、指出至少一处 Catalyst 优化。"
+            "review": "上一课我们拿到了「宽依赖 = Stage 断点」这把尺子。\n\n可你迟早会在 Spark UI 上撞见另外两个词：Job 和 Task。它们和 Stage 到底是什么关系？为什么简简单单一次 show()，也能在 UI 上留下一串记录？\n\n更现实的问题是：当别人说「这个作业卡在 Stage 2 的第 37 个 Task」，你得立刻反应过来他在说哪一层。",
+            "problem": "Job / Stage / Task 三层到底怎么对应？为什么通常一次 Action 就是一个 Job（什么时候不是）？Stage 为什么按宽依赖切、Task 又为什么按分区切？这三层里，谁和谁必须排队、谁和谁可以同时开工？",
+            "preview": "现在三层模型齐了：Action 触发 Job，宽依赖把 Job 切成 Stage，每个 Stage 再按分区切成一堆并行跑的 Task。你已经能从 UI 上的任何一个数字，反推出它属于哪一层。\n\n但「看得懂」和「真的会看」之间，还差一次不看答案的独立读图。\n\n给你一段真实代码，你能自己把它的计划读出来、数出 Stage、认出 Shuffle、指出至少一处优化吗？\n\n下一课：综合练习。"
           }
         },
         {
@@ -2130,7 +2140,7 @@
           "order_index": 8,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n这是 Level 4 的收束：给你一段真实代码，让你像读「施工排程单」一样，把前面所有工位串成一张完整图——先找 Exchange（断点/Shuffle），再数 Stage，最后找 *(N) 融合与下推标记。它逼你把「看计划」从「看得懂单个节点」升级到「看得懂整张图」。\n\n示例任务：读一段 Parquet，过滤 amount>0，按 city 聚合总销售额，输出。\n目标：独立写出/读出它的 explain() 输出，并指出：① 有几处 Exchange（Shuffle）；② 分成几个 Stage；③ 至少一处 Catalyst 优化（下推/裁剪/融合）。\n\n【一个直观的心智模型】\n\n把这次练习想成「把前面所有工位串成一张完整排程单」：\n1. 先找 **Exchange**（断点 / Shuffle）——它是 Stage 的分界线，也是性能重点信号。\n2. 再数 **Stage**（Exchange 数 + 1）。\n3. 最后找 ***(N)** 融合标记与下推/裁剪痕迹——看 Catalyst 帮你省了什么。\n\n⚠️ 比喻的边界（很重要）：\n① 计划相同 ≠ 运行时性能相同：同样一份计划，数据倾斜、分区数不同，真实耗时天差地别（Level 5/L7 才展开）。\n② 本课综合**只验证「读得懂」**——能指认 Shuffle、数出 Stage、找出优化点，就达标；不要求你改写调优。\n③ `explain()` 不触发执行，所以这套「读图」练习随时可做、零成本。\n\n【正式的技术定义】\n\n综合练习 = 对一段真实 Spark 代码，完整应用 Level 4 所学：调用 `explain()` 得到物理计划；识别 Scan/Filter/Project/Aggregate/Exchange 节点；据 Exchange 数判定 Stage 数；据 *(N) 与 Optimized 段判定 WholeStageCodegen 融合与 Catalyst 优化（谓词下推/列裁剪/常量折叠）。输出一份「读图报告」。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `spark.read.parquet('sales').filter(df.amount>0).groupBy('city').sum('amount').explain(True)`：Spark 先生成四段计划；你读 Optimized 段看到 Filter 下推、列裁剪；读 Physical 段看到一处 Exchange（groupBy 的 Shuffle）切出 2 个 Stage，且 Stage 内 *(N) 融合。整条分析，你没执行任何数据，纯粹「读图」。",
+            "explanation": "【先用人话理解】\n\n这是 Level 4 的收束：给你一段真实代码，让你像读「施工排程单」一样，把前面所有工位串成一张完整图——先找 Exchange（断点/Shuffle），再数 Stage，最后找 *(N) 融合与下推标记。它逼你把「看计划」从「看得懂单个节点」升级到「看得懂整张图」。\n\n示例任务：读一段 Parquet，过滤 amount>0，按 city 聚合总销售额，输出。\n目标：独立写出/读出它的 explain() 输出，并指出：① 有几处 Exchange（Shuffle）；② 分成几个 Stage；③ 至少一处 Catalyst 优化（下推/裁剪/融合）。\n\n【一个直观的心智模型】\n\n把这次练习想成「把前面所有工位串成一张完整排程单」：\n1. 先找 **Exchange**（断点 / Shuffle）——它是 Stage 的分界线，也是性能重点信号。\n2. 再数 **Stage**（Exchange 数 + 1）。\n3. 最后看 ***(N)** 编号与下推/裁剪痕迹——数「有几种不同的 N」= codegen stage 数，数「同一个 N 出现几次」= 该 stage 融合了几个算子。\n\n⚠️ 比喻的边界（很重要）：\n① 计划相同 ≠ 运行时性能相同：同样一份计划，数据倾斜、分区数不同，真实耗时天差地别（Level 5/L7 才展开）。\n② 本课综合**只验证「读得懂」**——能指认 Shuffle、数出 Stage、找出优化点，就达标；不要求你改写调优。\n③ `explain()` 不触发执行，所以这套「读图」练习随时可做、零成本。\n④ ⚠️ Spark 3.2+ 默认开启 AQE：`explain()` 看到的是**初始计划**（可能显示 `AdaptiveSparkPlan isFinalPlan=false`），运行时可能被调整；要确认「实际怎么跑」，请结合 Spark UI 的 SQL 详情页。\n\n【正式的技术定义】\n\n综合练习 = 对一段真实 Spark 代码，完整应用 Level 4 所学：调用 `explain()` 得到物理计划；识别 Scan/Filter/Project/Aggregate/Exchange 节点；据 Exchange 数判定 Stage 数；据 *(N) 判定 WholeStageCodegen 的 codegen stage 划分（N 是编号不是算子数），并结合 Optimized 段判定 Catalyst 优化（谓词下推/列裁剪/常量折叠）。输出一份「读图报告」。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `spark.read.parquet('sales').filter(df.amount>0).groupBy('city').sum('amount').explain(True)`：Spark 先生成四段计划；你读 Optimized 段看到 Filter 下推、列裁剪；读 Physical 段看到一处 Exchange（groupBy 的 Shuffle）切出 2 个 Stage，且 Stage 内 *(N) 融合。整条分析，你没执行任何数据，纯粹「读图」。",
             "examples": [
               {
                 "title": "完整读图练习",
@@ -2149,7 +2159,7 @@
               }
             ],
             "key_points": [
-              "读图三步：找 Exchange（Shuffle）→ 数 Stage（Exchange+1）→ 找 *(N) 融合与下推/裁剪",
+              "读图三步：找 Exchange（Shuffle）→ 数 Stage（单条线性链：Exchange 数 + 1）→ 看 *(N) 编号（数「不同 N 的个数」= codegen stage 数）与下推/裁剪",
               "能指认 Shuffle、数出 Stage、找出至少一处 Catalyst 优化即达标",
               "计划相同 ≠ 运行时性能相同（倾斜/分区数影响，L5/L7）",
               "综合只验证「读得懂」，不要求调优",
@@ -2162,9 +2172,9 @@
                 "fix": "先把图读准，调优是 L5/L7。"
               },
               {
-                "mistake": "数 Stage 时漏算「初始 Stage」。",
-                "why": "Stage 数 = Exchange 数 + 1。",
-                "fix": "从 1 开始加。"
+                "mistake": "数 Stage 时漏算「初始 Stage」，或拿公式去套多分支计划。",
+                "why": "单条线性链才是 Exchange 数 + 1；多分支 DAG 要按依赖关系数。",
+                "fix": "先确认是不是线性链，再决定用不用这个公式。"
               },
               {
                 "mistake": "把估计行数当真实性能。",
@@ -2172,9 +2182,9 @@
                 "fix": "真实耗时看 Spark UI（L5）。"
               }
             ],
-            "review": "从「为什么看计划」到「逻辑/物理四段」、「explain 三档」、「读节点」、「Catalyst 规则」、「codegen」、「窄宽依赖」、「Job/Stage/Task」，Level 4 的零件都齐了。",
-            "problem": "能不能不靠提示，独立给一段真实代码读出它的 explain() 输出——数出 Stage、认出 Shuffle、指出至少一处 Catalyst 优化？更重要的是，你能否清晰说出「它打算怎么算」？这正是检验你是否真正串起 Level 4 的标准。",
-            "preview": "恭喜你走完 Level 4——你现在能「看见」Spark 内部怎么算、怎么优化。但一个更深的问题浮现：「怎么让它真的算得更快？」那是 Level 5（分区/Shuffle 调优）的主场。去测验检验自己吧。🏁"
+            "review": "Level 4 的零件，到这里全齐了：\n\n· 为什么该看执行计划——它是诊断性能的第一视角；\n· 逻辑计划 vs 物理计划——四段各管什么；\n· explain() 怎么用——几档输出、惰性窥视；\n· 怎么读执行计划文本——认节点、认 Exchange、读对 `*(N)`；\n· Catalyst 优化规则——下推 / 裁剪 / 折叠的等价省工；\n· WholeStageCodegen 与 Tungsten——把流水线焊成一台机器；\n· 窄依赖 vs 宽依赖——Stage 断点的根源；\n· Job / Stage / Task——三层模型。\n\n这些现在都还是「别人讲给你听的」。这一课，把它们变成你自己能独立读出来的东西。",
+            "problem": "能不能不靠任何提示，独立给一段真实代码读出它的 explain() 输出——数出 Stage、认出 Shuffle、指出至少一处 Catalyst 优化？更重要的是，你能否用自己的话说清「它打算怎么算、哪里最花钱」？这正是检验你是否真正串起 Level 4 的标准。",
+            "preview": "恭喜你走完 Level 4——你现在能「看见」Spark 内部怎么算、在哪儿优化、在哪儿花钱，不再是对着一个黑盒瞎猜。\n\n但一个更实际的问题马上浮上来：既然你已经能看出「这里有一次 Shuffle」，那能不能让它少一次？能不能让并行度更合适、让拖后腿的那几个 Task 不再倾斜？\n\n看得出问题是第一步，**动手把它改快**是另一件事。\n\n那是 Level 5（分区 / Shuffle）的主场。去测验检验自己吧。🏁"
           }
         }
       ]
