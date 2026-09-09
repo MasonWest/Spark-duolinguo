@@ -1,4 +1,4 @@
-# Spark Quest
+# Spark Duolinguo
 
 > **Duolingo 风格的 Apache Spark 学习应用（单机本地版）**
 >
