@@ -208,7 +208,7 @@
         {
           "title": "第一个 PySpark 程序",
           "slug": "l0-first-pyspark-program",
-          "description": "动手运行一个读取数据并 show 的 PySpark 程序。",
+          "description": "动手运行一个简单的 DataFrame 程序。",
           "objective": "学完本课，你应该能够：独立写出一个能运行的 PySpark 程序骨架（建 session → 读数据 → 看 / 统计 → stop）；说清运行前需要哪三样依赖；并确认「我真的让 Spark 动起来了」。",
           "estimated_minutes": 20,
           "order_index": 4,
@@ -1733,7 +1733,7 @@
           "title": "逻辑计划 vs 物理计划",
           "slug": "l4-logical-vs-physical",
           "description": "区分 Logical（想做什么）与 Physical（怎么用 Spark 算子做）；理解四段 Parsed→Analyzed→Optimized→Physical。",
-          "objective": "学完本课，你应该能够：区分 Logical Plan（「想做什么」）与 Physical Plan（「怎么用 Spark 算子做」）；说出四段 Parsed → Analyzed → Optimized → Physical 各自做了什么；理解 Analyzed 才做类型/表存在性检查（很多报错在这）、Optimized 做等价改写、Physical 才绑定具体实现（如 HashAgg vs SortAgg）。",
+          "objective": "学完本课，你应该能够：区分 Logical Plan（「想做什么」）与 Physical Plan（「怎么用 Spark 算子做」）；说出四段 Parsed → Analyzed → Optimized → Physical 各自做了什么；理解 Analyzed 才做类型/表/列存在性检查（很多报错在这）、Optimized 做等价改写、Physical 才绑定具体实现（如 HashAgg vs SortAgg、SortMergeJoin vs BroadcastHashJoin）；并知道 join 策略是到 Physical 阶段才定的，所以「join 一定有 Shuffle」并不成立（Broadcast Join 详见 Level 6）。",
           "estimated_minutes": 13,
           "order_index": 1,
           "prerequisites": "",
@@ -1789,7 +1789,7 @@
           "title": "explain() 怎么用",
           "slug": "l4-explain-api",
           "description": "掌握 explain() / explain(True) / explain(mode=\"formatted\") 区别与输出结构。",
-          "objective": "学完本课，你应该能够：说清 explain() / explain(True) / explain(mode=\"formatted\") 的区别与输出结构；理解 explain() 本身不触发执行（是惰性窥视）；知道 mode=\"formatted\" 需 Spark 2.3+，explain(True) 等价于 extended。",
+          "objective": "学完本课，你应该能够：说清 explain() / explain(True) / explain(mode=\"formatted\") 的区别与输出结构；理解 explain() 本身不触发执行（是惰性窥视）；知道 Spark 3.0+ 共五种模式（simple / extended / codegen / cost / formatted）、mode=\"formatted\" 需 Spark 3.0+（不是 2.3+）、explain(True) 等价于 extended、而 mode=\"codegen\" 能直接看生成的 Java 代码；并知道 Spark 3.2+ 默认开启 AQE 时 explain() 看到的只是初始计划（常显示 AdaptiveSparkPlan isFinalPlan=false），想稳定复现经典输出需先 spark.conf.set(\"spark.sql.adaptive.enabled\", \"false\")。",
           "estimated_minutes": 11,
           "order_index": 2,
           "prerequisites": "",
@@ -1845,7 +1845,7 @@
           "title": "怎么读执行计划文本",
           "slug": "l4-read-plan",
           "description": "识别 Scan/Filter/Project/Aggregate/Exchange；尤其认出 Exchange = Shuffle 信号。",
-          "objective": "学完本课，你应该能够：识别 Scan / Filter / Project / Aggregate / Exchange 节点；尤其认出 Exchange = Shuffle 信号；理解 *(N) 是 Stage 内算子融合标记；并知道计划里的行数/字节是「估计」非真实。",
+          "objective": "学完本课，你应该能够：识别 Scan / Filter / Project / Aggregate / Exchange 节点；尤其认出 Exchange = Shuffle 信号，但也知道它并非必然出现（Broadcast Join 不产生 ShuffleExchange、上游已按该 key 分区时 groupBy 可省掉 Exchange）；读对 *(N)——N 是 codegen stage 的编号，不是融合算子的数量：数「带相同 N 的行数」才知道这个 stage 融合了多少算子，数「不同 N 的个数」才知道有几个 codegen stage；并知道计划里的行数/字节是「估计」而非真实值。",
           "estimated_minutes": 14,
           "order_index": 3,
           "prerequisites": "",
@@ -1901,7 +1901,7 @@
           "title": "Catalyst 优化规则",
           "slug": "l4-catalyst-rules",
           "description": "理解 Optimized 阶段的等价改写：谓词下推、列裁剪、常量折叠、null 传播。",
-          "objective": "学完本课，你应该能够：理解 Optimized 阶段的等价改写——谓词下推、列裁剪、常量折叠、null 传播；明白优化是「等价」的（结果不变只更省）；知道优化器非神仙（UDF/复杂嵌套下推不了），且下推能否发生取决于数据源（Parquet 能，csv 有限）。",
+          "objective": "学完本课，你应该能够：理解 Optimized 阶段的等价改写——谓词下推、列裁剪、常量折叠、null 传播；明白对确定性表达式而言优化是「等价」的（语义不变、只更省），而 rand() / current_timestamp() 这类非确定性表达式不能想当然地折叠或重排；知道优化器的边界在哪：含 UDF 的过滤条件依赖 UDF 的输出值，因此无法被移到 UDF 之前（这不是「优化器看不懂」，而是由表达式的数据依赖顺序决定的），不过列裁剪仍会发生，只是 UDF 依赖的列必须保留；并知道收益取决于数据源——下推对 Parquet 效果明显、csv 有限，列裁剪在 Parquet/ORC 上能跳过整列数据，而 csv 等行式文本通常仍需读取并解析整行。",
           "estimated_minutes": 14,
           "order_index": 4,
           "prerequisites": "",
@@ -1956,8 +1956,8 @@
         {
           "title": "WholeStageCodegen 与 Tungsten",
           "slug": "l4-wholestage-codegen",
-          "description": "理解相邻算子融合成单个 Java 方法；*(N) 标记含义；codegen 不是全融合。",
-          "objective": "学完本课，你应该能够：理解相邻算子融合成单个 Java 方法，避免逐算子虚函数/中间对象开销；说清 *(N) 标记含义；知道 codegen 不是全融合（Exchange 边界会打断）、某些表达式不支持会回退；内存/堆外细节留 L7。",
+          "description": "理解 WholeStageCodegen 把一段可连续 codegen 的算子流水线生成 Java 代码并编译执行；*(N) 是 codegen stage 编号；Exchange 会切断 codegen，不支持的会回退为逐算子执行。",
+          "objective": "学完本课，你应该能够：说清 WholeStageCodegen 把一段可以连续 codegen 的物理算子流水线生成 Java 代码并编译执行，以减少逐算子调用以及中间对象/数据转换的开销；读对 *(N)——N 是 codegen stage 的编号：数「同编号的行数」= 该 stage 融合的算子数，数「不同编号的个数」= 这条查询有几个 codegen stage，Exchange 之后编号继续递增、不会重新从 1 开始；知道 Exchange 会切断 codegen 流水线，不支持 codegen 的表达式或 Python UDF 会回退为逐算子 iterator（Volcano 式）执行——Spark 并没有一个「解释器」；并知道 WholeStageCodegen 属于 Project Tungsten 的代码生成部分，Tungsten 还包括紧凑的二进制内存表示与 cache-aware 的算法数据结构，那些内存/堆外细节留到 Level 7。",
           "estimated_minutes": 13,
           "order_index": 5,
           "prerequisites": "",
@@ -2022,8 +2022,8 @@
         {
           "title": "窄依赖 vs 宽依赖",
           "slug": "l4-dependency-narrow-wide",
-          "description": "区分 Narrow（无 Shuffle）与 Wide（跨分区重排，必 Shuffle）；理解这是 Stage 边界根源。",
-          "objective": "学完本课，你应该能够：区分 Narrow（父→子 1对1/多对1，无 Shuffle）与 Wide（跨分区重排，必 Shuffle）；理解这是 Stage 边界根源；知道窄依赖失败只重算局部分区（恢复便宜）、宽依赖失败要重算整个上游重排（贵）；map/filter/select 窄，groupBy/join/orderBy/distinct 宽。",
+          "description": "区分 Narrow（无 Shuffle）与 Wide（通常需 Shuffle，Broadcast Join 是例外）；理解这是 Stage 边界根源。",
+          "objective": "学完本课，你应该能够：区分 Narrow（父分区→子分区 1对1/多对1，无 Shuffle）与 Wide（子分区依赖父多个甚至全部分区的同 key 数据，通常需要 Shuffle）；理解这是 Stage 边界的根源；知道 shuffle-based join（sort-merge / shuffle-hash）属于宽依赖，但 Broadcast Join 是重要例外——它不 Shuffle、不切 Stage；容错上：窄依赖通常只需沿本地依赖链重算受影响的分区（便宜），宽依赖的 Shuffle 输出丢失时可能要重新跑相关的上游 map task（贵）；map / filter / select 是窄依赖，groupBy / orderBy / distinct 与 shuffle-based join 是宽依赖。",
           "estimated_minutes": 13,
           "order_index": 6,
           "prerequisites": "",
@@ -2079,7 +2079,7 @@
           "title": "Job / Stage / Task 层级",
           "slug": "l4-job-stage-task",
           "description": "建立「一次 Action=一个 Job；Job 按宽依赖切 Stage；每 Stage 按分区数切 Task 并行」层级模型。",
-          "objective": "学完本课，你应该能够：建立「一次 Action=一个 Job；Job 按宽依赖切 Stage；每 Stage 按分区数切 Task 并行」的层级模型；理解 Task 数=该 Stage 分区数，Stage 数=宽依赖数+1，Job 内 Stage 顺序执行、Stage 内 Task 并行；并行度调优留 L5。",
+          "objective": "学完本课，你应该能够：建立「通常一次 Action = 一个 Job（take / show 这类带限制语义的可能触发多个）；Job 按宽依赖切 Stage；每个 Stage 按分区数切 Task 并行」的层级模型；理解 Task 数 = 该 Stage 的分区数；单条线性依赖链可以用「Shuffle 边界数 + 1」快速估算 Stage 数，遇到多分支 / Union / 多数据源的 DAG 则要按实际依赖关系判断，不能套公式；Stage 按依赖 DAG 执行——有依赖的必须等父 Stage、无依赖的可以并行提交，单个 Stage 内的 Task 通常并行执行；并行度调优留 Level 5。",
           "estimated_minutes": 13,
           "order_index": 7,
           "prerequisites": "",
@@ -2135,7 +2135,7 @@
           "title": "综合练习",
           "slug": "l4-comprehensive",
           "description": "给一段真实代码，能读/写出其 explain() 输出，数 Stage、认 Shuffle、指出至少一处 Catalyst 优化。",
-          "objective": "学完本课，你应该能够：给一段真实代码，独立读/写出其 explain() 输出，数 Stage、认 Shuffle、指出至少一处 Catalyst 优化；理解计划相同 ≠ 运行时性能相同（倾斜/分区数影响，L5/L7）；综合只验证「读得懂」，不要求调优。",
+          "objective": "学完本课，你应该能够：给一段真实代码，独立读/写出它的 explain() 输出，数 Stage（单条线性链用 Shuffle 边界数 + 1，多分支按实际依赖数）、认出 Shuffle、指出至少一处 Catalyst 优化；理解计划相同 ≠ 运行时性能相同（数据倾斜 / 分区数都会影响，Level 5 / Level 7 展开）；知道 Spark 3.2+ 默认开启 AQE 时 explain() 只是初始计划，最终执行计划要结合 Spark UI 看；综合练习只验证「读得懂」，不要求你会调优。",
           "estimated_minutes": 18,
           "order_index": 8,
           "prerequisites": "",
@@ -2203,12 +2203,12 @@
           "order_index": 0,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n你已经知道 Spark 把活分给很多工人（Executor）并行干。可「分给工人」是按什么切的？答案是分区（Partition）。就像仓库里那一大堆货被分成 N 个托盘，每个托盘交给一个工人搬。分区就是 Spark 并行计算的最小数据单元——一个分区，由一个 Task 处理。\n\n【一个直观的心智模型】\n\n把分区想成「大仓库里的货被分成的 N 个托盘」。每个托盘（分区）是一份独立的数据切片，交给一个工人（Executor）去搬、去算。Task 数 = 托盘数，托盘越多能同时开工的工人越多。复用 L4 的「Task = 每分区一份活」和 L0 的「Executor = 工人」：托盘就是分给工人的那摞活。\n\n⚠️ 比喻的边界（很重要）：\n① 分区是逻辑切分，由 partitioner（如 HashPartitioner）或输入切片决定，并不是把文件在磁盘上物理劈成几块；同一文件的不同分区可能仍属同一文件的不同字节区间。\n② 分区数影响并行度，不影响结果正确性——切 2 份还是 200 份，算出来的答案一样，只是快慢不同。\n③ HDFS block 与分区不是 1:1：Spark 默认按 block 数给初始分区，但 repartition / 不同输入格式会改变它，别把「block 数」当成「分区数」。\n\n【正式的技术定义】\n\nPartition（分区）是 RDD / DataFrame 底层数据的逻辑切片，是 Spark 并行计算的最小数据单元。一个分区由一个 Task 在一个 Executor 上处理。分区数决定并行 Task 数（理论并行度）。分区方案由 partitioner（如 HashPartitioner）或输入格式（如 HDFS 切片）决定。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df = spark.read.parquet('sales')`，Spark 先按文件物理布局（block / 文件数）算出初始分区数——假设 128 个。当你调用 `df.count()`（Action），Spark 为这 128 个分区各起一个 Task，分派给集群 Executor 并行处理。每个 Task 只搬自己那份分区数据去算，互不重叠。你看到的并行度，本质就是分区数。",
+            "explanation": "【先用人话理解】\n\n你已经知道 Spark 把活分给很多工人（Executor）并行干。可「分给工人」是按什么切的？答案是分区（Partition）。就像仓库里那一大堆货被分成 N 个托盘，每个托盘交给一个工人搬。分区就是 Spark 并行计算的最小数据单元——一个分区，由一个 Task 处理。\n\n【一个直观的心智模型】\n\n把分区想成「大仓库里的货被分成的 N 个托盘」。每个托盘（分区）是一份独立的数据切片，交给一个工人（Executor）去搬、去算。Task 数 = 托盘数，托盘越多能同时开工的工人越多。复用 L4 的「Task = 每分区一份活」和 L0 的「Executor = 工人」：托盘就是分给工人的那摞活。\n\n⚠️ 比喻的边界（很重要）：\n① 分区是逻辑切分，由 partitioner（如 HashPartitioner）或输入切片决定，并不是把文件在磁盘上物理劈成几块；同一文件的不同分区可能仍属同一文件的不同字节区间。\n② 分区数影响并行度，不影响结果正确性——切 2 份还是 200 份，算出来的答案一样，只是快慢不同。\n③ HDFS block 与分区不是 1:1：读文件时的初始分区数由**实现**决定——DataFrame 读取看 `spark.sql.files.maxPartitionBytes`（默认 128MB）与文件是否可切分；RDD（`sc.textFile`）看 InputFormat 的 split 划分（默认大小接近 HDFS block）。它「常常正好接近 block 数」只是巧合，不是规则；repartition / 不同输入格式都会改变它。别把「block 数」当成「分区数」。\n\n【正式的技术定义】\n\nPartition（分区）是 RDD / DataFrame 底层数据的逻辑切片，是 Spark 并行计算的最小数据单元。一个分区由一个 Task 在一个 Executor 上处理。分区数决定并行 Task 数（理论并行度）。分区方案由 partitioner（如 HashPartitioner）或输入格式（如 HDFS 切片）决定。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df = spark.read.parquet('sales')`，Spark 先按文件大小与 `spark.sql.files.maxPartitionBytes`（默认 128MB）算出初始分区数——假设 128 个。当你调用 `df.count()`（Action），Spark 为这 128 个分区各起一个 Task，分派给集群 Executor 并行处理。每个 Task 只搬自己那份分区数据去算，互不重叠。你看到的并行度，本质就是分区数。",
             "examples": [
               {
                 "title": "查看当前分区数",
                 "code": "df = spark.read.parquet('sales')\nprint(df.rdd.getNumPartitions())\n# 输出初始分区数（如 128）",
-                "note": "getNumPartitions 直接看真实分区数；初始值通常来自输入文件的 block 数。"
+                "note": "getNumPartitions 直接看真实分区数；初始值来自「怎么读」：DataFrame 按 `spark.sql.files.maxPartitionBytes`（默认 128MB）切，恰好常与 block 数接近，但两者不是一回事。"
               },
               {
                 "title": "分区是逻辑切分，不是物理劈文件",
@@ -2223,7 +2223,7 @@
             ],
             "key_points": [
               "分区是 Spark 并行计算的最小数据单元，一个分区由一个 Task 处理",
-              "分区数 = 并行 Task 数 = 理论并行度（复用 L4 Job/Stage/Task）",
+              "分区数 = 并行 Task 数 = 理论并行度（实际并发上限还受集群可用 core 数限制；复用 L4 Job/Stage/Task）",
               "分区是逻辑切分（由 partitioner/输入切片决定），不是把文件物理劈开",
               "分区数影响性能，不影响结果正确性",
               "HDFS block 与分区非 1:1，别混为一谈"
@@ -2259,7 +2259,7 @@
           "order_index": 1,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n分区数不是随便定的数字，它直接决定了「能有几个人同时干活」。分区太少，工人（Executor）闲着没事做、或者一个人扛巨量数据干到天黑；分区太多，光是派活、收活的管理开销就把时间吃掉，还可能产生海量小文件。所以「多少都影响性能」——关键在平衡。\n\n【一个直观的心智模型】\n\n把分区数想成「派工单上写的 N 个托盘」——它等于同时能开工的工人上限。托盘太少：有的工人闲着、有的托盘巨大干到崩溃；托盘太多：光是「点名、发单、收工」的管理动作就比正活还多。复用 Executor=工人、托盘=分区的口径。\n\n⚠️ 比喻的边界（很重要）：\n① 本课只讲「分区数影响性能」的原理，不给你一个万能最优值——最优分区数取决于数据量、集群核数、单条记录大小，是 Level 7 调优的主题。\n② 默认分区数有来源（如读文件按 block、shuffle 按 spark.sql.shuffle.partitions 默认 200），但这些默认值未必适合你的数据，本课点到为止。\n③ 分区数与「结果正确性」无关，只与「快慢」有关；别为了「算对」去纠结分区数。\n\n【正式的技术定义】\n\n并行度（Parallelism）指同时执行的 Task 数量，在 Spark 中等于该 Stage 的分区数。分区过少 → 集群算力未被充分利用（Executor 闲置）或单个 Task 处理数据过大（长尾任务、易 OOM）；分区过多 → 任务调度、任务启动、小文件（每个 Task 一个输出文件）等固定开销累积。合理的分区数是性能调优的核心杠杆之一。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.repartition(2).count()`：Spark 把数据重排成 2 个分区，Action 时只起 2 个 Task——若集群有 100 个核，98 个核全程闲着。反过来 `df.repartition(10000).count()`：起 10000 个 Task，绝大多数 Task 只处理几 KB 数据，但调度 10000 次任务的开销可能超过计算本身。两种极端都慢。",
+            "explanation": "【先用人话理解】\n\n分区数不是随便定的数字，它直接决定了「能有几个人同时干活」。分区太少，工人（Executor）闲着没事做、或者一个人扛巨量数据干到天黑；分区太多，光是派活、收活的管理开销就把时间吃掉，还可能产生海量小文件。所以「多少都影响性能」——关键在平衡。\n\n【一个直观的心智模型】\n\n把分区数想成「派工单上写的 N 个托盘」——它等于同时能开工的工人上限。托盘太少：有的工人闲着、有的托盘巨大干到崩溃；托盘太多：光是「点名、发单、收工」的管理动作就比正活还多。复用 Executor=工人、托盘=分区的口径。\n\n⚠️ 比喻的边界（很重要）：\n① 本课只讲「分区数影响性能」的原理，不给你一个万能最优值——最优分区数取决于数据量、集群核数、单条记录大小，是 Level 7 调优的主题。\n② 默认分区数有来源（如读文件按 `spark.sql.files.maxPartitionBytes`、shuffle 按 `spark.sql.shuffle.partitions` 默认 200），但这些默认值未必适合你的数据，本课点到为止。\n③ 分区数与「结果正确性」无关，只与「快慢」有关；别为了「算对」去纠结分区数。\n④ ⚠️ **版本提示**：Spark 3.2+ 默认开启 AQE，`spark.sql.shuffle.partitions`（默认 200）只是 shuffle 后的**初始**分区数——运行时 AQE 会按真实数据量把小分区合并掉，所以「200」是初始上界，不一定是最终分区数；`explain()` 也会因此显示 `AdaptiveSparkPlan isFinalPlan=false`。\n④ ⚠️ **版本提示**：Spark 3.2+ 默认开启 AQE，`spark.sql.shuffle.partitions`（默认 200）只是 shuffle 后的**初始**分区数——运行时 AQE 会按真实数据量把小分区合并掉，所以「200」是初始上界，不一定是最终分区数；`explain()` 也会因此显示 `AdaptiveSparkPlan isFinalPlan=false`。\n\n【正式的技术定义】\n\n并行度（Parallelism）指同时执行的 Task 数量。在 Spark 中它**理论上**等于该 Stage 的分区数，但实际能同时跑多少还受集群可用 core 数限制——分区数多于 core 数时，多出来的 Task 要排队等核。分区过少 → 集群算力未被充分利用（Executor 闲置）或单个 Task 处理数据过大（长尾任务、易 OOM）；分区过多 → 任务调度、任务启动、小文件（每个 Task 一个输出文件）等固定开销累积。合理的分区数是性能调优的核心杠杆之一。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.repartition(2).count()`：Spark 把数据重排成 2 个分区，Action 时只起 2 个 Task——若集群有 100 个核，98 个核全程闲着。反过来 `df.repartition(10000).count()`：起 10000 个 Task，绝大多数 Task 只处理几 KB 数据，但调度 10000 次任务的开销可能超过计算本身。两种极端都慢。",
             "examples": [
               {
                 "title": "分区太少，资源闲置",
@@ -2274,11 +2274,11 @@
               {
                 "title": "看 shuffle 默认分区数来源",
                 "code": "print(spark.conf.get('spark.sql.shuffle.partitions'))\n# 默认 200，是 shuffle 后分区的默认值（非最优保证）",
-                "note": "shuffle 类操作默认按这个值定分区数；它只是默认值，调优留 Level 7。"
+                "note": "shuffle 类操作默认按这个值定**初始**分区数；它只是默认值，且 Spark 3.2+ 的 AQE 会在运行时再合并，调优留 Level 7。"
               }
             ],
             "key_points": [
-              "分区数 = 并行 Task 数 = 理论并行度",
+              "分区数 = 并行 Task 数 = 理论并行度（实际并发还受可用 core 数限制）（实际并发还受可用 core 数限制）",
               "分区太少 → Executor 闲置 / 单 Task 过大（长尾、OOM 风险）",
               "分区太多 → 调度与小文件开销累积",
               "最优分区数取决于数据量/核数/记录大小，本课不给药（留 L7）",
@@ -2310,12 +2310,12 @@
           "title": "Shuffle 是什么",
           "slug": "l5-what-is-shuffle",
           "description": "理解 Shuffle = 跨节点按 key 重新分布数据；是宽依赖的物化，也是「为什么某些操作特别慢」的根源。",
-          "objective": "学完本课，你应该能够：用自己的话解释 Shuffle 是什么——跨节点按 key 重新分布数据；理解 Shuffle 是宽依赖的物化，也是「为什么某些操作特别慢」的根源；知道 Shuffle 不是「错误」而是宽依赖的必然代价；并复用 Level 2/3/4 的「货在空中飞」隐喻正式命名它。",
+          "objective": "学完本课，你应该能够：用自己的话解释 Shuffle 是什么——跨节点按 key 重新分布数据；理解 Shuffle 是宽依赖的物化，也是「为什么某些操作特别慢」的根源；知道 Shuffle 不是「错误」而是宽依赖的通常代价（上游已按该 key 分区、或走 Broadcast Join 时可省）；并复用 Level 2/3/4 的「货在空中飞」隐喻正式命名它。",
           "estimated_minutes": 12,
           "order_index": 2,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n前面讲的分区，数据都在各自工人手里就地算。可一旦某个操作需要「把所有工人手里『同 key』的数据凑到一起」，事情就麻烦了——每个人手里的货得跨节点飞到别人工位上重新归拢。这个「跨节点、按 key 重排数据」的过程，就叫 Shuffle。\n\n【一个直观的心智模型】\n\n复用 Level 2/3/4 的「货在空中飞」：平常数据安静躺在各工人（Executor）手里；一旦遇到 groupBy / join / orderBy，就像吹了声哨，所有工人把「同 key 的货」抛到空中，按 key 重新落到对应工人的新托盘上。空中飞货 = Shuffle = 数据离开原车间、按 key 重排。复用 Stage=不跨车间的连续工序段：Shuffle 就是把货搬出车间这道动作。\n\n⚠️ 比喻的边界（很重要）：\n① Shuffle 不是「错误」，而是宽依赖（Wide Dependency）的必然代价——只要计算需要「全局按 key 汇聚」，它就必须发生，躲不掉（除非本就无需汇聚）。\n② 本课只正式定义它；它「贵在哪」下节课拆，具体调优（buffer/压缩/分区数）留 Level 7。\n③ Shuffle 发生时数据跨网络，意味着 Driver 端依然不抱数据——是 Executor 之间互传，不是回 Driver 中转。\n\n【正式的技术定义】\n\nShuffle 是 Spark 在执行宽依赖算子时，将各分区数据按 key 重新哈希/排序并跨节点传输、再在目标节点重新分区的物理过程。它是宽依赖（如 groupBy / join / orderBy / distinct）的物化，对应执行计划里的 Exchange 节点。Shuffle 是 Spark 作业中最昂贵的操作之一。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.groupBy('city').count()` 触发 Action：Stage 0 在本地读数据并做预聚合（窄），到 Shuffle 边界，Spark 把每个分区的记录按 `city` 哈希，序列化后经网络发到持有目标分区的 Executor，目标端反序列化、归并、再进入 Stage 1 做最终聚合。这一「序列化→网络→反序列化→重排」就是 Shuffle 的全貌。",
+            "explanation": "【先用人话理解】\n\n前面讲的分区，数据都在各自工人手里就地算。可一旦某个操作需要「把所有工人手里『同 key』的数据凑到一起」，事情就麻烦了——每个人手里的货得跨节点飞到别人工位上重新归拢。这个「跨节点、按 key 重排数据」的过程，就叫 Shuffle。\n\n【一个直观的心智模型】\n\n复用 Level 2/3/4 的「货在空中飞」：平常数据安静躺在各工人（Executor）手里；一旦遇到 groupBy / join / orderBy，就像吹了声哨，所有工人把「同 key 的货」抛到空中，按 key 重新落到对应工人的新托盘上。空中飞货 = Shuffle = 数据离开原车间、按 key 重排。复用 Stage=不跨车间的连续工序段：Shuffle 就是把货搬出车间这道动作。\n\n⚠️ 比喻的边界（很重要）：\n① Shuffle 不是「错误」，而是宽依赖（Wide Dependency）的**通常**代价——需要「全局按 key 汇聚」时通常必须发生。但有两个重要例外：上游**已经**按该 key 分好区（如刚 `repartition('city')`），可以省掉 Exchange；JOIN 走 Broadcast Join 时小表侧也不产生 ShuffleExchange（Level 6 展开）。\n② 本课只正式定义它；它「贵在哪」下节课拆，具体调优（buffer/压缩/分区数）留 Level 7。\n③ Shuffle 发生时数据跨网络，意味着 Driver 端依然不抱数据——是 Executor 之间互传，不是回 Driver 中转。\n\n【正式的技术定义】\n\nShuffle 是 Spark 在执行宽依赖算子时，将各分区数据按 key 重新哈希/排序并跨节点传输、再在目标节点重新分区的物理过程。它是宽依赖的物化，对应执行计划里的 Exchange 节点。典型例子有 groupBy / orderBy / distinct，以及 **shuffle-based 的 join**（Sort Merge Join / Shuffle Hash Join）；Broadcast Join 不产生 ShuffleExchange，不属于宽依赖（Level 6）。此外，若上游已按该 key 分区，这些操作也可以不插入 Exchange。Shuffle 是 Spark 作业中最昂贵的操作之一。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.groupBy('city').count()` 触发 Action：Stage 0 在本地读数据并做预聚合（窄），到 Shuffle 边界，Spark 把每个分区的记录按 `city` 哈希，序列化后经网络发到持有目标分区的 Executor，目标端反序列化、归并、再进入 Stage 1 做最终聚合。这一「序列化→网络→反序列化→重排」就是 Shuffle 的全貌。",
             "examples": [
               {
                 "title": "Shuffle 在计划里叫 Exchange",
@@ -2337,7 +2337,7 @@
               "Shuffle = 跨节点按 key 重新分布数据",
               "Shuffle 是宽依赖的物化，对应执行计划里的 Exchange 节点",
               "Shuffle 是「某些操作特别慢」的根源之一",
-              "Shuffle 不是错误，是宽依赖的必然代价（躲不掉）",
+              "Shuffle 不是错误，是宽依赖的通常代价；上游已按该 key 分区或走 Broadcast Join 时可省",
               "数据是 Executor 之间互传，不经 Driver 中转"
             ],
             "common_mistakes": [
@@ -2371,7 +2371,7 @@
           "order_index": 3,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\nShuffle 之所以是性能杀手，是因为它不是「把货从 A 桌挪到 B 桌」那么轻松——它要先装箱（序列化）、装车发运（走网络）、卸货分拣（排序/聚合）。每一道都是实打实的开销。理解这笔账，你就懂为什么能不 Shuffle 就不 Shuffle。\n\n【一个直观的心智模型】\n\n把一次 Shuffle 想成「一次空中运输」：\n- 装箱：把每件货打成标准包裹（序列化）；\n- 装车发运：包裹走网线飞到目标工人（跨网络传输）；\n- 卸货分拣：目标端拆包（反序列化）、按 key 排序、归并聚合。\n复用「空中飞货」隐喻：飞这一趟，光油费（网络）+ 打包人工（序列化）+ 卸货分拣（排序聚合）就不少。\n\n⚠️ 比喻的边界（很重要）：\n① 本课只讲「贵在哪几个环节」，不给你 spark.shuffle.file.buffer / compression 等具体调优参数——那是 Level 7 的事。\n② 当内存放不下中间结果，Spark 会把数据 spill 到磁盘，磁盘 I/O 比内存慢几个数量级，进一步放大代价。\n③ 网络传输受带宽与节点间距离限制；数据倾斜时某些 key 的货特别多，「空中运输」会严重不均衡（倾斜调优留 L7）。\n\n【正式的技术定义】\n\nShuffle 的代价来自多个环节：map 端按 key 分区并常做排序/combine、序列化后写磁盘/网络；数据跨节点传输；reduce 端通过网络拉取（fetch）自己负责的分区、反序列化、归并排序后交付后续算子。任一环节（磁盘 spill、网络、序列化、排序、拉取）在大数据量下都可能是瓶颈。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.groupBy('city').count()`：map 端先把记录按 city 分区、本地排序/combine，序列化成块写入；reduce 端发起 fetch 拉取属于自己 key 的块，跨网络传输，反序列化后在本地归并排序，得到每 city 的计数。整条链路「排序+序列化+网络+反序列化+排序」一个不落，这就是 Shuffle 的贵。",
+            "explanation": "【先用人话理解】\n\nShuffle 之所以是性能杀手，是因为它不是「把货从 A 桌挪到 B 桌」那么轻松——它要先装箱（序列化）、装车发运（走网络）、卸货分拣（排序/聚合）。每一道都是实打实的开销。理解这笔账，你就懂为什么能不 Shuffle 就不 Shuffle。\n\n【一个直观的心智模型】\n\n把一次 Shuffle 想成「一次空中运输」：\n- 装箱：把每件货打成标准包裹（序列化）；\n- 装车发运：包裹走网线飞到目标工人（跨网络传输）；\n- 卸货分拣：目标端拆包（反序列化）、按 key 排序、归并聚合。\n复用「空中飞货」隐喻：飞这一趟，光油费（网络）+ 打包人工（序列化）+ 卸货分拣（排序聚合）就不少。\n\n⚠️ 比喻的边界（很重要）：\n① 本课只讲「贵在哪几个环节」，不给你 spark.shuffle.file.buffer / compression 等具体调优参数——那是 Level 7 的事。\n② 当内存放不下中间结果，Spark 会把数据 spill 到磁盘；磁盘（尤其随机 I/O）通常比内存慢 1~2 个数量级，进一步放大代价。\n③ 网络传输受带宽与节点间距离限制；数据倾斜时某些 key 的货特别多，「空中运输」会严重不均衡（倾斜调优留 L7）。\n\n【正式的技术定义】\n\nShuffle 的代价来自多个环节：map 端按 key 分区并常做排序/combine、序列化后写磁盘/网络；数据跨节点传输；reduce 端通过网络拉取（fetch）自己负责的分区、反序列化、归并排序后交付后续算子。任一环节（磁盘 spill、网络、序列化、排序、拉取）在大数据量下都可能是瓶颈。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.groupBy('city').count()`：map 端先把记录按 city 分区、本地排序/combine，序列化成块写入；reduce 端发起 fetch 拉取属于自己 key 的块，跨网络传输，反序列化后在本地归并排序，得到每 city 的计数。整条链路「排序+序列化+网络+反序列化+排序」一个不落，这就是 Shuffle 的贵。",
             "examples": [
               {
                 "title": "序列化 + 网络 + 反序列化",
@@ -2392,7 +2392,7 @@
             "key_points": [
               "Shuffle 代价环节：序列化 → 网络传输 → 反序列化 → 排序/聚合",
               "map 端常做分区+排序+combine，reduce 端 fetch+归并",
-              "内存不足会 spill 到磁盘，I/O 慢几个数量级",
+              "内存不足会 spill 到磁盘，I/O 通常比内存慢 1~2 个数量级",
               "网络传输受带宽/距离限制，是分布式固有成本",
               "数据倾斜会放大 Shuffle 代价（调优留 L7）"
             ],
@@ -2421,13 +2421,13 @@
         {
           "title": "窄/宽依赖在分区层面的含义",
           "slug": "l5-narrow-wide-partition",
-          "description": "把 L4 的窄/宽依赖定义落到分区：窄依赖父分区只映射一个子分区（无需重排），宽依赖父分区数据发往多个子分区（必 Shuffle）；理解「Stage 边界 = Shuffle 发生的切口」。",
-          "objective": "学完本课，你应该能够：把 Level 4 的窄/宽依赖定义落到分区层面——窄依赖父分区只映射一个子分区（无需重排），宽依赖父分区数据发往多个子分区（必 Shuffle）；理解「Stage 边界 = Shuffle 发生的切口」；知道 L5 不重讲窄宽定义（L4 已讲），重点在「分区如何被重新分配」+「为什么宽依赖处必切 Stage」。",
+          "description": "把 L4 的窄/宽依赖定义落到分区：窄依赖父分区只映射一个子分区（无需重排），宽依赖父分区数据发往多个子分区（通常需 Shuffle；上游已按该 key 分区时可省，Broadcast Join 不属于宽依赖）；理解「Stage 边界 = Shuffle 发生的切口」。",
+          "objective": "学完本课，你应该能够：把 Level 4 的窄/宽依赖定义落到分区层面——窄依赖父分区只映射一个子分区（无需重排），宽依赖父分区数据发往多个子分区（通常需 Shuffle；上游已按该 key 分区时可省，Broadcast Join 不属于宽依赖）；理解「Stage 边界 = Shuffle 发生的切口」；知道 L5 不重讲窄宽定义（L4 已讲），重点在「分区如何被重新分配」+「为什么宽依赖处通常就切 Stage（上游已分区时例外）」。",
           "estimated_minutes": 13,
           "order_index": 4,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n窄依赖和宽依赖，落到分区上就是一句话：子分区需要的货，是「老老实实待在原地、只从一个父分区来」，还是「必须从所有父分区按 key 空运到别处拼起来」。前者不动窝，后者必飞货。这就是同一件事的两个说法。\n\n【一个直观的心智模型】\n\n- 窄依赖 = 一个托盘（父分区）直接交给一个工人（子分区），不拆不飞（复用「车间内部传递」）。\n- 宽依赖 = 一个托盘的货按 key 拆开，分别空运到不同工人的新托盘（复用「空中飞货」+ Stage=连续不跨车间工序段）。\n所以宽依赖处就是 Stage 的切口：飞货一出车间，这道连续工序段就结束了。\n\n⚠️ 比喻的边界（很重要）：\n① L5 不重讲窄宽「定义」（L4 已讲），本课重点在「分区怎么被重新分配」——窄：子分区只依赖父的局部分区；宽：子分区依赖父全部分区中同 key 数据。\n② 宽依赖处必切 Stage，是因为子分区要等「所有上游同 key 货到齐」才能算，天然跨节点，无法留在同一段连续工序里。\n③ 并行度调优（怎么定分区数最优）留 Level 7，本课只讲依赖类型如何决定数据流向与 Stage 边界。\n\n【正式的技术定义】\n\n在分区层面：Narrow Dependency 中每个子分区只由有限个（通常 1 个或同节点）父分区计算得到，无需跨节点重排；Wide Dependency 中每个子分区依赖所有父分区中同 key 的数据，必须跨节点重分布（Shuffle）。宽依赖处即 Stage 边界，也是融合（WholeStageCodegen）的断点。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.filter(...).select(...)`（窄）：Spark 在同一 Stage 内把这几个算子融合，各分区就地连续处理，无跨节点移动。你写 `df.groupBy('city').count()`（宽）：Stage 0 本地预聚合后，在 Shuffle 处把数据按 city 重分布到新分区，切出 Stage 1 做跨节点合并。分区层面的「重分配」就是 Stage 划分的物理依据。",
+            "explanation": "【先用人话理解】\n\n窄依赖和宽依赖，落到分区上就是一句话：子分区需要的货，是「老老实实待在原地、只从一个父分区来」，还是「必须从所有父分区按 key 空运到别处拼起来」。前者不动窝，后者必飞货。这就是同一件事的两个说法。\n\n【一个直观的心智模型】\n\n- 窄依赖 = 一个托盘（父分区）直接交给一个工人（子分区），不拆不飞（复用「车间内部传递」）。\n- 宽依赖 = 一个托盘的货按 key 拆开，分别空运到不同工人的新托盘（复用「空中飞货」+ Stage=连续不跨车间工序段）。\n所以宽依赖处就是 Stage 的切口：飞货一出车间，这道连续工序段就结束了。\n\n⚠️ 比喻的边界（很重要）：\n① L5 不重讲窄宽「定义」（L4 已讲），本课重点在「分区怎么被重新分配」——窄：子分区只依赖父的局部分区；宽：子分区依赖父全部分区中同 key 数据。\n② 宽依赖处通常会切 Stage，是因为子分区要等「所有上游同 key 货到齐」才能算，天然跨节点，无法留在同一段连续工序里。注意前提是「真的需要重分布」：上游已按该 key 分区时不插 Exchange，也就不切 Stage；Broadcast Join 同理。\n③ 并行度调优（怎么定分区数最优）留 Level 7，本课只讲依赖类型如何决定数据流向与 Stage 边界。\n\n【正式的技术定义】\n\n在分区层面：Narrow Dependency 中每个子分区只由**有限个**（通常 1 个）父分区计算得到，无需跨节点重排——注意窄依赖并不要求父子在同一节点，它强调的是「依赖的父分区数量有界」。Wide Dependency 中每个子分区依赖所有父分区中同 key 的数据，通常需要跨节点重分布（Shuffle）——除非上游已经按同一 key 分好区，此时可省掉 Exchange。宽依赖处即 Stage 边界，也是融合（WholeStageCodegen）的断点。补充：Broadcast Join 的小表侧只是被广播分发，并不满足「子分区依赖所有父分区同 key 数据」的定义，它**不是**宽依赖。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.filter(...).select(...)`（窄）：Spark 在同一 Stage 内把这几个算子融合，各分区就地连续处理，无跨节点移动。你写 `df.groupBy('city').count()`（宽）：Stage 0 本地预聚合后，在 Shuffle 处把数据按 city 重分布到新分区，切出 Stage 1 做跨节点合并。分区层面的「重分配」就是 Stage 划分的物理依据。",
             "examples": [
               {
                 "title": "窄依赖：分区就地处理",
@@ -2437,7 +2437,7 @@
               {
                 "title": "宽依赖：分区被重分配",
                 "code": "df.groupBy('city').count().explain()\n# Exchange 处分区按 city 重分布到新分区，切 Stage",
-                "note": "宽依赖中父分区数据发往多个子分区，必 Shuffle。"
+                "note": "宽依赖中父分区数据发往多个子分区，通常需 Shuffle（上游已按该 key 分区时可省）。"
               },
               {
                 "title": "依赖类型决定 Stage 边界",
@@ -2447,7 +2447,7 @@
             ],
             "key_points": [
               "窄依赖：子分区只依赖父局部分区，无需重排（车间内部）",
-              "宽依赖：子分区依赖父全部分区同 key 数据，必 Shuffle（空中飞货）",
+              "宽依赖：子分区依赖父全部分区同 key 数据，通常需 Shuffle（上游已按该 key 分区时可省；Broadcast Join 不属于宽依赖）",
               "宽依赖处 = Stage 边界 = 融合断点",
               "L5 重点在「分区如何被重分配」，窄宽定义 L4 已讲",
               "并行度调优留 Level 7，本课只看依赖决定数据流向"
@@ -2478,17 +2478,17 @@
           "title": "哪些操作会触发 Shuffle",
           "slug": "l5-shuffle-trigger-operators",
           "description": "列举触发 Shuffle 的常见算子（groupBy / reduceByKey / aggregateByKey / join / distinct / repartition / orderBy / sort 等），区分「一定 Shuffle」与「可能 Shuffle」。",
-          "objective": "学完本课，你应该能够：列举触发 Shuffle 的常见算子（groupBy / reduceByKey / aggregateByKey / join / distinct / repartition / orderBy / sort 等）；区分「一定 Shuffle」与「可能 Shuffle」；知道 join 只点出「是宽依赖、会 Shuffle」，深类型（broadcast/sort-merge 怎么选）留 Level 6；不展开各 join 策略优劣。",
+          "objective": "学完本课，你应该能够：列举触发 Shuffle 的常见算子（groupBy / reduceByKey / aggregateByKey / join / distinct / repartition / orderBy / sort 等）；区分「一定 Shuffle」与「可能 Shuffle」；知道 join 通常要按 key 重分布、但 Broadcast Join 可免，深类型（broadcast / sort-merge 怎么选）留 Level 6；不展开各 join 策略优劣。",
           "estimated_minutes": 13,
           "order_index": 5,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n既然 Shuffle 这么贵，你至少得认得出「哪些工序会叫空中货运」。就像仓库里有张清单，列着哪些动作必然要搬货、哪些动作可能要搬。认全这张清单，你写代码时才能下意识避开不必要的飞货。\n\n【一个直观的心智模型】\n\n把触发 Shuffle 的算子想成「会叫空中货运的那些工序清单」：groupBy 分拣、join 拼桌、distinct 去重、orderBy 重排、repartition 推倒重排——这些都是「需要全局按 key / 全局有序 / 全局重分布」的动作，必然或可能叫飞货。复用「空中飞货」与「水果分拣派对 = groupBy 聚合」。\n\n⚠️ 比喻的边界（很重要）：\n① 区分「一定 Shuffle」与「可能 Shuffle」：groupBy / distinct / orderBy / sort / join / repartition 通常一定 Shuffle；而像 `union`（同 schema 简单拼接）一般不 Shuffle；某些 `reduceByKey` 在已按相同 key 分区时仍可能仍需跨节点合并（取决于上游分区）。\n② join 只点出「是宽依赖、会 Shuffle」；broadcast / sort-merge / shuffle-hash 怎么选、什么时候 broadcast，是 Level 6 的深类型，本课不展开。\n③ 不要背死「某算子必 Shuffle」——要看它是否需要「全局按 key 汇聚 / 全局有序」，那是 Shuffle 的真正判据。\n\n【正式的技术定义】\n\n触发 Shuffle 的算子通常需要跨分区按 key 重分布或全局排序：groupBy / groupByKey / reduceByKey / aggregateByKey（按 key）、join / cogroup（按 key 对齐）、distinct / dropDuplicates（按整行或列去重需重排）、orderBy / sort / sortWithinPartitions（全局有序需重排）、repartition（强制重分布）。是否实际 Shuffle 取决于上游是否已是目标分区分布。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.orderBy('city')`：因需要全局有序，Spark 在 Shuffle 处把数据按排序键重分布到新分区并排序，切出 Stage。你写 `dfA.join(dfB, 'id')`：两表按 id 重分布（Shuffle）后对齐拼桌。你写 `df.union(other)`（同 schema）：仅拼接分区、不重排，通常无 Shuffle——印证「是否需全局重分布」才是判据。",
+            "explanation": "【先用人话理解】\n\n既然 Shuffle 这么贵，你至少得认得出「哪些工序会叫空中货运」。就像仓库里有张清单，列着哪些动作必然要搬货、哪些动作可能要搬。认全这张清单，你写代码时才能下意识避开不必要的飞货。\n\n【一个直观的心智模型】\n\n把触发 Shuffle 的算子想成「会叫空中货运的那些工序清单」：groupBy 分拣、join 拼桌、distinct 去重、orderBy 重排、repartition 推倒重排——这些都是「需要全局按 key / 全局有序 / 全局重分布」的动作，必然或可能叫飞货。复用「空中飞货」与「水果分拣派对 = groupBy 聚合」。\n\n⚠️ 比喻的边界（很重要）：\n① 区分「通常一定 Shuffle」与「通常不 Shuffle」：`repartition` 一定 Shuffle（它就是强制重分布）；groupBy / distinct / orderBy / sort 通常需要 Shuffle，但**上游已按目标 key / 排序键分区时可省**；`join` 要看策略——sort-merge / shuffle-hash 需要，Broadcast Join 不需要（Level 6）；`union`（同 schema 简单拼接）一般不 Shuffle；`sortWithinPartitions` **不 Shuffle**（它只在各分区内部排序）；`reduceByKey` 若上游已按相同 key 且相同分区数分区，可只做本地聚合、完全不 Shuffle。\n② join 只点出「是宽依赖、会 Shuffle」；broadcast / sort-merge / shuffle-hash 怎么选、什么时候 broadcast，是 Level 6 的深类型，本课不展开。\n③ 不要背死「某算子必 Shuffle」——要看它是否需要「全局按 key 汇聚 / 全局有序」，那是 Shuffle 的真正判据。\n\n【正式的技术定义】\n\n触发 Shuffle 的算子通常需要跨分区按 key 重分布或全局排序：groupBy / groupByKey / reduceByKey / aggregateByKey（按 key）、join / cogroup（按 key 对齐；Broadcast Join 例外）、distinct / dropDuplicates（按整行或列去重需重排）、orderBy / sort（全局有序需重排）、repartition（强制重分布）。**注意 `sortWithinPartitions` 不在此列**——它只在每个分区内部排序、不跨节点重排，因此不 Shuffle。是否实际 Shuffle 最终取决于上游是否已是目标分区分布：上游已按相同 key 分好区时，groupBy / reduceByKey 等都可以不插 Exchange。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.orderBy('city')`：因需要全局有序，Spark 在 Shuffle 处把数据按排序键重分布到新分区并排序，切出 Stage。你写 `dfA.join(dfB, 'id')`：两表按 id 重分布（Shuffle）后对齐拼桌。你写 `df.union(other)`（同 schema）：仅拼接分区、不重排，通常无 Shuffle——印证「是否需全局重分布」才是判据。",
             "examples": [
               {
-                "title": "一定 Shuffle 的算子",
-                "code": "df.groupBy('city').count()\ndf.orderBy('city')\ndf.distinct()\n# 都需全局按 key/有序重分布 → 必 Shuffle",
-                "note": "groupBy / orderBy / distinct 是 Shuffle 常客。"
+                "title": "通常 Shuffle 的算子",
+                "code": "df.groupBy('city').count()\ndf.orderBy('city')\ndf.distinct()\n# 都需全局按 key/有序重分布 → 通常 Shuffle（上游已分区时可省）",
+                "note": "groupBy / orderBy / distinct 是 Shuffle 常客（上游已按该 key / 排序键分区时可省）。"
               },
               {
                 "title": "join 也 Shuffle",
@@ -2502,11 +2502,11 @@
               }
             ],
             "key_points": [
-              "一定/通常 Shuffle：groupBy / distinct / orderBy / sort / join / repartition",
+              "通常 Shuffle：groupBy / distinct / orderBy / sort / shuffle-based join / repartition；不 Shuffle：sortWithinPartitions、union、Broadcast Join 的大表侧",
               "reduceByKey / aggregateByKey 按 key，通常需跨节点合并",
               "union（同 schema 拼接）通常不 Shuffle",
               "判据是「是否需全局按 key 汇聚/全局有序」，而非算子名",
-              "join 深类型（broadcast 等）留 Level 6，本课只点「会 Shuffle」"
+              "join 深类型（broadcast 等）留 Level 6；本课只点「shuffle-based join 需按 key 重分布，Broadcast Join 例外」"
             ],
             "common_mistakes": [
               {
@@ -2539,7 +2539,7 @@
           "order_index": 6,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n同样是把同 key 的货凑一起，做法不同，空中运费天差地别。一种做法是：每个工人先把自家的同 key 货捆成小包（本地先聚合），再只把小包空运去中央汇总；另一种是：把每件散货原样空运，到中央再慢慢捆。前者飞货量小得多——这就是 reduceByKey 比 groupByKey 省的根本原因。\n\n【一个直观的心智模型】\n\n- reduceByKey = 先在各自车间把同类项捆成小包（map-side combine），再只空运小包到中央汇总（复用「空中飞货」+ 水果分拣派对：每个人扔之前先本地预聚合，只扔两个大袋）。\n- groupByKey = 把每件散货都原样空运（不捆），到中央再分组——空中飞的全是未聚合的原始 value，运力浪费。\n\n⚠️ 比喻的边界（很重要）：\n① combine 有前提：聚合函数必须是可交换、可结合的（如 sum/ min/ max），否则本地先聚合会算错；groupBy 的「分组后随便处理」没有这个限制。\n② 本课只讲「为什么 reduceByKey 更省 Shuffle」的原理，不写「设自定义 partitioner / 调 spark.sql.shuffle.partitions 到最优」的 tuning 代码——那是 Level 7。\n③ 即便省了 Shuffle 量，reduceByKey 仍有一次 Shuffle（只是传输量小）；它优化的是「传输体积」，不是「消除 Shuffle」。\n\n【正式的技术定义】\n\nreduceByKey 在 map 端对每个分区内的同 key 记录先做本地聚合（combine），再 Shuffle 传输已聚合的部分结果，reduce 端合并得到最终值，因此跨网络传输的数据量远小于原始记录数。groupByKey 不做 map 端 combine，直接将每个 key 的全部 value 原样 Shuffle 到 reduce 端再分组，传输量 = 原始 value 总数，网络代价高。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `rdd.map(...).reduceByKey(_ + _)`：每个 Executor 先在本地把同 key 的 value 相加成部分和，Shuffle 时只传这些部分和（例如每分区每 key 一个和），reduce 端加总。你写 `rdd.map(...).groupByKey()`：每个 value 原样序列化飞到目标 Executor，目标端收齐所有 value 再处理——同样数据量，空中飞货量可能是前者的几十倍。",
+            "explanation": "【先用人话理解】\n\n同样是把同 key 的货凑一起，做法不同，空中运费天差地别。一种做法是：每个工人先把自家的同 key 货捆成小包（本地先聚合），再只把小包空运去中央汇总；另一种是：把每件散货原样空运，到中央再慢慢捆。前者飞货量小得多——这就是 reduceByKey 比 groupByKey 省的根本原因。\n\n【一个直观的心智模型】\n\n- reduceByKey = 先在各自车间把同类项捆成小包（map-side combine），再只空运小包到中央汇总（复用「空中飞货」+ 水果分拣派对：每个人扔之前先本地预聚合，只扔两个大袋）。\n- groupByKey = 把每件散货都原样空运（不捆），到中央再分组——空中飞的全是未聚合的原始 value，运力浪费。\n\n⚠️ 比喻的边界（很重要）：\n① combine 有前提：聚合函数必须是**可结合的**（associative，如 sum / min / max；它们通常同时也满足可交换），否则本地先聚合会算错；groupBy 的「分组后随便处理」没有这个限制。\n② 本课只讲「为什么 reduceByKey 更省 Shuffle」的原理，不写「设自定义 partitioner / 调 spark.sql.shuffle.partitions 到最优」的 tuning 代码——那是 Level 7。\n③ 即便省了传输量，reduceByKey 通常仍有一次 Shuffle（只是传输量小）；它优化的是「传输体积」，不是「消除 Shuffle」。唯一例外是上游已按相同 key 且相同分区数分区——那时它只做本地聚合，一次 Shuffle 都没有。\n\n【正式的技术定义】\n\nreduceByKey 在 map 端对每个分区内的同 key 记录先做本地聚合（combine），再 Shuffle 传输已聚合的部分结果，reduce 端合并得到最终值，因此跨网络传输的数据量远小于原始记录数。groupByKey 不做 map 端 combine，直接将每个 key 的全部 value 原样 Shuffle 到 reduce 端再分组，传输量 = 原始 value 总数，网络代价高。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `rdd.map(...).reduceByKey(_ + _)`：每个 Executor 先在本地把同 key 的 value 相加成部分和，Shuffle 时只传这些部分和（例如每分区每 key 一个和），reduce 端加总。你写 `rdd.map(...).groupByKey()`：每个 value 原样序列化飞到目标 Executor，目标端收齐所有 value 再处理——同样数据量，空中飞货量可能是前者的几十倍。",
             "examples": [
               {
                 "title": "reduceByKey：先本地 combine",
@@ -2560,8 +2560,8 @@
             "key_points": [
               "reduceByKey：map 端先本地 combine，再 Shuffle 部分和（传输量小）",
               "groupByKey：不 combine，所有 value 原样 Shuffle（传输量大）",
-              "combine 要求聚合函数可交换、可结合（sum/min/max）",
-              "reduceByKey 优化的是「Shuffle 传输体积」，不是消除 Shuffle",
+              "combine 要求聚合函数可结合（sum/min/max，通常同时可交换）",
+              "reduceByKey 优化的是「Shuffle 传输体积」，不是消除 Shuffle（除非上游已按同 key、同分区数分好区）（除非上游已按同 key、同分区数分好区）",
               "tuning 代码（partitioner/分区数）留 Level 7，本课只讲原理"
             ],
             "common_mistakes": [
@@ -2595,7 +2595,7 @@
           "order_index": 7,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n想调整分区数（托盘数）有两个扳手：一个粗暴——把所有托盘推倒重排，必叫空中货运；一个温柔——把相邻的托盘就地并拢，不拆不飞。前者能增能减但必付 Shuffle；后者只能减、但免费。选哪个，看你是要「加托盘」还是「减托盘」。\n\n【一个直观的心智模型】\n\n- repartition = 把所有托盘推倒重排（必空中飞货）：能增能减，但每次都付一次 Shuffle。\n- coalesce = 把相邻托盘就地并拢（不拆不飞，窄合并）：只能减不能增，且不触发 Shuffle。\n复用「空中飞货」与「托盘 = 分区」：想减托盘又不想白付飞货，就选 coalesce。\n\n⚠️ 比喻的边界（很重要）：\n① coalesce 不能增分区——它只做「合并」，没有数据可凭空多出托盘；要增分区必须 repartition。\n② coalesce 默认 shuffle=False，只在同节点内合并相邻分区；若跨节点合并仍可能移动数据，想要强制不跨节点可传 shuffle=False 并依赖同节点布局（通常无需显式）。\n③ 并行度/性能调优（选多少分区最优）留 Level 7；本课只讲两个手段的「触发 Shuffle 与否」与「能否增减」。\n\n【正式的技术定义】\n\nrepartition(n) 通过对数据做 hash 重分布把分区数改为 n，**一定触发 Shuffle**，可增可减。coalesce(n) 通过合并现有分区减少分区数（n < 当前），默认走窄依赖合并、**不触发 Shuffle**，但只能减少不能增加；若想跨节点均匀合并可传 shuffle=True（那就变 Shuffle）。二者都返回新 DataFrame，原 DataFrame 不变（不可变语义）。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.repartition(200)`：Spark 按 key 哈希把数据重分布到 200 个分区，一次 Shuffle，分区数变 200（增或减都行）。你写 `df.coalesce(2)`：Spark 把相邻分区合并成 2 个，不跨节点重排、无 Shuffle，分区数从多降到 2（只能减）。你写 `df.coalesce(500)`（当前只有 10 个分区）则无效——不能凭空增多。",
+            "explanation": "【先用人话理解】\n\n想调整分区数（托盘数）有两个扳手：一个粗暴——把所有托盘推倒重排，必叫空中货运；一个温柔——把相邻的托盘就地并拢，不拆不飞。前者能增能减但必付 Shuffle；后者只能减、但免费。选哪个，看你是要「加托盘」还是「减托盘」。\n\n【一个直观的心智模型】\n\n- repartition = 把所有托盘推倒、按人头**轮流重新发牌**（必空中飞货）：能增能减，但每次都付一次 Shuffle。注意它是「轮流发」不是「按 key 归堆」，所以同 key 未必同托盘。\n- coalesce = 把相邻托盘就地并拢（不拆不飞，窄合并）：只能减不能增，且不触发 Shuffle。\n复用「空中飞货」与「托盘 = 分区」：想减托盘又不想白付飞货，就选 coalesce。\n\n⚠️ 比喻的边界（很重要）：\n① coalesce 不能增分区——它只做「合并」，没有数据可凭空多出托盘；要增分区必须 repartition。\n② coalesce 默认 shuffle=False：Spark 会**尽量**把同一 Executor 上的分区并到一起，但并不保证——跨节点合并时仍会通过 block 传输拉取数据（这不是一次 Shuffle stage，但仍然要搬数据）。所以它并非绝对零移动，结果是「省掉一次 Shuffle，可能换来分区大小不均」。\n③ 并行度/性能调优（选多少分区最优）留 Level 7；本课只讲两个手段的「触发 Shuffle 与否」与「能否增减」。\n\n【正式的技术定义】\n\nrepartition(n) 用 **round-robin（轮询）**方式把数据均匀打散到 n 个分区，**一定触发 Shuffle**，可增可减。注意它不保证同一个 key 落进同一个分区；想要按某列哈希分区得写 `repartition(n, col)`。coalesce(n) 通过合并现有分区减少分区数（n < 当前），默认走窄依赖合并、**不触发 Shuffle**，但只能减少不能增加；若想跨节点均匀合并可传 shuffle=True（那就变 Shuffle）。二者都返回新 DataFrame，原 DataFrame 不变（不可变语义）。顺带说清一个常见误解：正因为 `repartition(n)` 是轮询打散、不保证同 key 同分区，所以 `repartition(200).groupBy('city')` 里的 groupBy 往往还得再 Shuffle 一次（呼应 L4 那个「3 个 Stage」的例子）。顺带说清一个常见误解：正因为 `repartition(n)` 是轮询打散、不保证同 key 同分区，所以 `repartition(200).groupBy('city')` 里的 groupBy 往往还得再 Shuffle 一次（呼应 L4 那个「3 个 Stage」的例子）。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `df.repartition(200)`：Spark 按 key 哈希把数据重分布到 200 个分区，一次 Shuffle，分区数变 200（增或减都行）。你写 `df.coalesce(2)`：Spark 把相邻分区合并成 2 个，不跨节点重排、无 Shuffle，分区数从多降到 2（只能减）。你写 `df.coalesce(500)`（当前只有 10 个分区）则无效——不能凭空增多。",
             "examples": [
               {
                 "title": "repartition：必 Shuffle，能增能减",
@@ -2617,7 +2617,7 @@
               "repartition：一定触发 Shuffle，可增可减分区",
               "coalesce：默认不 Shuffle（窄合并），只能减少分区",
               "想减分区又不想白付 Shuffle → 选 coalesce",
-              "coalesce 不能增分区，要增必须 repartition",
+              "coalesce 不能增分区，要增必须 repartition；repartition(n) 是轮询打散（同 key 未必同分区），repartition(n, col) 才按列哈希；repartition(n) 是轮询打散（同 key 未必同分区），repartition(n, col) 才按列哈希",
               "coalesce 跨节点合并仍可能移动数据；调优留 L7"
             ],
             "common_mistakes": [
@@ -2651,7 +2651,7 @@
           "order_index": 8,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n这是 Level 5 的收束：给你一段真实代码，让你像看「运输排程单」一样，把前面所有道具串成一张完整图——先找空中飞货（Shuffle），再数托盘（分区/并行度），最后找「能本地先捆包」的机会（combine）。它逼你把「看分区与 Shuffle」从「看得懂单个概念」升级到「看得懂整段作业」。\n\n示例任务：读一份日志，按城市分组统计错误数，按数量降序取前 10。\n目标：独立指出 ① 哪几步触发 Shuffle（groupBy / orderBy）；② 分成几个 Stage（Shuffle 数 + 1）；③ 并行度约等于多少（看分区数）；④ 能否用 reduceByKey 类思路减少飞货。\n\n【一个直观的心智模型】\n\n把这次练习想成「把前面道具串成一张运输排程单」：\n1. 先找 **空中飞货（Shuffle）**——groupBy / orderBy / join 等，它们是性能重点信号。\n2. 再数 **托盘（分区 / 并行度）**——分区数 = Task 数 = 理论并行度。\n3. 最后找 **可本地捆包的机会（combine）**——能用 reduceByKey 就不用 groupByKey。\n\n⚠️ 比喻的边界（很重要）：\n① 计划相同 ≠ 运行时性能相同：同样一份计划，数据倾斜、分区数不同，真实耗时天差地别（Level 7 才展开）。\n② 本课综合**只验证「看得懂」**——能指认 Shuffle、数出 Stage、估计并行度、指出 reduceByKey 优化点，就达标；不要求你写 tuning 代码或给最优分区数。\n③ explain() 不触发执行，所以这套「读图」练习随时可做、零成本。\n\n【正式的技术定义】\n\n综合练习 = 对一段真实 Spark 代码，完整应用 Level 5 所学：识别触发 Shuffle 的算子（groupBy / orderBy / join / distinct / repartition）；据 Shuffle 数判定 Stage 数（Shuffle 数 + 1）；据分区数估计并行度（Task 数）；并据「map 端 combine」原理判断能否用 reduceByKey 类算子替代 groupByKey 以减少传输。输出一份「分区与 Shuffle 读图报告」。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `logs.groupBy('city').count().orderBy(F.desc('count')).limit(10).explain(True)`：Spark 先生成计划；你读出 groupBy 处一处 Exchange（Shuffle，切出 Stage）、orderBy 处又一处 Exchange（再切 Stage），共 2 次 Shuffle → 3 个 Stage；并发现 groupBy 用 reduceByKey 式本地预聚合（combine）已省传输；limit 不 Shuffle。整段分析零执行，纯粹「读图」。",
+            "explanation": "【先用人话理解】\n\n这是 Level 5 的收束：给你一段真实代码，让你像看「运输排程单」一样，把前面所有道具串成一张完整图——先找空中飞货（Shuffle），再数托盘（分区/并行度），最后找「能本地先捆包」的机会（combine）。它逼你把「看分区与 Shuffle」从「看得懂单个概念」升级到「看得懂整段作业」。\n\n示例任务：读一份日志，按城市分组统计错误数，按数量降序取前 10。\n目标：独立指出 ① 哪几步触发 Shuffle（groupBy / orderBy）；② 分成几个 Stage（Shuffle 数 + 1）；③ 并行度约等于多少（看分区数）；④ 能否用 reduceByKey 类思路减少飞货。\n\n【一个直观的心智模型】\n\n把这次练习想成「把前面道具串成一张运输排程单」：\n1. 先找 **空中飞货（Shuffle）**——groupBy / orderBy / join 等，它们是性能重点信号。\n2. 再数 **托盘（分区 / 并行度）**——分区数 = Task 数 = 理论并行度。\n3. 最后找 **可本地捆包的机会（combine）**——能用 reduceByKey 就不用 groupByKey。\n\n⚠️ 比喻的边界（很重要）：\n① 计划相同 ≠ 运行时性能相同：同样一份计划，数据倾斜、分区数不同，真实耗时天差地别（Level 7 才展开）。\n② 本课综合**只验证「看得懂」**——能指认 Shuffle、数出 Stage、估计并行度、指出 reduceByKey 优化点，就达标；不要求你写 tuning 代码或给最优分区数。\n③ explain() 不触发执行，所以这套「读图」练习随时可做、零成本。\n④ ⚠️ **版本提示**：Spark 3.2+ 默认开启 AQE，`explain()` 给出的是**初始**计划（可能出现 `AdaptiveSparkPlan isFinalPlan=false`），AQE 会在运行时按真实统计合并分区、甚至改 Join 策略。要确认最终执行计划，看 Spark UI 的 SQL 详情页。\n④ ⚠️ **版本提示**：Spark 3.2+ 默认开启 AQE，`explain()` 给出的是**初始**计划（可能出现 `AdaptiveSparkPlan isFinalPlan=false`），AQE 会在运行时按真实统计合并分区、甚至改 Join 策略。要确认最终执行计划，看 Spark UI 的 SQL 详情页。\n\n【正式的技术定义】\n\n综合练习 = 对一段真实 Spark 代码，完整应用 Level 5 所学：识别触发 Shuffle 的算子（groupBy / orderBy / shuffle-based join / distinct / repartition）；对**单条线性依赖链**用「Shuffle 边界数 + 1」估算 Stage 数（多分支 / 多数据源的 DAG 要按实际依赖关系数，不能套公式）；据分区数估计并行度（Task 数）；并据「map 端 combine」原理判断能否用 reduceByKey 类算子替代 groupByKey 以减少传输。输出一份「分区与 Shuffle 读图报告」。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `logs.groupBy('city').count().orderBy(F.desc('count')).limit(10).explain(True)`：Spark 先生成计划；你读出 groupBy 处一处 Exchange（Shuffle，切出 Stage）。后半段有个细节值得知道：`orderBy(...).limit(10)` 会被优化成 `TakeOrderedAndProject`，它内部是一次**单分区** Shuffle，而不是「先按 range 重排、再排序」两次动作。所以总计仍是 2 次 Shuffle → 3 个 Stage，且最后一个 Stage 只有 1 个 Task。整段分析零执行，纯粹「读图」。⚠️ Spark 3.2+ 开启 AQE 时，`explain()` 看到的是**初始**计划（`AdaptiveSparkPlan isFinalPlan=false`），分区数与最终执行计划可能不同。",
             "examples": [
               {
                 "title": "完整读图练习",
@@ -2670,7 +2670,7 @@
               }
             ],
             "key_points": [
-              "读图三步：找 Shuffle（空中飞货）→ 数 Stage（Shuffle+1）→ 估计并行度（分区数）",
+              "读图三步：找 Shuffle（空中飞货）→ 数 Stage（单条线性链：Shuffle 边界数 + 1）→ 估计并行度（分区数）",
               "能指认 Shuffle、数出 Stage、估计并行度、指出 reduceByKey 优化点即达标",
               "计划相同 ≠ 运行时性能相同（倾斜/分区数影响，L7）",
               "综合只验证「看得懂」，不要求调优或给最优分区数",
@@ -2684,7 +2684,7 @@
               },
               {
                 "mistake": "数 Stage 时漏算「初始 Stage」。",
-                "why": "Stage 数 = Shuffle 数 + 1。",
+                "why": "单条线性链下 Stage 数 = Shuffle 边界数 + 1（多分支 DAG 要按实际依赖关系数）。",
                 "fix": "从 1 开始加。"
               },
               {
@@ -2709,17 +2709,17 @@
           "title": "JOIN 是什么（为什么比单表聚合更重）",
           "slug": "l6-what-is-join",
           "description": "理解 JOIN = 两数据集按 key 对齐拼合；相比单表 groupBy，JOIN 往往要「两边都按 key 重排」或「一方被广播」，所以通常更贵。",
-          "objective": "学完本课，你应该能够：用自己的话解释 JOIN 是「先按 key 对齐、再拼合」而不是「查两张表」；说清为什么 JOIN 通常比单表 groupBy 更贵（两侧都要按 key 重分布）；知道无 join key / 条件写错会退化成笛卡尔积或空结果；理解「一侧足够小可广播」是唯一常见的免 Shuffle 路径（本课只埋伏笔，第 3 课展开）；并明确本课不重讲 Level 3 的 INNER JOIN 语法。",
+          "objective": "学完本课，你应该能够：用自己的话解释 JOIN 是「先按 key 对齐、再拼合」而不是「查两张表」；说清为什么 JOIN 通常比单表 groupBy 更贵（两侧都要按 key 重分布）；知道无 join key / 条件写错会退化成笛卡尔积或空结果；理解「一侧足够小可广播」与「两侧已按同一 key 分好区」是两条常见的免 Shuffle 路径（本课只埋伏笔，第 3 课展开）；并明确本课不重讲 Level 3 的 INNER JOIN 语法。",
           "estimated_minutes": 12,
           "order_index": 0,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n单表聚合（groupBy）像「把一筐水果按种类分堆」——货只有一筐，按 key 归拢就完事。JOIN 不一样：它是「两筐货要按同一个编号对上号，再拼成一张表」。麻烦在于，编号相同的那两条记录，一开始很可能躺在不同工人（Executor）手里，你得先把它们弄到一块儿，才能拼得起来。\n\n【一个直观的心智模型】\n\n复用 Level 3 的「两拨货按 key 拼桌」：订单表和客户表要按 customer_id 拼成一张大桌。可拼桌前有个硬前提——同一个 customer_id 的两条记录必须坐到一起。怎么做到？只有两条路：\n- **两边都按座号（key）重排**：两拨货各飞一次「空中运输」（复用 L5 的 Shuffle 隐喻），落到按 key 分好的新托盘上，再逐 key 配对——这是 Sort-Merge Join / Shuffle Hash Join 的路子（第 4、5 课细讲）；\n- **把小桌名单复印 N 份发到每个工人手里**：大表那拨货原地不动，工人拿手里的名单直接对照——这是 Broadcast Hash Join（第 3 课的主角）。\n\n所以 JOIN 的「重」，就重在这个「先对齐、再拼合」的前置动作上。\n\n⚠️ 比喻的边界（很重要）：\n① JOIN 不是「查两表」——它是先按 key 对齐再拼合的二元算子。没给 join key（或条件非等值），就退化成笛卡尔积：每条对每条，O(n·m) 的灾难。\n② 相比 groupBy 通常只把一边的货按 key 汇聚，JOIN 常常**两边**都要按 key 重排，所以一般更贵——但这是「通常」：当一侧足够小时，大表那次 Shuffle 是可以整个免掉的（第 3 课）。\n③ 拼桌是比喻，真实代价是「序列化 → 跨网络 → 反序列化 → 排序」（复用 L5 空中飞货三环节），不是把纸挪过去那么轻。\n④ 别指望 explain 帮你跑一遍：explain 只是看计划、不执行（复用 L4）。\n\n【正式的技术定义】\n\nJOIN 是按 join key（通常是等值条件）把两个数据集的记录配对拼接的二元算子。由于相同 key 的记录在物理上必须落到同一位置才能配对，JOIN 通常需要按 key 重新分布数据，即触发 Shuffle（宽依赖，对应执行计划里的 Exchange 节点）。因此 JOIN 是分布式计算中最昂贵的操作类别之一；唯一的常见例外是「一侧足够小、可以被广播」时，大数据那一侧可以完全免去 Shuffle。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `orders.join(customers, 'customer_id')`：\n1. Catalyst（优化大脑，复用 L3）生成逻辑计划：Scan orders → Scan customers → Join；\n2. 进入物理计划阶段，它必须决定「到底怎么拼」——这正是 Level 6 后面几课的主题（BHJ / SMJ / SHJ）；\n3. 若走 SMJ：orders 与 customers **各自**按 customer_id 哈希分区并排序（两个 Exchange），相同 key 落到同一分区，再逐 key 归并配对；\n4. 若 customers 足够小走 BHJ：customers 被整份广播到每个 Executor（BroadcastExchange），orders 原地流式探测，计划里只出现一个 Exchange。\n同样一句 join 代码，内部可能是两条完全不同的执行路径——这就是「读计划认策略」的价值。",
+            "explanation": "【先用人话理解】\n\n单表聚合（groupBy）像「把一筐水果按种类分堆」——货只有一筐，按 key 归拢就完事。JOIN 不一样：它是「两筐货要按同一个编号对上号，再拼成一张表」。麻烦在于，编号相同的那两条记录，一开始很可能躺在不同工人（Executor）手里，你得先把它们弄到一块儿，才能拼得起来。\n\n【一个直观的心智模型】\n\n复用 Level 3 的「两拨货按 key 拼桌」：订单表和客户表要按 customer_id 拼成一张大桌。可拼桌前有个硬前提——同一个 customer_id 的两条记录必须坐到一起。怎么做到？只有两条路：\n- **两边都按座号（key）重排**：两拨货各飞一次「空中运输」（复用 L5 的 Shuffle 隐喻），落到按 key 分好的新托盘上，再逐 key 配对——这是 Sort-Merge Join / Shuffle Hash Join 的路子（第 4、5 课细讲）；\n- **把小桌名单复印 N 份发到每个工人手里**：大表那拨货原地不动，工人拿手里的名单直接对照——这是 Broadcast Hash Join（第 3 课的主角）。\n\n所以 JOIN 的「重」，就重在这个「先对齐、再拼合」的前置动作上。\n\n⚠️ 比喻的边界（很重要）：\n① JOIN 不是「查两表」——它是先按 key 对齐再拼合的二元算子。没给 join key（或条件非等值），就退化成笛卡尔积：每条对每条，O(n·m) 的灾难。\n② 相比 groupBy 通常只把一边的货按 key 汇聚，JOIN 常常**两边**都要按 key 重排，所以一般更贵——但这是「通常」：当一侧足够小时，大表那次 Shuffle 可以整个免掉（Broadcast Join，第 3 课）；两侧已按同一 key 分好区时同样能免。\n③ 拼桌是比喻，真实代价是「序列化 → 跨网络 → 反序列化 → 排序」（复用 L5 空中飞货三环节），不是把纸挪过去那么轻。\n④ 别指望 explain 帮你跑一遍：explain 只是看计划、不执行（复用 L4）。\n⑤ ⚠️ **版本提示**：（a）Spark 3.2+ 默认开启 AQE，它可能在**运行时**把计划里的 Sort-Merge Join 改成 Broadcast Hash Join（`spark.sql.adaptive.autoBroadcastJoinThreshold`），所以 `explain()` 的初始计划未必是最终执行路径，确认要看 Spark UI。（b）Spark 2.4 及更早，隐式笛卡尔积会直接抛 AnalysisException；Spark 3.0 起 `spark.sql.crossJoin.enabled` 默认 true，引擎不再替你拦这一枪——所以写完 join 更要自己 count() 验量级。\n⑤ ⚠️ **版本提示**：（a）Spark 3.2+ 默认开启 AQE，它可能在**运行时**把计划里的 Sort-Merge Join 改成 Broadcast Hash Join（`spark.sql.adaptive.autoBroadcastJoinThreshold`），所以 `explain()` 的初始计划未必是最终执行路径，确认要看 Spark UI。（b）Spark 2.4 及更早，隐式笛卡尔积会直接抛 AnalysisException；Spark 3.0 起 `spark.sql.crossJoin.enabled` 默认 true，引擎不再替你拦这一枪——所以写完 join 更要自己 count() 验量级。\n\n【正式的技术定义】\n\nJOIN 是按 join key（通常是等值条件）把两个数据集的记录配对拼接的二元算子。由于相同 key 的记录在物理上必须落到同一位置才能配对，JOIN 通常需要按 key 重新分布数据，即触发 Shuffle（宽依赖，对应执行计划里的 Exchange 节点）。因此 JOIN 是分布式计算中最昂贵的操作类别之一。常见的免 Shuffle 路径有两条：「一侧足够小、可以被广播」（Broadcast Hash Join，第 3 课）；以及「两侧已经按同一个 join key 分好区」（如分桶表，或上游已经 `repartition(n, key)` 且分区数一致）——这时同 key 本来就在一起，无需再重排。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `orders.join(customers, 'customer_id')`：\n1. Catalyst（优化大脑，复用 L3）生成逻辑计划：Scan orders → Scan customers → Join；\n2. 进入物理计划阶段，它必须决定「到底怎么拼」——这正是 Level 6 后面几课的主题（BHJ / SMJ / SHJ）；\n3. 若走 SMJ：orders 与 customers **各自**按 customer_id 哈希分区并排序（两个 Exchange），相同 key 落到同一分区，再逐 key 归并配对；\n4. 若 customers 足够小走 BHJ：customers 被整份广播到每个 Executor（BroadcastExchange），orders 原地流式探测，计划里只出现一个 Exchange。\n同样一句 join 代码，内部可能是两条完全不同的执行路径——这就是「读计划认策略」的价值。",
             "examples": [
               {
                 "title": "最基础的等值 JOIN + 看计划",
                 "code": "orders = spark.read.parquet('orders')\ncustomers = spark.read.parquet('customers')\norders.join(customers, 'customer_id').explain()\n# 先看两个数：Exchange 有几个？Join 节点叫什么？",
-                "note": "0 个 Exchange = 走了广播，大表免 Shuffle；2 个 Exchange = 两边都重排（SMJ）。这是判断 JOIN 代价的第一眼。"
+                "note": "只看到 **BroadcastExchange**、大表侧没有普通 Exchange = 走了广播，大表免 Shuffle；看到**两个普通 Exchange** = 两边都重排（SMJ）。注意 BroadcastExchange 名字里也带 Exchange，数的时候别把它漏掉或重复数。这是判断 JOIN 代价的第一眼。"
               },
               {
                 "title": "单表 groupBy（一次 Shuffle）对照 JOIN",
@@ -2741,7 +2741,7 @@
               "JOIN = 先按 key 对齐、再拼合，不是简单地「查两张表」",
               "相同 key 必须落到同一位置 → JOIN 通常触发 Shuffle（宽依赖 / Exchange）",
               "相比单表 groupBy，JOIN 常常两边都要重排，所以通常更贵",
-              "一侧足够小时可广播（BHJ），大表可免 Shuffle——唯一常见的免 Shuffle 路径",
+              "一侧足够小时可广播（BHJ），或两侧已按同一 key 分好区 → 大表可免 Shuffle",
               "无 join key / 条件写错 → 笛卡尔积 O(n·m) 或空结果，是最贵的事故"
             ],
             "common_mistakes": [
@@ -2775,7 +2775,7 @@
           "order_index": 1,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n同一句 `df1.join(df2, 'id')`，Spark 内部其实有好几种「拼法」。就像拼桌这件小事，你可以把小名单复印给所有人对照，也可以两本名册先排序再逐页比对，还可以先把一方做成索引再让另一方来查。选哪种，取决于两拨货有多大。\n\n【一个直观的心智模型】\n\n同一场「两拨货按 key 拼桌」，Spark 备着三套预案：\n- **复印小册子对照（Broadcast Hash Join，BHJ）**：把小的那份名单复印 N 份发到每个工人手里，大表那拨货原地不动，工人拿手里的册子直接对照。→ 大表**不 Shuffle**。\n- **两本按 key 排序的电话簿逐页对照（Sort-Merge Join，SMJ）**：两拨货都按 key 排好序、飞到归并台上，两个人各翻各的，指针一路往下走，相同 key 就配对。→ **两边都 Shuffle**。\n- **一方按 key 重排做抽屉柜、另一方流式来查（Shuffle Hash Join，SHJ）**：把一拨货按 key 重排成一只抽屉柜（哈希表），另一拨货流式过来，每条直接拉开对应抽屉查。→ **至少一方 Shuffle**，且抽屉柜要塞得进内存。\n\n外加两个谁都不想要的**兜底**：小表广播 + 嵌套循环（BroadcastNestedLoopJoin，非等值条件时）、以及无 key 时的笛卡尔积（CartesianProduct）。\n\n⚠️ 比喻的边界（很重要）：\n① 三套预案**结果完全等价**，只是代价不同——策略选择是「等价改写」，不改变答案（这正是 Catalyst 能自由选的前提）。\n② 本课只给框架和名字，各策略的原理细节在第 3/4/5 课，Spark 到底凭什么选是第 6 课；本课不给任何阈值或参数。\n③ 计划里的节点名是**物理计划**才有的（复用 L4 逻辑 vs 物理），看到的是 `BroadcastHashJoin` / `SortMergeJoin` / `ShuffledHashJoin`；具体哪个会出现跟 Spark 版本、表大小、配置都有关，别背死「某代码一定出某节点」。\n④ 「抽屉柜」要占内存，「电话簿排序」要占磁盘与时间——没有免费的策略，只有合适的策略。\n\n【正式的技术定义】\n\n物理 JOIN 策略（Join Strategy）指 Spark 在物理计划阶段为逻辑 Join 选定的具体实现方式，主要有三种：\n- **Broadcast Hash Join（BHJ）**：小表广播到每个 Executor，内存构建哈希表，大表流式探测，大表不 Shuffle；\n- **Sort-Merge Join（SMJ）**：两侧按 join key 分区并排序（Shuffle），再归并配对，是大表 × 大表的通用默认策略；\n- **Shuffle Hash Join（SHJ）**：两侧按 key Shuffle 分区，较小一侧在内存建哈希表，较大一侧流式探测。\n兜底策略为 BroadcastNestedLoopJoin（一侧广播 + 嵌套循环，用于非等值条件）与 CartesianProduct（无等值条件时的笛卡尔积）。选择发生在物理计划阶段，由 Spark 依据统计信息与配置自动完成。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `big.join(small, 'id').explain()`：Catalyst 先生成逻辑计划（只有一个 Join 节点，还没决定怎么拼），进入物理计划阶段后，由 join strategy 相关规则把它替换成某一种具体实现。所以你在 explain 里看到的 `BroadcastHashJoin(...)` / `SortMergeJoin(...)`，是**决策的结果**而不是你写出来的东西——决策依据（表大小估计、hint、配置）第 6 课拆。",
+            "explanation": "【先用人话理解】\n\n同一句 `df1.join(df2, 'id')`，Spark 内部其实有好几种「拼法」。就像拼桌这件小事，你可以把小名单复印给所有人对照，也可以两本名册先排序再逐页比对，还可以先把一方做成索引再让另一方来查。选哪种，取决于两拨货有多大。\n\n【一个直观的心智模型】\n\n同一场「两拨货按 key 拼桌」，Spark 备着三套预案：\n- **复印小册子对照（Broadcast Hash Join，BHJ）**：把小的那份名单复印 N 份发到每个工人手里，大表那拨货原地不动，工人拿手里的册子直接对照。→ 大表**不 Shuffle**。\n- **两本按 key 排序的电话簿逐页对照（Sort-Merge Join，SMJ）**：两拨货都按 key 排好序、飞到归并台上，两个人各翻各的，指针一路往下走，相同 key 就配对。→ **两边都 Shuffle**。\n- **一方按 key 重排做抽屉柜、另一方流式来查（Shuffle Hash Join，SHJ）**：把一拨货按 key 重排成一只抽屉柜（哈希表），另一拨货流式过来，每条直接拉开对应抽屉查。→ **至少一方 Shuffle**，且抽屉柜要塞得进内存。\n\n外加两个谁都不想要的**兜底**：小表广播 + 嵌套循环（BroadcastNestedLoopJoin，非等值条件时）、以及无 key 时的笛卡尔积（CartesianProduct）。\n\n⚠️ 比喻的边界（很重要）：\n① 三套预案**结果完全等价**（在确定性求值的前提下），只是代价不同——策略选择是「等价改写」，不改变答案（这正是 Catalyst 能自由选的前提）。\n② 本课只给框架和名字，各策略的原理细节在第 3/4/5 课，Spark 到底凭什么选是第 6 课；本课不给任何阈值或参数。\n③ 计划里的节点名是**物理计划**才有的（复用 L4 逻辑 vs 物理），看到的是 `BroadcastHashJoin` / `SortMergeJoin` / `ShuffledHashJoin`；具体哪个会出现跟 Spark 版本、表大小、配置都有关，别背死「某代码一定出某节点」。⚠️ 补充两条版本事实：Spark 3.x 默认 `spark.sql.join.preferSortMergeJoin=true`，所以 SHJ 相对少见；Spark 3.2+ 的 AQE 又可能在运行时把 SMJ 改成 BHJ 或 SHJ——在 3.x 上，「物理计划」其实是一个会变的计划。⚠️ 补充两条版本事实：Spark 3.x 默认 `spark.sql.join.preferSortMergeJoin=true`，所以 SHJ 相对少见；Spark 3.2+ 的 AQE 又可能在运行时把 SMJ 改成 BHJ 或 SHJ——在 3.x 上，「物理计划」其实是一个会变的计划。\n④ 「抽屉柜」要占内存，「电话簿排序」要占磁盘与时间——没有免费的策略，只有合适的策略。\n\n【正式的技术定义】\n\n物理 JOIN 策略（Join Strategy）指 Spark 在物理计划阶段为逻辑 Join 选定的具体实现方式，主要有三种：\n- **Broadcast Hash Join（BHJ）**：小表广播到每个 Executor，内存构建哈希表，大表流式探测，大表不 Shuffle；\n- **Sort-Merge Join（SMJ）**：两侧按 join key 分区并排序（Shuffle），再归并配对，是大表 × 大表的通用默认策略；\n- **Shuffle Hash Join（SHJ）**：两侧按 key Shuffle 分区，较小一侧在内存建哈希表，较大一侧流式探测。\n兜底策略为 BroadcastNestedLoopJoin（一侧广播 + 嵌套循环，用于非等值条件）与 CartesianProduct（无等值条件时的笛卡尔积）。选择发生在物理计划阶段，由 Spark 依据统计信息与配置自动完成。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `big.join(small, 'id').explain()`：Catalyst 先生成逻辑计划（只有一个 Join 节点，还没决定怎么拼），进入物理计划阶段后，由 join strategy 相关规则把它替换成某一种具体实现。所以你在 explain 里看到的 `BroadcastHashJoin(...)` / `SortMergeJoin(...)`，是**决策的结果**而不是你写出来的东西——决策依据（表大小估计、hint、配置）第 6 课拆。",
             "examples": [
               {
                 "title": "BHJ 的计划长相（小表被广播）",
@@ -2836,7 +2836,7 @@
           "order_index": 2,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\nL5 说过，Shuffle 贵就贵在「装箱 → 装车 → 卸货分拣」。那么最直接的省钱办法就是：**别让大表那批货飞**。如果你的维表只有几百几千行（城市字典、商品类目），而事实表有几十亿行，那根本没必要把几十亿行搬来搬去——把那本小字典复印 N 份发给每个工人就行了。\n\n【一个直观的心智模型】\n\n复用并正式命名 L5「空中飞货」的反面：**小册子复印 N 份**。\n- 小表 = 一本薄薄的小册子（城市字典）；\n- 大表 = 一仓库待处理的货；\n- 广播 = 把小册子复印 N 份，一个工人（Executor）手里塞一本；\n- 拼合 = 工人拿着手里的册子，对眼前的货逐条对照，当场就能拼好，**这批货一步都不用离开自己的托盘**。\n\n复用 L5 的「托盘 = 分区」：每个分区的货都在本地被处理，没有跨节点重排——这就是「大表不 Shuffle」。\n\n⚠️ 比喻的边界（很重要）：\n① **小表必须能塞进 Executor 内存**：工人手里的册子是占地方的真实内存，不是魔法投影。小表稍大一点，所有 Executor 同时撑着它，可能直接 OOM 或让 Spark 放弃广播、改走别的策略。\n② 广播**不是零成本**：小册子也要复印、也要运到每个工人手上（BroadcastExchange 本身就是一次网络传输），只是它搬的是小表，比搬大表便宜好几个数量级。\n③ 广播的是**整张小表**，不是「按需取用的索引」——即使大表里只用到其中 3 个 key，那一整本册子照样整份发过去。\n④ 「多大算小」由一个广播阈值控制，Spark 会拿小表的**统计大小估计**去和它比；具体阈值是多少、怎么调，是 Level 7 调优的内容，本课只讲「存在这个前提」。\n\n【正式的技术定义】\n\nBroadcast Hash Join（广播哈希连接）是 Spark 的一种物理 JOIN 策略：将较小一侧（build side）的完整数据通过 BroadcastExchange 发送到每个 Executor，在各 Executor 内存中构建哈希表；较大一侧（probe/stream side）的各分区数据在本地流式读取，逐条到哈希表中探测匹配。由于大表侧无需按 key 重分布，**大表不发生 Shuffle**，计划中只出现广播侧的 BroadcastExchange。适用前提是小表的统计大小低于广播阈值且能放入 Executor 内存。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `big.join(small, 'city_id')`（small 很小）：\n1. 物理计划阶段，Catalyst 判断 small 的大小估计低于广播阈值 → 选定 BHJ；\n2. 计划中插入 `BroadcastExchange`，把 small 的完整数据收集后分发到每个 Executor；\n3. 每个 Executor 把收到的 small 在内存里建成哈希表（build）；\n4. big 的各个分区**在原 Executor 上**被逐条读取，拿 join key 去哈希表里探测（probe），命中就输出拼好的行；\n5. 全程 big 没有跨节点移动——省下的正是 L5 拆过的那串「装箱→装车→卸货分拣」。",
+            "explanation": "【先用人话理解】\n\nL5 说过，Shuffle 贵就贵在「装箱 → 装车 → 卸货分拣」。那么最直接的省钱办法就是：**别让大表那批货飞**。如果你的维表只有几百几千行（城市字典、商品类目），而事实表有几十亿行，那根本没必要把几十亿行搬来搬去——把那本小字典复印 N 份发给每个工人就行了。\n\n【一个直观的心智模型】\n\n复用并正式命名 L5「空中飞货」的反面：**小册子复印 N 份**。\n- 小表 = 一本薄薄的小册子（城市字典）；\n- 大表 = 一仓库待处理的货；\n- 广播 = 把小册子复印 N 份，一个工人（Executor）手里塞一本；\n- 拼合 = 工人拿着手里的册子，对眼前的货逐条对照，当场就能拼好，**这批货一步都不用离开自己的托盘**。\n\n复用 L5 的「托盘 = 分区」：每个分区的货都在本地被处理，没有跨节点重排——这就是「大表不 Shuffle」。\n\n⚠️ 比喻的边界（很重要）：\n① **小表必须能塞进 Executor 内存**：工人手里的册子是占地方的真实内存，不是魔法投影。小表稍大一点，所有 Executor 同时撑着它，可能直接 OOM 或让 Spark 放弃广播、改走别的策略。\n② 广播**不是零成本**：小册子也要复印、也要运到每个工人手上（BroadcastExchange 本身就是一次网络传输），只是它搬的是小表，比搬大表便宜好几个数量级。\n③ 广播的是**整张小表**，不是「按需取用的索引」——即使大表里只用到其中 3 个 key，那一整本册子照样整份发过去。\n④ 「多大算小」由一个广播阈值控制，Spark 会拿小表的**统计大小估计**去和它比。⚠️ **版本事实**：这个阈值就是 `spark.sql.autoBroadcastJoinThreshold`，**默认 10MB**——记住它是「某个版本的行为」，不是 Spark 的概念定义；怎么调、调到多少是 Level 7 的事。另外广播还有 join 类型的限制（例如 FULL OUTER JOIN 无法走 BHJ），这也是 hint 会被忽略的常见原因之一。\n\n【正式的技术定义】\n\nBroadcast Hash Join（广播哈希连接）是 Spark 的一种物理 JOIN 策略：将较小一侧（build side）的完整数据通过 BroadcastExchange 发送到每个 Executor，在各 Executor 内存中构建哈希表；较大一侧（probe/stream side）的各分区数据在本地流式读取，逐条到哈希表中探测匹配。由于大表侧无需按 key 重分布，**大表不发生 Shuffle**，计划中只出现广播侧的 BroadcastExchange。适用前提是小表的统计大小低于广播阈值且能放入 Executor 内存。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `big.join(small, 'city_id')`（small 很小）：\n1. 物理计划阶段，Catalyst 判断 small 的大小估计低于广播阈值 → 选定 BHJ；\n2. 计划中插入 `BroadcastExchange`，把 small 的完整数据收集后分发到每个 Executor；\n3. 每个 Executor 把收到的 small 在内存里建成哈希表（build）；\n4. big 的各个分区**在原 Executor 上**被逐条读取，拿 join key 去哈希表里探测（probe），命中就输出拼好的行；\n5. 全程 big 没有跨节点移动——省下的正是 L5 拆过的那串「装箱→装车→卸货分拣」。",
             "examples": [
               {
                 "title": "典型的维表 JOIN：自动广播",
@@ -2897,7 +2897,7 @@
           "order_index": 3,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n小册子那招有个硬前提：小表得真的小。可如果两边都是几十亿行呢？复印谁的都不合适——那就只能换思路：既然同 key 的记录必须凑到一起，那就**两边都按 key 重新排一遍**，让相同 key 落到同一个分区，然后两个指针顺着往下走，边走边配对。\n\n【一个直观的心智模型】\n\n想象两本**按字母排序的电话簿**（复用 L5 的空中飞货：这两本簿子是先各自排好序、再飞到归并台上的）：\n- 归并台两侧各放一本排好序的簿子；\n- 你左手翻 A 册、右手翻 B 册，比较当前页的姓氏；\n- 姓氏相同 → 配对输出，两边同时往下翻；\n- 不相同 → 把「字母更小」的那一侧往下翻一页，追上另一侧；\n- 一路扫到底，整张表就拼完了。\n\n复用「托盘 = 分区」「Executor = 工人」：排序后的簿子被切成 N 段（分区），每个工人领一段，各拼各的，互不干扰。\n\n⚠️ 比喻的边界（很重要）：\n① **两边都 Shuffle**：两本簿子都得重排一遍再飞过去，代价是双份的——这是 SMJ 最贵的地方。\n② 排序本身也要钱：全量排序，内存放不下时会 spill 到磁盘（复用 L5「spill 慢几个数量级」）；具体排序与溢出的调优留 L7。\n③ 但它**不要求任何一侧塞进内存**——这是它能扛住「大表 × 大表」的根本原因，也正是 BHJ 做不到的地方。\n④ 归并扫描是线性的（排完序后两边各扫一遍），不是「每条去另一本里翻一遍」——否则就退化成嵌套循环了。\n\n【正式的技术定义】\n\nSort-Merge Join（排序归并连接）是 Spark 处理等值 JOIN 的通用物理策略：两侧数据先按 join key 进行分区（Shuffle，各自一个 Exchange），并在分区内按 key 排序；随后在 reduce 端用两个游标对两侧有序数据进行归并扫描，key 相等即配对输出。由于它不要求任一侧完整驻留内存（可溢写磁盘），适用于大表 × 大表，是 Spark 在无法广播时的默认 JOIN 策略。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `a.join(b, 'id')`（两边都很大）：\n1. 物理计划阶段：a 与 b 的大小估计都超过广播阈值 → 无法 BHJ，选定 SMJ；\n2. 计划中 a 侧插入一个 Exchange（按 id 哈希分区 + 分区内排序），b 侧同样插入一个 Exchange；\n3. Shuffle 完成后，同一个 id 的所有记录在两侧都落到了**同一个分区**；\n4. 每个分区内，两个有序游标归并扫描，key 相等就输出配对行；\n5. 整个计划里你会看到：`Exchange → Sort → SortMergeJoin`，两次 Exchange 就是它贵的证据。",
+            "explanation": "【先用人话理解】\n\n小册子那招有个硬前提：小表得真的小。可如果两边都是几十亿行呢？复印谁的都不合适——那就只能换思路：既然同 key 的记录必须凑到一起，那就**两边都按 key 重新排一遍**，让相同 key 落到同一个分区，然后两个指针顺着往下走，边走边配对。\n\n【一个直观的心智模型】\n\n想象两本**按字母排序的电话簿**（复用 L5 的空中飞货：这两本簿子是先各自排好序、再飞到归并台上的）：\n- 归并台两侧各放一本排好序的簿子；\n- 你左手翻 A 册、右手翻 B 册，比较当前页的姓氏；\n- 姓氏相同 → 配对输出，两边同时往下翻；\n- 不相同 → 把「字母更小」的那一侧往下翻一页，追上另一侧；\n- 一路扫到底，整张表就拼完了。\n\n复用「托盘 = 分区」「Executor = 工人」：排序后的簿子被切成 N 段（分区），每个工人领一段，各拼各的，互不干扰。\n\n⚠️ 比喻的边界（很重要）：\n① **两边都 Shuffle**：两本簿子都得重排一遍再飞过去，代价是双份的——这是 SMJ 最贵的地方。\n② 排序本身也要钱：全量排序，内存放不下时会 spill 到磁盘（复用 L5 的 spill 概念：磁盘通常比内存慢 1~2 个数量级）；具体排序与溢出的调优留 L7。\n③ 但它**不要求任何一侧塞进内存**——这是它能扛住「大表 × 大表」的根本原因，也正是 BHJ 做不到的地方。\n④ 归并扫描是线性的（排完序后两边各扫一遍），不是「每条去另一本里翻一遍」——否则就退化成嵌套循环了。\n⑤ ⚠️ **版本提示**：Spark 3.2+ 的 AQE 在拿到运行时真实统计后，如果某一侧其实很小，会把 SMJ 改成 Broadcast Hash Join（`spark.sql.adaptive.autoBroadcastJoinThreshold`）。所以你在 `explain()` 里看到 SMJ，不代表执行时一定是 SMJ。\n⑤ ⚠️ **版本提示**：Spark 3.2+ 的 AQE 在拿到运行时真实统计后，如果某一侧其实很小，会把 SMJ 改成 Broadcast Hash Join（`spark.sql.adaptive.autoBroadcastJoinThreshold`）。所以你在 `explain()` 里看到 SMJ，不代表执行时一定是 SMJ。\n\n【正式的技术定义】\n\nSort-Merge Join（排序归并连接）是 Spark 处理等值 JOIN 的通用物理策略：两侧数据先按 join key 进行分区（Shuffle，各自一个 Exchange），并在分区内按 key 排序；随后在 reduce 端用两个游标对两侧有序数据进行归并扫描，key 相等即配对输出。由于它不要求任一侧完整驻留内存（可溢写磁盘），适用于大表 × 大表，是 Spark 在无法广播时的默认 JOIN 策略。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `a.join(b, 'id')`（两边都很大）：\n1. 物理计划阶段：a 与 b 的大小估计都超过广播阈值 → 无法 BHJ，选定 SMJ；\n2. 计划中 a 侧插入一个 Exchange（按 id 哈希分区 + 分区内排序），b 侧同样插入一个 Exchange；\n3. Shuffle 完成后，同一个 id 的所有记录在两侧都落到了**同一个分区**；\n4. 每个分区内，两个有序游标归并扫描，key 相等就输出配对行；\n5. 整个计划里你会看到：`Exchange → Sort → SortMergeJoin`，两次 Exchange 就是它贵的证据。",
             "examples": [
               {
                 "title": "大表 × 大表：默认走 SMJ",
@@ -2958,7 +2958,7 @@
           "order_index": 4,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\nBHJ 是「小表不飞、大表不飞，只飞小册子」，SMJ 是「两边都飞、都排序再归并」。第三条路介于两者之间：**两边都按 key 重排（还是要飞），但其中一侧在内存里做成抽屉柜（哈希表），另一侧流式过来直接拉开抽屉查**——省掉排序这一步。\n\n【一个直观的心智模型】\n\n复用「拼桌」与 L5 的「空中飞货」：\n- 两拨货都按 key 飞到各自的托盘上（这一步和 SMJ 一样，仍是 Shuffle）；\n- 到位后，把**较小那一侧**做成一只抽屉柜：每个 key 一个抽屉，同 key 的记录全塞进对应抽屉；\n- 然后**较大那一侧**的货流式走过来，每条看一眼自己的 key，直接拉开那个抽屉，把里面的记录全配一遍。\n\n抽屉柜不用排序，但它得**做得进屋里**（内存）——这就是 SHJ 的命门。\n\n⚠️ 比喻的边界（很重要）：\n① SHJ **仍然要 Shuffle**（至少两侧按 key 重排），别把它和「免 Shuffle 的 BHJ」混为一谈；它省的是排序，不是传输。\n② 抽屉柜要占内存：build 侧一旦数据量偏大，就会撑爆内存或被迫放弃——所以大表场景 Spark 更偏爱 SMJ（可溢写磁盘）。\n③ SHJ 具体在什么条件下被选中，跟 Spark 版本、配置、统计信息都有关系，**别背死条件**，看 explain 说话。\n④ 兜底的两位都不是好消息：BroadcastNestedLoopJoin（一侧广播 + 嵌套循环，非等值条件时）、CartesianProduct（无 key，每条对每条）。看到它们意味着 O(n·m) 级别的风险。\n\n【正式的技术定义】\n\nShuffle Hash Join（SHJ）：两侧数据按 join key 进行 Shuffle 分区，使相同 key 落到同一分区；随后较小一侧（build side）在内存中构建哈希表，较大一侧（stream/probe side）以流式方式逐条探测匹配。它不要求排序，但要求 build 侧能放入内存。\n兜底策略：\n- **BroadcastNestedLoopJoin（BNLJ）**：将一侧广播后，用嵌套循环逐条比对，用于非等值连接条件；\n- **CartesianProduct**：无等值条件（或条件恒真）时的笛卡尔积，结果行数为两侧行数之积。\n二者在数据量大时都极其昂贵，属于应避免出现在生产计划里的节点。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `a.join(b, 'id')` 且 Spark 选了 SHJ：两侧各一次 Exchange 按 id 分区（Shuffle），同一分区内 b（较小侧）被读进内存建哈希表，a 的记录流式过来逐条探测、命中即输出——全程没有排序，但有传输、有内存占用。\n你写 `a.crossJoin(b)` 或 join 条件恒真：Spark 找不到可用等值 key，退化成 CartesianProduct，结果行数 = count(a) × count(b)，集群会在瞬间被压垮。",
+            "explanation": "【先用人话理解】\n\nBHJ 是「小表不飞、大表不飞，只飞小册子」，SMJ 是「两边都飞、都排序再归并」。第三条路介于两者之间：**两边都按 key 重排（还是要飞），但其中一侧在内存里做成抽屉柜（哈希表），另一侧流式过来直接拉开抽屉查**——省掉排序这一步。\n\n【一个直观的心智模型】\n\n复用「拼桌」与 L5 的「空中飞货」：\n- 两拨货都按 key 飞到各自的托盘上（这一步和 SMJ 一样，仍是 Shuffle）；\n- 到位后，把**较小那一侧**做成一只抽屉柜：每个 key 一个抽屉，同 key 的记录全塞进对应抽屉；\n- 然后**较大那一侧**的货流式走过来，每条看一眼自己的 key，直接拉开那个抽屉，把里面的记录全配一遍。\n\n抽屉柜不用排序，但它得**做得进屋里**（内存）——这就是 SHJ 的命门。\n\n⚠️ 比喻的边界（很重要）：\n① SHJ **仍然要 Shuffle**（至少两侧按 key 重排），别把它和「免 Shuffle 的 BHJ」混为一谈；它省的是排序，不是传输。\n② 抽屉柜要占内存：build 侧一旦数据量偏大，就会撑爆内存或被迫放弃——所以大表场景 Spark 更偏爱 SMJ（可溢写磁盘）。\n③ SHJ 具体在什么条件下被选中，跟 Spark 版本、配置、统计信息都有关系，**别背死条件**，看 explain 说话。可参考的版本事实：Spark 3.x 默认 `spark.sql.join.preferSortMergeJoin=true`，所以 SHJ 比较少见；Spark 3.2+ 的 AQE 另有 `spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold`（默认 0，即关闭），调大后 AQE 会在运行时把小的 SMJ 改成 SHJ。可参考的版本事实：Spark 3.x 默认 `spark.sql.join.preferSortMergeJoin=true`，所以 SHJ 比较少见；Spark 3.2+ 的 AQE 另有 `spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold`（默认 0，即关闭），调大后 AQE 会在运行时把小的 SMJ 改成 SHJ。\n④ 兜底的两位都不是好消息：BroadcastNestedLoopJoin（一侧广播 + 嵌套循环，非等值条件时）、CartesianProduct（无 key，每条对每条）。看到它们意味着 O(n·m) 级别的风险。⚠️ **版本事实**：Spark 2.4 及更早会直接对隐式笛卡尔积抛 AnalysisException；Spark 3.0 起 `spark.sql.crossJoin.enabled` 默认为 true，不再报错——引擎不再替你兜底，只能自己 count() 验量级。⚠️ **版本事实**：Spark 2.4 及更早会直接对隐式笛卡尔积抛 AnalysisException；Spark 3.0 起 `spark.sql.crossJoin.enabled` 默认为 true，不再报错——引擎不再替你兜底，只能自己 count() 验量级。\n\n【正式的技术定义】\n\nShuffle Hash Join（SHJ）：两侧数据按 join key 进行 Shuffle 分区，使相同 key 落到同一分区；随后较小一侧（build side）在内存中构建哈希表，较大一侧（stream/probe side）以流式方式逐条探测匹配。它不要求排序，但要求 build 侧能放入内存。\n兜底策略：\n- **BroadcastNestedLoopJoin（BNLJ）**：将一侧广播后，用嵌套循环逐条比对，用于非等值连接条件；\n- **CartesianProduct**：无等值条件（或条件恒真）时的笛卡尔积，结果行数为两侧行数之积。\n二者在数据量大时都极其昂贵，属于应避免出现在生产计划里的节点。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `a.join(b, 'id')` 且 Spark 选了 SHJ：两侧各一次 Exchange 按 id 分区（Shuffle），同一分区内 b（较小侧）被读进内存建哈希表，a 的记录流式过来逐条探测、命中即输出——全程没有排序，但有传输、有内存占用。\n你写 `a.crossJoin(b)` 或 join 条件恒真：Spark 找不到可用等值 key，退化成 CartesianProduct，结果行数 = count(a) × count(b)，集群会在瞬间被压垮。",
             "examples": [
               {
                 "title": "SHJ 的计划长相",
@@ -3019,7 +3019,7 @@
           "order_index": 5,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n三套预案摆在面前，谁来做选择？还是那位老熟人——Catalyst 优化大脑（复用 L3/L4）。它不看你写了什么花哨的 API，只看一件事：**这两拨货各有多大，按哪种拼法最划算**。\n\n【一个直观的心智模型】\n\n复用 L3 的「Catalyst = 优化大脑 / 总工程师」：总工站在两堆货前，先看一眼两堆的**尺码单**（统计信息），再决定：\n- 小得能塞进工人手里的（大小估计低于广播阈值）→ 复印小册子（BHJ）；\n- 小不了但某一侧还算苗条、能做成抽屉柜 → 建哈希抽屉柜（SHJ）；\n- 两边都巨大 → 两本电话簿排序归并（SMJ）。\n\n它的判断完全基于**尺码单**，而不是基于真实的称重结果——这点非常关键。\n\n⚠️ 比喻的边界（很重要）：\n① 尺码单是**估计值**，不是实测。数据源没统计信息（如未做过 analyze、或中间经过 UDF/复杂变换无法估计）时，Spark 只能猜，猜错就会误判：该广播的没广播、不该广播的硬广播。\n② 「大小」的判断由**广播阈值**这把尺子决定（概念上就是「多大算小」）；尺子的具体刻度和怎么调，是 Level 7 调优的事，本课只讲「存在这把尺子、它是决策依据之一」。\n③ hint 是**建议不是命令**：你可以用 `F.broadcast()` 表达倾向，但 Spark 仍可能基于自身判断不采纳（下一课细讲）。\n④ 决策发生在**物理计划阶段**，所以只有 `explain()`（物理计划视角）才看得到结果，逻辑计划里没有策略之分。\n\n【正式的技术定义】\n\nJOIN 策略选择（Join Selection）发生在 Spark 物理计划阶段：优化器依据两侧数据的**统计大小估计**、join 类型（是否等值连接、是否外连接等）、用户 hint、以及相关配置开关（如广播阈值的启用与否），在候选策略中择优。一般优先级是：可广播则优先 Broadcast Hash Join；否则在 Shuffle Hash Join 与 Sort-Merge Join 间依「build 侧能否进内存 / 是否可排序溢写」等条件取舍，Sort-Merge Join 是最通用的兜底。由于依据的是估计值而非真实运行数据，统计信息缺失或不准确会导致策略误判。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `a.join(b, 'id')` 并 explain：\n1. Catalyst 先生成并优化逻辑计划（此时还没有「怎么拼」的概念）；\n2. 物理计划阶段，join 选择规则读取两侧的大小估计；\n3. 若 b 的估计大小低于广播阈值且连接类型支持 → 选 BHJ，计划中出现 BroadcastExchange；\n4. 否则按条件在 SHJ / SMJ 之间取舍，通常落到 SMJ（两 Exchange + Sort）；\n5. 你看到的节点名就是这次决策的**结果**。若发现「明明是小表却没广播」，八成是统计信息缺失导致估计偏大——这就是下一课要动手解决的场景。",
+            "explanation": "【先用人话理解】\n\n三套预案摆在面前，谁来做选择？还是那位老熟人——Catalyst 优化大脑（复用 L3/L4）。它不看你写了什么花哨的 API，只看一件事：**这两拨货各有多大，按哪种拼法最划算**。\n\n【一个直观的心智模型】\n\n复用 L3 的「Catalyst = 优化大脑 / 总工程师」：总工站在两堆货前，先看一眼两堆的**尺码单**（统计信息），再决定：\n- 小得能塞进工人手里的（大小估计低于广播阈值）→ 复印小册子（BHJ）；\n- 小不了但某一侧还算苗条、能做成抽屉柜 → 建哈希抽屉柜（SHJ）；\n- 两边都巨大 → 两本电话簿排序归并（SMJ）。\n\n它的判断完全基于**尺码单**，而不是基于真实的称重结果——这点非常关键。\n\n⚠️ 比喻的边界（很重要）：\n① 尺码单是**估计值**，不是实测。数据源没统计信息（如未做过 analyze、或中间经过 UDF/复杂变换无法估计）时，Spark 只能猜，猜错就会误判：该广播的没广播、不该广播的硬广播。\n② 「大小」的判断由**广播阈值**这把尺子决定（概念上就是「多大算小」）；尺子的具体刻度和怎么调，是 Level 7 调优的事，本课只讲「存在这把尺子、它是决策依据之一」。\n③ hint 是**建议不是命令**：你可以用 `F.broadcast()` 表达倾向，但 Spark 仍可能基于自身判断不采纳（下一课细讲）。\n④ 决策发生在**物理计划阶段**，所以只有 `explain()`（物理计划视角）才看得到结果，逻辑计划里没有策略之分。\n⑤ ⚠️ **版本提示**：Spark 3.2+ 默认开启 AQE，Spark 会在**运行时**拿到真实的 shuffle 统计后再优化一次：把 SMJ 改成 BHJ（`spark.sql.adaptive.autoBroadcastJoinThreshold`），或改成 SHJ（`spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold`）。所以「决策只在规划期做一次」是简化说法——在 3.x 上它是「规划期一次 + 运行期若干次」，而运行期那次用的是实测值，往往更准。\n⑤ ⚠️ **版本提示**：Spark 3.2+ 默认开启 AQE，Spark 会在**运行时**拿到真实的 shuffle 统计后再优化一次：把 SMJ 改成 BHJ（`spark.sql.adaptive.autoBroadcastJoinThreshold`），或改成 SHJ（`spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold`）。所以「决策只在规划期做一次」是简化说法——在 3.x 上它是「规划期一次 + 运行期若干次」，而运行期那次用的是实测值，往往更准。\n\n【正式的技术定义】\n\nJOIN 策略选择（Join Selection）发生在 Spark 物理计划阶段：优化器依据两侧数据的**统计大小估计**、join 类型（是否等值连接、是否外连接等）、用户 hint、以及相关配置开关（如广播阈值的启用与否），在候选策略中择优。一般优先级是：可广播则优先 Broadcast Hash Join；否则在 Shuffle Hash Join 与 Sort-Merge Join 间依「build 侧能否进内存 / 是否可排序溢写」等条件取舍，Sort-Merge Join 是最通用的兜底。由于依据的是估计值而非真实运行数据，统计信息缺失或不准确会导致策略误判。（Spark 3.2+ 的 AQE 会在运行时用实测统计再优化一次，能纠正一部分规划期的误判。）（Spark 3.2+ 的 AQE 会在运行时用实测统计再优化一次，能纠正一部分规划期的误判。）\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `a.join(b, 'id')` 并 explain：\n1. Catalyst 先生成并优化逻辑计划（此时还没有「怎么拼」的概念）；\n2. 物理计划阶段，join 选择规则读取两侧的大小估计；\n3. 若 b 的估计大小低于广播阈值且连接类型支持 → 选 BHJ，计划中出现 BroadcastExchange；\n4. 否则按条件在 SHJ / SMJ 之间取舍，通常落到 SMJ（两 Exchange + Sort）；\n5. 你看到的节点名就是这次决策的**结果**。若发现「明明是小表却没广播」，八成是统计信息缺失导致估计偏大——这就是下一课要动手解决的场景。",
             "examples": [
               {
                 "title": "用 explain 验证实际策略",
@@ -3141,7 +3141,7 @@
           "order_index": 7,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\n前面所有策略都在解决「怎么拼更省」。可有一种慢，跟策略无关：99 个 Task 早就干完下班了，剩下 1 个还在苦哈哈地搬——因为它手里那个 key 的数据量，比别人多几百倍。整体作业只能等它。这就是数据倾斜（Data Skew）。\n\n【一个直观的心智模型】\n\n复用「两拨货按 key 拼桌」：拼桌时按 key 分座位。正常情况下每个座位坐几个人；可偏偏有个座位（比如 key = 未知城市 / 空值 / 热门商品）挤了 **90% 的人**。\n\n结果就是：那一桌的工人累死，其他桌的工人早就收工在旁边喝茶——**整体完工时间 = 最慢那一桌的时间**。\n\n⚠️ 比喻的边界（很重要）：\n① **计划里看不出倾斜**：执行计划只告诉你「按 key 重排」，不告诉你每个 key 有多少条。这是 L4 就埋下的伏笔——「计划相同 ≠ 运行时性能相同」。要发现它，得看运行时（Spark UI 的 Task 耗时/数据量分布）。\n② **加分区数救不了单个 key**：同 key 的记录按哈希必须落到同一个分区，你把托盘数从 200 加到 2000，那个巨大的 key 依然完整地待在同一个分区里——它只会被换到另一个托盘，不会被拆开。这正是「加盐」必须存在的原因。\n③ 应对的**原理**是打散：把大 key 拆成 N 个子 key 让它在多个分区间摊开（salting），或把大 key 单独拎出来单独处理，或用广播直接绕开 Shuffle。\n④ 具体的倾斜开关、自适应优化参数与深调优，**全部留给 Level 7**，本课只到「能认出来 + 懂原理」。\n\n【正式的技术定义】\n\n数据倾斜（Data Skew）指数据按 key 分布严重不均：少数 key 拥有的记录数远超平均值。在 JOIN（以及 groupBy 等按 key 重分布的操作）中，相同 key 必须落到同一分区，因此这些「巨型 key」会让个别 Task 处理的数据量远超其他，成为长尾任务（straggler），作业的最终完成时间被最慢的 Task 决定。\n原理级应对思路：\n- **Salting（加盐）**：给大 key 的记录加上随机前缀（如 key_0 ~ key_N），把它拆成 N 个子 key 分散到不同分区，另一侧对应地「复制膨胀」后再 join；\n- **隔离大 key**：把少数巨型 key 单独过滤出来单独处理，其余走常规路径；\n- **绕开 Shuffle**：若一侧足够小，改用 Broadcast Hash Join，让大表根本不按 key 重排，倾斜自然失效。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `a.join(b, 'id')` 且 id = 0 占了 80% 的记录：Shuffle 时所有 id=0 的记录被哈希到同一分区，那个 Task 要处理 80% 的数据，其余 199 个 Task 分剩下 20%。explain 输出一切如常（两个 Exchange + SortMergeJoin），只有运行时才发现「1 个 Task 跑了 40 分钟，其他 199 个 20 秒」。\n加盐之后：a 侧的 id=0 被改写成 `0_0` ~ `0_7` 共 8 个子 key，b 侧的 id=0 记录复制 8 份分别对应这 8 个子 key，Shuffle 时它们被哈希到 8 个不同分区，压力被摊开——代价是 b 侧数据被放大了 N 倍，所以它只适合「少数大 key」的场景。",
+            "explanation": "【先用人话理解】\n\n前面所有策略都在解决「怎么拼更省」。可有一种慢，跟策略无关：99 个 Task 早就干完下班了，剩下 1 个还在苦哈哈地搬——因为它手里那个 key 的数据量，比别人多几百倍。整体作业只能等它。这就是数据倾斜（Data Skew）。\n\n【一个直观的心智模型】\n\n复用「两拨货按 key 拼桌」：拼桌时按 key 分座位。正常情况下每个座位坐几个人；可偏偏有个座位（比如 key = 未知城市 / 空值 / 热门商品）挤了 **90% 的人**。\n\n结果就是：那一桌的工人累死，其他桌的工人早就收工在旁边喝茶——**整体完工时间 = 最慢那一桌的时间**。\n\n⚠️ 比喻的边界（很重要）：\n① **计划里看不出倾斜**：执行计划只告诉你「按 key 重排」，不告诉你每个 key 有多少条。这是 L4 就埋下的伏笔——「计划相同 ≠ 运行时性能相同」。要发现它，得看运行时（Spark UI 的 Task 耗时/数据量分布）。\n② **加分区数救不了单个 key**：同 key 的记录按哈希必须落到同一个分区，你把托盘数从 200 加到 2000，那个巨大的 key 依然完整地待在同一个分区里——它只会被换到另一个托盘，不会被拆开。这正是「加盐」必须存在的原因。\n③ 应对的**原理**是打散：把大 key 拆成 N 个子 key 让它在多个分区间摊开（salting），或把大 key 单独拎出来单独处理，或用广播直接绕开 Shuffle。\n④ 具体的倾斜开关、自适应优化参数与深调优，**全部留给 Level 7**，本课只到「能认出来 + 懂原理」。⚠️ **版本事实**：Spark 3.0+ 有 `spark.sql.adaptive.skewJoin.enabled`（默认 **true**，需配合 `spark.sql.adaptive.enabled`）——AQE 会自动把倾斜分区拆分（必要时复制）成大小相近的任务。也就是说在 Spark 3.x 上，「手工加盐」往往不是第一步：先看 AQE 的倾斜处理有没有生效（Spark UI），它没兜住再考虑 salting / 隔离大 key / 广播。⚠️ **版本事实**：Spark 3.0+ 有 `spark.sql.adaptive.skewJoin.enabled`（默认 **true**，需配合 `spark.sql.adaptive.enabled`）——AQE 会自动把倾斜分区拆分（必要时复制）成大小相近的任务。也就是说在 Spark 3.x 上，「手工加盐」往往不是第一步：先看 AQE 的倾斜处理有没有生效（Spark UI），它没兜住再考虑 salting / 隔离大 key / 广播。\n\n【正式的技术定义】\n\n数据倾斜（Data Skew）指数据按 key 分布严重不均：少数 key 拥有的记录数远超平均值。在 JOIN（以及 groupBy 等按 key 重分布的操作）中，相同 key 必须落到同一分区，因此这些「巨型 key」会让个别 Task 处理的数据量远超其他，成为长尾任务（straggler），作业的最终完成时间被最慢的 Task 决定。\n原理级应对思路：\n- **Salting（加盐）**：给大 key 的记录加上随机前缀（如 key_0 ~ key_N），把它拆成 N 个子 key 分散到不同分区，另一侧对应地「复制膨胀」后再 join；\n- **隔离大 key**：把少数巨型 key 单独过滤出来单独处理，其余走常规路径；\n- **绕开 Shuffle**：若一侧足够小，改用 Broadcast Hash Join，让大表根本不按 key 重排，倾斜自然失效；\n- **交给 AQE（Spark 3.0+）**：`spark.sql.adaptive.skewJoin.enabled` 默认开启，AQE 会在运行时把倾斜分区拆开并重算，多数情况下不需要你手写加盐。\n\n【写下代码后，Spark 内部发生了什么】\n\n你写 `a.join(b, 'id')` 且 id = 0 占了 80% 的记录：Shuffle 时所有 id=0 的记录被哈希到同一分区，那个 Task 要处理 80% 的数据，其余 199 个 Task 分剩下 20%。explain 输出一切如常（两个 Exchange + SortMergeJoin），只有运行时才发现「1 个 Task 跑了 40 分钟，其他 199 个 20 秒」。\n加盐之后：a 侧的 id=0 被改写成 `0_0` ~ `0_7` 共 8 个子 key，b 侧的 id=0 记录复制 8 份分别对应这 8 个子 key，Shuffle 时它们被哈希到 8 个不同分区，压力被摊开——代价是 b 侧数据被放大了 N 倍，所以它只适合「少数大 key」的场景。",
             "examples": [
               {
                 "title": "倾斜的典型症状（运行时才看得见）",
@@ -3202,7 +3202,7 @@
           "order_index": 8,
           "prerequisites": "",
           "content": {
-            "explanation": "【先用人话理解】\n\nLevel 6 到这儿就齐了。回头看，我们其实只教你一套**固定动作**：拿到一句 join，先问多大、再看计划、数 Exchange、找小册子、最后想想有没有哪个 key 会撑爆一个工位。走完这五步，你就能对任意一句 JOIN 说出「它现在是怎么跑的、能不能更省、风险在哪」。\n\n【一个直观的心智模型】\n\n把前面所有道具串成一张**拼桌预案单**（检查清单）：\n1. **判大小**：两拨货各多大？有没有明显的小表？（小册子候选）\n2. **看计划**：explain 一眼，节点名是 BroadcastHashJoin / SortMergeJoin / ShuffledHashJoin / NestedLoop / Cartesian？\n3. **数 Exchange**：0~1 个 = 走了广播（大表免飞）；2 个 = 两边都飞（SMJ/SHJ）；\n4. **给不给 hint**：该广播没广播（统计失灵）→ `F.broadcast()`；不该广播别乱给（内存反噬）；\n5. **找倾斜**：有没有 key 会一桌挤满人？有 → 打散 / 隔离 / 广播绕过。\n\n⚠️ 比喻的边界（很重要）：\n① 这张清单只是**读得懂**的清单，不是调优清单：具体阈值、分区数最优值、倾斜开关等都是 Level 7 的地盘，本课不要求你会调参数。\n② **计划相同 ≠ 运行时性能相同**：同样的 SortMergeJoin，一次 30 秒、一次 40 分钟，差别可能在倾斜、在数据分布、在 spill——清单第 5 步正是为此存在。\n③ explain 不执行、零成本（复用 L4）：诊断阶段随便看，但别把「看起来省」当成「真的快」，最终仍要以运行时为准。\n④ 策略是等价改写，选错不会算错结果，只会让你多付钱（时间/资源）。\n\n【正式的技术定义】\n\nJOIN 诊断的标准化流程：\n（1）估算两侧数据规模，识别广播候选；\n（2）用 `explain()` 读取物理计划，依据节点名识别实际策略（BroadcastHashJoin / ShuffledHashJoin / SortMergeJoin / BroadcastNestedLoopJoin / CartesianProduct）；\n（3）通过 Exchange 的数量判断重排次数，BroadcastExchange 表示存在广播、大表侧无 Exchange 即免 Shuffle；\n（4）对「应广播而未广播」的场景施加 broadcast hint，并复核其是否生效；\n（5）评估 key 分布，识别数据倾斜风险，按 salting / 隔离大 key / 广播绕过等原理级思路应对。\n该流程只覆盖「识别与选择」，不涉及定量调优（Level 7）。\n\n【写下代码后，Spark 内部发生了什么】\n\n你拿到 `fact.join(dim_city, 'city_id').join(dim_prod, 'prod_id')` 这样的真实代码：\n1. Catalyst 为每个 Join 分别做策略选择（不是整条链统一选一种）；\n2. 第一个 join 若 dim_city 够小 → BHJ（BroadcastExchange + 大表不飞）；\n3. 第二个 join 若 dim_prod 估不出大小 → 可能落到 SMJ（两个 Exchange + Sort）；\n4. 你 explain 后决定给 dim_prod 加 `F.broadcast()`，再 explain 确认 BroadcastExchange 真的出现；\n5. 最后想一想：city_id 里有没有「未知城市」这种巨型 key？有 → 隔离或打散。\n走完这五步，一句 JOIN 的账你就算清楚了。",
+            "explanation": "【先用人话理解】\n\nLevel 6 到这儿就齐了。回头看，我们其实只教你一套**固定动作**：拿到一句 join，先问多大、再看计划、数 Exchange、找小册子、最后想想有没有哪个 key 会撑爆一个工位。走完这五步，你就能对任意一句 JOIN 说出「它现在是怎么跑的、能不能更省、风险在哪」。\n\n【一个直观的心智模型】\n\n把前面所有道具串成一张**拼桌预案单**（检查清单）：\n1. **判大小**：两拨货各多大？有没有明显的小表？（小册子候选）\n2. **看计划**：explain 一眼，节点名是 BroadcastHashJoin / SortMergeJoin / ShuffledHashJoin / NestedLoop / Cartesian？\n3. **数 Exchange**：只有 `BroadcastExchange`、大表侧没有普通 Exchange = 走了广播（大表免飞）；两个普通 Exchange = 两边都飞（SMJ/SHJ）。注意 BroadcastExchange 也是 Exchange，别数漏；\n4. **给不给 hint**：该广播没广播（统计失灵）→ `F.broadcast()`；不该广播别乱给（内存反噬）；\n5. **找倾斜**：有没有 key 会一桌挤满人？有 → 打散 / 隔离 / 广播绕过。\n\n⚠️ 比喻的边界（很重要）：\n① 这张清单只是**读得懂**的清单，不是调优清单：具体阈值、分区数最优值、倾斜开关等都是 Level 7 的地盘，本课不要求你会调参数。\n② **计划相同 ≠ 运行时性能相同**：同样的 SortMergeJoin，一次 30 秒、一次 40 分钟，差别可能在倾斜、在数据分布、在 spill——清单第 5 步正是为此存在。\n③ explain 不执行、零成本（复用 L4）：诊断阶段随便看，但别把「看起来省」当成「真的快」，最终仍要以运行时为准。\n④ 策略是等价改写，选错不会算错结果，只会让你多付钱（时间/资源）。\n⑤ ⚠️ **版本提示**：Spark 3.2+ 默认开启 AQE，`explain()` 看到的是**初始**计划，运行时可能把 SMJ 改成 BHJ、合并 shuffle 分区、自动处理倾斜。诊断流程因此要加一步：「先看 Spark UI 的最终计划，再对照 explain() 的初始计划」。\n⑤ ⚠️ **版本提示**：Spark 3.2+ 默认开启 AQE，`explain()` 看到的是**初始**计划，运行时可能把 SMJ 改成 BHJ、合并 shuffle 分区、自动处理倾斜。诊断流程因此要加一步：「先看 Spark UI 的最终计划，再对照 explain() 的初始计划」。\n\n【正式的技术定义】\n\nJOIN 诊断的标准化流程：\n（1）估算两侧数据规模，识别广播候选；\n（2）用 `explain()` 读取物理计划，依据节点名识别实际策略（BroadcastHashJoin / ShuffledHashJoin / SortMergeJoin / BroadcastNestedLoopJoin / CartesianProduct）；\n（3）通过 Exchange 的数量判断重排次数，BroadcastExchange 表示存在广播、大表侧无 Exchange 即免 Shuffle；\n（4）对「应广播而未广播」的场景施加 broadcast hint，并复核其是否生效；\n（5）评估 key 分布，识别数据倾斜风险，按 salting / 隔离大 key / 广播绕过等原理级思路应对。\n该流程只覆盖「识别与选择」，不涉及定量调优（Level 7）。\n\n【写下代码后，Spark 内部发生了什么】\n\n你拿到 `fact.join(dim_city, 'city_id').join(dim_prod, 'prod_id')` 这样的真实代码：\n1. Catalyst 为每个 Join 分别做策略选择（不是整条链统一选一种）；\n2. 第一个 join 若 dim_city 够小 → BHJ（BroadcastExchange + 大表不飞）；\n3. 第二个 join 若 dim_prod 估不出大小 → 可能落到 SMJ（两个 Exchange + Sort）；\n4. 你 explain 后决定给 dim_prod 加 `F.broadcast()`，再 explain 确认 BroadcastExchange 真的出现；\n5. 最后想一想：city_id 里有没有「未知城市」这种巨型 key？有 → 隔离或打散。\n走完这五步，一句 JOIN 的账你就算清楚了。",
             "examples": [
               {
                 "title": "完整诊断：先看计划再动手",

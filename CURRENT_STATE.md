@@ -1,6 +1,6 @@
 # Spark Quest — 当前项目状态
 
-> 最后更新：2026-09-09（Level 4 全面技术修复已验收并推送；与 `CHANGELOG.md` 同步）
+> 最后更新：2026-09-10（Level 5 / Level 6 技术审查与修复已完成并推送；与 `CHANGELOG.md` 同步）
 > 代码目录：`E:\MMMason\Spark_dlg\spark-quest-app\`
 > 代码仓库：`https://github.com/MasonWest/Spark-duolinguo`（分支 `main`）
 > 文档目录（通常只读）：`E:\MMMason\Spark_dlg\spark_quest\`
@@ -23,6 +23,7 @@
 | 10 | ~~AI Tutor~~ → **10.1 薄弱题 / Weak Questions**（`quiz_answer_log` 事实层 + 派生薄弱题列表 + 单题重练） | 🟡 **10.1 已完成（待验收）**；10.2+ / AI Tutor 规划中 |
 | Notes | Lesson 学习笔记（lesson_notes 表 + 笔记 API + 前端接入） | 🟢 已完成（V1.0 基线） |
 | **技术修复** | **Level 4（执行计划）全面技术修复（2026-09-09）**：P0 `*(N)` 语义 + P1×6 / P2×6 / P3×5；9 课课文 + 27 道题 + objective + 答案位置重排 + 三段文案重写 + 比喻库口径更正 | 🟢 **已完成并验收并推送**（遗留 L2/L3 旧口径已登记为技术债，暂不修） |
+| **技术修复** | **Level 5（分区与 Shuffle）+ Level 6（JOIN 与 Broadcast）技术审查与修复（2026-09-10）**：4 项明确错误（`repartition` 是 round-robin 非 hash 重分布 / `sortWithinPartitions` 不 Shuffle / q481 旧容错口径 / BroadcastExchange 也是 Exchange）+ 绝对化清理 + 15 处版本事实；17 课课文 + 26 道题 + 比喻库 §6/§7 十七条更正 | 🟢 **已完成并推送**（L7 待审；L2/L3 旧口径技术债未修） |
 | **v1.1** | **Course Map 重做（区域化垂直旅程 / 三档时间叙事 / 5 态节点 / 列表兜底）** | **🟢 已完成并验收** |
 
 **当前进度：Phase 9.1 Streak 已完成并验收；Phase 9.2 Badge 已实现完毕（待验收）；Phase 10.1 薄弱题 / Weak Questions 已实现完毕（`quiz_answer_log` 事实层 + 跨来源派生薄弱题 + `/wrong-questions` 重练页，待验收）。**
@@ -1109,6 +1110,58 @@ Practice 端点**绝不调用** `record_activity / increment_user_stats / evalua
 - 修复脚本全部支持 dry-run 与自动备份，位于 `backend/`：
   `fix_level4_20260909.py` / `fix_level4_20260909_round2.py` / `fix_level4_objective_20260909.py` /
   `rebalance_l4_answers_20260909.py` / `rewrite_level4_narrative_20260909.py` / `sync_seed_from_db_20260909.py` / `preview_level4_narrative.py`
+
+---
+
+## Level 5 / Level 6 技术审查与修复记录 —— 分区与 Shuffle / JOIN 与 Broadcast（2026-09-10，已完成并推送）
+
+Level 4 修复完成后，对同为「执行与优化」主线的 Level 5（分区与 Shuffle，lesson id 40–48）与 Level 6（JOIN 与 Broadcast，lesson id 49–57）做同口径审查，过程中发现问题顺手修掉。详见 `CHANGELOG.md` 的 2026-09-10 条目。
+
+### 结论
+
+**L5 问题明显重于 L6**。L6 的 BHJ / SMJ / SHJ 原理写得扎实，主要缺口是未提 AQE 会在运行时改写计划；L5 有多处与 L4 已更正口径**直接冲突**。
+
+### 核心事实（本项目口径以此为准）
+
+| 项 | 正确口径 |
+|---|---|
+| `repartition(n)` | **round-robin 轮询打散，不是 hash 重分布**，同 key 不保证同分区；只有 `repartition(n, col)` 才按列哈希 |
+| `sortWithinPartitions` | 只在各分区内部排序，**不 Shuffle**（旧版误列进 Shuffle 触发清单） |
+| BroadcastExchange | **名字里就带 Exchange**——广播路径是「1 个 BroadcastExchange + 大表侧无普通 Exchange」，不是「0 个 Exchange」 |
+| 免 Shuffle 路径 | **两条**：一侧足够小可广播（BHJ），或两侧已按同一 join key 分好区 |
+| 宽依赖 | 通常需 Shuffle（上游已按该 key 分区时可省）；**Broadcast Join 不属于宽依赖** |
+| 容错 | Shuffle 输出丢失时可能需**重新执行相关上游 map task**；「整体重算上游」是 RDD 论文（2012）的叙述 |
+| combine 条件 | **可结合**（associative）是必要条件；可交换通常同时成立但非必要 |
+| 磁盘 spill | 通常比内存慢 **1~2 个数量级**（不是「几个数量级」） |
+
+### 版本事实（本次新增，均核对官方文档）
+
+| 项 | 事实 |
+|---|---|
+| `spark.sql.adaptive.skewJoin.enabled` | 默认 **true**（Spark 3.0+）→ AQE 自动拆倾斜分区，**3.x 上手工加盐往往不是第一步** |
+| AQE 运行时改写 | 3.2+ 可把 SMJ 改成 BHJ → 「策略只在规划期决策一次」不成立，实际是「规划期一次 + 运行期若干次」 |
+| `spark.sql.crossJoin.enabled` | 3.0 起默认 **true**（2.4 及更早对隐式笛卡尔积直接抛异常） |
+| `spark.sql.join.preferSortMergeJoin` | 3.x 默认 true → SHJ 相对少见 |
+| `spark.sql.autoBroadcastJoinThreshold` | 默认 **10MB**；广播另有 join 类型限制（FULL OUTER JOIN 无法走 BHJ） |
+| `spark.sql.shuffle.partitions` | 默认 200，AQE 下只是**初始**分区数（上界不是结果） |
+| `spark.sql.files.maxPartitionBytes` | 默认 128MB，决定读文件时的初始分区数（与 HDFS block 非 1:1） |
+| `orderBy().limit(n)` | 会被优化成 `TakeOrderedAndProject`（内部一次单分区 Shuffle） |
+
+### 改动范围
+
+- **17 课课文** + `lessons.objective` / `description` 共 5 处（沿用 L4 教训：objective 是独立列，不在 content 七键 JSON 内）
+- **26 道 quiz**（L5 21 + L6 5）；**correct_index 一个未动**，改的是选项文本与解析
+- **《心智模型与比喻边界案例库》§6 九条目 + §7 八条目**全部按结论更正——该文档是写新课时参考的源头，也是 L4 出错的根因
+
+### 验收
+
+全局 66 课 / 660 题；L5、L6 各 9 课 90 题；每课 10 题；无重复题干；无 orphan quiz。seed 与真库逐题比对 0 处不符。关键词扫描剩 17 处命中，逐条人工确认为合法文本。
+
+### 待办
+
+- **Level 7 尚未审查**：讲 Tungsten / 内存模型 / 分区调优，且引用的 L5 / L6 结论本次已变更，建议单独审一轮
+- **L5 / L6 答案位置分布未核查**（L4 曾发现 A38/B45/C6/D1 的严重失衡）
+- L2 / L3 旧口径技术债仍未修（用户决定）
 
 ---
 

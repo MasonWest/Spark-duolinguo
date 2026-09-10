@@ -527,6 +527,62 @@ Phase 9.2 Badge 之后，把核心学习闭环补完整：**学习 → 测试 �
 
 ---
 
+## 2026-09-10 — Level 5 / Level 6 技术审查与修复
+
+起因：Level 4 修复完成后，对同为「执行与优化」主线的 Level 5（分区与 Shuffle，lesson id 40–48）与 Level 6（JOIN 与 Broadcast，lesson id 49–57）做同口径审查，过程中发现问题顺手修掉。审查维度同 L4：技术事实准确性 / 示例真实性 / 概念边界 / 版本敏感性。结论：**L5 问题明显重于 L6**——L6 的 BHJ / SMJ / SHJ 原理扎实，主要缺口是未提 AQE 会在运行时改写计划；L5 有多处与 L4 已更正口径**直接冲突**。
+
+### Fixed — 明确错误（4 项）
+- **`repartition(n)` 不是 hash 重分布，是 round-robin（轮询打散）**，同 key 不保证同分区；只有 `repartition(n, col)` 才是按列哈希。原说法会推出「`repartition(200).groupBy('city')` 已按 city 分好区、只 Shuffle 一次」的错误结论——而这正是 L4-8 三 Stage 例子的立论前提。涉及 L5-6 课文 + q491 / q510 / q511
+- **`sortWithinPartitions` 被误列进 Shuffle 触发清单**：它只在各分区内部排序，不跨节点重排，**不 Shuffle**
+- **q481 仍用 L4 已废的容错口径**（「上游任何分区丢都要整体重算」）→ 改为「可能需重新执行相关上游 map task」，并在解析中点明整体重算是 RDD 论文（2012）的叙述
+- **L6-1 写「0 个 Exchange = 走了广播」**：BroadcastExchange 名字里就带 Exchange，广播路径是 **1 个**不是 0 个。学生照此数必然数漏
+
+### Fixed — 绝对化表述清理
+- Shuffle「必然代价、躲不掉」→**通常**（上游已按该 key 分好区时可省；Broadcast Join 不产生 ShuffleExchange）
+- 宽依赖「必 Shuffle」→**通常**，并明确 **Broadcast Join 不属于宽依赖**（不满足「子分区依赖所有父分区同 key 数据」的定义）
+- join 从「必 Shuffle」清单移出，改为分策略表述（sort-merge / shuffle-hash 需重排，Broadcast 不需）
+- 「广播是唯一常见的免 Shuffle 路径」→**两条**：一侧足够小可广播，或两侧已按同一 join key 分好区
+- 磁盘 spill「I/O 慢几个数量级」→**1~2 个数量级**
+- `repartition` 的「必 Shuffle」保留（它确实一定 Shuffle）
+
+### Added — 版本事实（15 处，均核对官方文档）
+- **`spark.sql.adaptive.skewJoin.enabled` 默认 true（自 Spark 3.0）**：AQE 会自动拆分倾斜分区（必要时复制）。因此 **3.x 上手工加盐往往不是第一步**，应先看 AQE 是否生效，没兜住再考虑 salting / 隔离 / 广播
+- **AQE 3.2+ 可在运行时把 SMJ 改成 BHJ**：L6-6 原「策略只在规划期决策一次」不再成立，实际是「规划期一次 + 运行期若干次」，且运行期用的是**实测**统计
+- `spark.sql.crossJoin.enabled` 3.0 起默认 **true**（2.4 及更早对隐式笛卡尔积直接抛 AnalysisException，现在不拦了）
+- Spark 3.x 默认 `spark.sql.join.preferSortMergeJoin=true` → SHJ 相对少见；3.2+ 另有 `spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold`（默认 0 即关闭）
+- 广播阈值 `spark.sql.autoBroadcastJoinThreshold` 默认 **10MB**；广播还有 join 类型限制（如 FULL OUTER JOIN 无法走 BHJ）
+- `spark.sql.shuffle.partitions`（默认 200）在 AQE 下只是 shuffle 后的**初始**分区数，运行期会合并 → 200 是上界不是结果
+- 读文件初始分区数由**实现**决定：DataFrame 看 `spark.sql.files.maxPartitionBytes`（默认 128MB），RDD 看 InputFormat split；「常常等于 block 数」是巧合不是定义
+- `orderBy().limit(n)` 会被优化成 `TakeOrderedAndProject`（内部一次单分区 Shuffle）
+- 分区数决定的是**理论**并行度，实际并发上限还受可用 core 数限制
+- combine 的准确条件是**可结合**（associative）；「可交换」通常同时成立但非必要条件
+
+### Changed
+- 课文 17 课 + `lessons.objective` / `description` 共 5 处（沿用 L4 教训：**objective 是独立列，不在 content 七键 JSON 内**）
+- 题库 **26 题**（L5 21 + L6 5）；**correct_index 一个未动**，改的是选项文本与解析
+- 《心智模型与比喻边界案例库》**§6 Level 5 九条目 + §7 Level 6 八条目全部按结论更正** —— 该文档是写新课时参考的源头，也是 L4 出错的根因，本次一并堵住
+
+### Architecture
+- 不改表结构、不新增持久化状态；全部改动落在现有 lessons / quizzes 行内
+- `app/course_seed.json` / `app/quiz_seed.json` 用**全量**同步脚本（`sync_seed_all_20260910.py`，66 课 / 660 题）回写，取代此前只同步 L4 的脚本
+
+### RedLines（未抢跑）
+- 不改 Level 5 / 6 课程结构与课时数；不顺手重构 UI / DB；不修改用户学习进度（`lesson_mastery` / `study_days` / `user_stats` / `quiz_answer_log`）
+
+### 验收
+- 真库核实：全局 66 课 / 660 题；L5 9 课 90 题、L6 9 课 90 题；每课 10 题；无重复题干；无 orphan quiz
+- seed 与真库逐题比对：**0 处不符**
+- 关键词扫描剩 17 处命中，逐条人工确认均为合法文本（`repartition` 的准确「必 Shuffle」、否定式告诫句、干扰项、以及 q481 解析中刻意引用的旧说法）
+- 脚本：`backend/fix_level56_20260910.py`（支持 dry-run）、`sync_seed_all_20260910.py`
+- 文档：`spark_quest/docs/Spark_Quest_Level5_Level6_技术审查与修复报告_20260910.md`
+
+### 遗留技术债与待办
+- **L2 / L3 课文与题库仍是旧口径**（orderBy / 聚合 / JOIN 必 Shuffle），与已更正的设计文档存在已知不一致 —— 用户决定暂不修
+- **Level 7 尚未审查**：它讲 Tungsten / 内存模型 / 分区调优，且引用的 L5 / L6 结论本次已变更（如 `shuffle.partitions` 默认 200 的口径），建议单独审一轮
+- L5 / L6 答案位置分布未核查（L4 曾发现 A38/B45/C6/D1 的严重失衡）
+
+---
+
 ## 模板（后续阶段直接复制此结构，改日期与内容）
 
 ## YYYY-MM-DD — <阶段标题>
