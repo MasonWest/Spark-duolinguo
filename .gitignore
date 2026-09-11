@@ -60,3 +60,5 @@ backend/_quiz_dump.json
 backend/_p6b_e2e_check.py
 # 生成物：由 backend/preview_level4_narrative.py 重新生成
 backend/_l4_narrative_preview.html
+# 生成物：由 backend/preview_narrative_567_20260911.py 重新生成
+backend/_l567_narrative_preview.html

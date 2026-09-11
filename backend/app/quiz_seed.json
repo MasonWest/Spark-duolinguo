@@ -8126,7 +8126,7 @@
             "并行度不足、单 Task 数据量过大 → spill 到磁盘甚至 OOM"
           ],
           "correct_index": 3,
-          "explanation": "复用 L5：内存放不下就 spill，磁盘 I/O 比内存慢几个数量级。",
+          "explanation": "复用 L5：内存放不下就 spill；磁盘 I/O 通常比内存慢 1~2 个数量级。",
           "dimension": "why"
         },
         {
@@ -8178,7 +8178,7 @@
             "只在本地模式生效"
           ],
           "correct_index": 2,
-          "explanation": "默认值是「能跑起来」的起点，不是「跑得快」的保证。",
+          "explanation": "默认值是「能跑起来」的起点，不是「跑得快」的保证。另外注意：Spark 3.2+ 默认开启 AQE 时，它只是初始分区数（上界），运行时会被按真实数据量合并。",
           "dimension": "concept"
         },
         {
@@ -8396,7 +8396,7 @@
             "因为 SQL 太复杂"
           ],
           "correct_index": 1,
-          "explanation": "这正是 L6 第 6 课「估计会误判」的兜底方案。",
+          "explanation": "这正是 L6 第 6 课「估计会误判」的兜底方案。版本事实：AQE 自 Spark 3.2.0 起默认开启，所以在较新的 Spark 上通常不需要手动打开它。",
           "dimension": "why"
         },
         {
@@ -8500,7 +8500,7 @@
             "两者互斥，只能选一个"
           ],
           "correct_index": 2,
-          "explanation": "AQE 不替代「少读少传少算」，它是在此之上的运行时增强。",
+          "explanation": "AQE 不替代「少读少传少算」，它是在此之上的运行时增强；且自 Spark 3.2.0 起默认开启，手动调参与它不是二选一的关系。",
           "dimension": "comparison"
         }
       ]
@@ -8635,7 +8635,7 @@
             "优先试 AQE（代价低、零代码改动）；不奏效再考虑隔离或加盐"
           ],
           "correct_index": 3,
-          "explanation": "按代价从低到高推进：AQE → 隔离大 key → 加盐 → 广播绕过 → 过滤异常 key。",
+          "explanation": "按代价从低到高推进：AQE → 隔离大 key → 加盐 → 广播绕过 → 过滤异常 key。其中 AQE 的倾斜处理（skewJoin.enabled）自 Spark 3.0 起默认开启，所以第一步是确认它有没有生效，而不是先去打开它。",
           "dimension": "comparison"
         }
       ]
