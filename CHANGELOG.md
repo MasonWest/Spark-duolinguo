@@ -690,6 +690,75 @@ Level 4 → L5/L6 之后，对执行与优化主线的最后一环 Level 7（les
 
 ---
 
+## 2026-09-11 — Level 5 答案位置重排（修复「正确项恒为 A」缺陷）
+
+用户实测 Level 5 首个 lesson 抽题时发现正确项恒为 A。核查确认 **Level 5 共 90 题、88 题 correct_index=0（全 A）**，根因是 `seed_level5.py` 写库时正确项永远放位置 0，未套用 L4 之后确立的「写库时就把正确项放目标位置」约定。**Level 6 分布已是 [22,23,22,23]，无需处理。**
+
+### Fixed
+- **Level 5 答案位置重排**：套用规范目标序列 `[2,0,3,1,0,3,1,2,3,1]`（A/B/C/D 计数 2/3/2/3），按课序 rotate 错开跨课位置规律，与 L6 既有设计一致。
+- **冻结已作答的 5 题**（均在 lesson 40，有 `quiz_answer_log` 记录），保持原位置不动——重排会令历史作答记录语义错位（沿用 L4 rebalance 口径）。
+- 仅对 85 道可动题做选项置换 + `correct_index` 重算，**正确项文本零改动**；解析未写死选项字母（扫描 0 处），无需改写。
+- 顺带把修正后的分布写回 `seed_level5.py` 的 `LEVEL5_QUIZZES`，使规范源可重生成（仅作用于「清空 L5 quiz 后重跑 seed」场景；运行中 DB 以本脚本为准）。
+
+### 验收
+- L5 整体 A/B/C/D = [22,25,18,25]（原 [88,2,0,0]）；lesson 41–48 每课均为 [2,3,2,3]
+- lesson 40 因 5 题历史作答冻结为 A，结果 [6,1,2,1]（用户已做过该课，保留历史语义）
+- 全库（L5/L6 options+explanation）U+FFFD 残留 **0**；选项纯置换、正确文本逐题校验一致
+- 脚本：`backend/rebalance_l5_answers_20260911.py`（--dry / --apply）、`backend/patch_seed_l5_20260911.py`
+- 备份：`spark_quest.db.bak_before_l5rebalance_20260911`、`seed_level5.py.bak_before_l5seedfix_20260911`
+
+### 备注（未修，待用户决定）
+- 全库扫描仍有 **Level 2 偏 A [63,13,12,12]、Level 3 偏 B [30,57,3,0]** 的同类分布失衡，非全 A 但不均衡；L0/L1/L4/L6/L7 均已均衡。如需一并洗牌可再处理。
+
+---
+
+## 2026-09-11 — Level 5 干扰项重写（修复「正确项总是最长」缺陷）+ Lesson 42 心智模型去重
+
+用户反馈：L5 抽题刚修完全 A，又发现**正确答案总是最长的那个选项**，毫无挑战性。核查确认 L5 90 题有 **88 题（98%）正确项为严格最长**（中位差 +13 字符）——根因是正确项为完整句子、干扰项全为短短语，长度本身成了给分信号。位置重排只解决了「恒为 A」，没解决「恒最长」。
+
+### Fixed
+- **L5 全部 90 题干扰项重写**：把每个干扰项从短短语改写为**与正确项长度相当、事实错误但可信**的完整句子（干扰项文本改写、正确项文本与位置 `correct_index` 一律不动）。
+- 数据依据：`backend/l5_distractors_20260911.json`（90 × 3 干扰项），由 `backend/rewrite_l5_distractors_20260911.py` 落库。
+- **Lesson 42（Shuffle 是什么）心智模型去重**：原 explanation 的「心智模型」段落在段落首尾各重复一遍定义（开头「空中飞货 = Shuffle = 数据离开原车间、按 key 重排」、结尾「Shuffle 就是把货搬出车间这道动作」），且「先用人话理解」段已先抛过同名飞货比喻，造成两端重复。改为：引言只埋钩子不抢定义、把正式命名交给心智模型段落；心智模型段落删去冗余自述、保留与 Stage 的桥接句。
+- 同口径写回 `seed_level5.py` 的 `LEVEL5_QUIZZES`（88 题按 prompt 匹配同步，2 题 stale prompt 跳过），脚本：`backend/patch_seed_l5_distractors_20260911.py`。
+
+### 验收
+- 「明显最长（>10 字符差）」占比 **53/90 → 20/90**（↓62%）；「有干扰项比正确项更长」占比 **1/90 → 12/90**——「正确项总是最长」模式已打破。
+- 逐题校验：正确项文本 0 改动、`correct_index` 0 位移、选项无重复、U+FFFD 乱码 0。
+- Lesson 42 explanation 已无重复定义句；未引入「必/必然/一定/唯一」等绝对化词。
+- 备份：`spark_quest.db.bak_before_l5distractors_20260911`、`seed_level5.py.bak_before_l5seeddistractors_20260911`、`spark_quest.db.bak_before_l42mentalmodel_20260911`
+
+### 备注（已修，但性质不同）
+- 少量「解释型」题（如 q481/q482/q490/q520，正确项是完整机制说明）正确项仍偏长，属「explain why」题型固有特性，非可作弊的长度信号；此类题干扰项已是完整错误句子，长度差已压到可接受范围。
+
+### 补充（同日稍后闭合 seed 缺口）
+- 上述 seed 写回当时有 **2 题 stale prompt 被跳过**：q456（`为什么 groupBy / orderBy 通常会触发 Shuffle？（join 要分策略）`）与 q516（`对单条线性依赖链，估算 Stage 数的公式是？`）的 prompt 曾在 2026-09-10 L5/L6 审计中于 DB 改过、却未回写 seed，导致 seed 仍持旧 prompt + 旧短短语干扰项；若清空 L5 quiz 重跑 seed，这 2 题会把「正确项恒最长」的旧缺陷重新引入。
+- 现用 `backend/patch_seed_l5_stale_20260911.py` 以「旧 seed prompt → DB qid（456 / 516）」映射，把这 2 题的 prompt + options + correct_index 按 DB 对齐。seed 现 **90/90 与 DB 一致**（matched=90 / mismatched=0 / correct_text_not_found=0）。备份 `seed_level5.py.bak_before_l5stale_20260911`。
+
+---
+
+## 2026-09-11（续）— Lesson「比喻的边界 / 版本提示」段落重复修复
+
+用户反馈 **Level 5 第二个 lesson（41 分区数与并行度）的「⚠️ 比喻的边界」段里有一整句被复制了两遍、字都一摸一样**（实际是 explanation 里 ④ ⚠️ 版本提示 段落被原样粘贴两次）。排查发现这是 2026-09-10 L5/L6 审计新增「版本提示」段落时引入的**系统性复制粘贴重复**：同段落在该 lesson 出现两次，且同时存在于 DB 与 seed。
+
+### Fixed
+- 用行级去重（保留空行、删第二次出现的重复非空行）修复 `lessons.content.explanation`，DB 与 `app/course_seed.json`（lesson 内容真源）**两处同改**，否则重跑 seed 会复活。
+- 受影响 lesson：
+  - **L5**：41（分区数与并行度，④ AQE 默认开启段落重复）、48（综合练习，版本提示段落重复）
+  - **L6**：49（JOIN 是什么，⑤ AQE 运行时改 SMJ→BHJ 段落重复）、52（Sort-Merge Join，同）、54（Spark 怎么选 JOIN 策略，同）、57（综合练习，同）
+- 各 lesson 修复后：`④/⑤` 计数 2→1、版本提示段落唯一、无残留重复行、DB==SEED、U+FFFD 0。
+
+### 验收
+- 全库 lessons 扫描：修复前 6 课有重复行，修复后 **0 课**有重复行（L41/48/49/52/54/57 全清）。
+- 脚本：`backend/fix_l41_l48_dup_20260911.py`（L41/48）、`backend/fix_l6_dup_20260911.py`（L49/52/54/57），均 `--apply` 幂等、删前断言 `removed in (0,1)`。
+- 备份：`spark_quest.db.bak_before_l41l48dup_20260911`、`app/course_seed.json.bak_before_l41l48dup_20260911`、`spark_quest.db.bak_before_l6dup_20260911`、`app/course_seed.json.bak_before_l6dup_20260911`。
+
+### 备注
+- 用户原先误以为重复在 42（Shuffle 是什么），实际 42 无此重复；本轮未动 42（上一轮已修其真实存在的首尾定义重复）。
+- 此 bug 与「全库扫 U+FFFD / 扫重复题干」同源：内容审计只看单 lesson 容易漏，必须全库 + DB+seed 双源扫描。
+
+---
+
 ## 模板（后续阶段直接复制此结构，改日期与内容）
 
 ## YYYY-MM-DD — <阶段标题>

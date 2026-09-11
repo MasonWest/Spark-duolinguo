@@ -525,114 +525,1221 @@ LEVEL5 = {
 }
 
 LEVEL5_QUIZZES = [
-    {"lesson_slug": "l5-what-is-partition", "questions": [
-        {"type": "single_choice", "prompt": "分区（Partition）最准确的定位是？", "options": ["结果正确性的保证", "Spark 并行计算的最小数据单元，一个分区由一个 Task 处理", "磁盘上被劈开的物理文件块", "Driver 端的内存容器"], "correct_index": 1, "explanation": "分区是并行计算的最小数据单元，一个分区由一个 Task 在一个 Executor 上处理；它是逻辑切片，不是磁盘物理切割。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "为什么分区数影响并行度？", "options": ["分区数 = 并行 Task 数 = 理论并行度", "分区数 = Executor 数", "分区越多结果越准", "分区数 = Stage 数"], "correct_index": 0, "explanation": "每个分区对应一个 Task，所以分区数直接决定同时执行的 Task 数（并行度）。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "写下 df = spark.read.parquet('sales') 后调用 df.count()，Spark 内部发生什么？", "options": ["为各分区各起一个 Task 并行处理", "先把全表读进 Driver 再算", "不切分区直接算", "只起一个 Task"], "correct_index": 0, "explanation": "Action 触发时，Spark 为当前每个分区起一个 Task，分派给 Executor 并行处理，Task 数 = 分区数。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "想查看当前 DataFrame 的分区数，用？", "options": ["df.rdd.getNumPartitions()", "df.count()", "df.show()", "spark.conf.get('partitions')"], "correct_index": 0, "explanation": "getNumPartitions() 直接返回当前分区数，是看清并行度的入口。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于分区与 HDFS block，正确的是？", "options": ["分区数一定等于 block 数", "分区与 block 不是 1:1，输入格式/算子会改变分区数", "block 就是分区", "分区由 Driver 决定与 block 无关"], "correct_index": 1, "explanation": "默认分区可能按 block 数给，但 repartition / 不同输入格式会改变它，二者非 1:1。", "dimension": "comparison"},
-        {"type": "single_choice", "prompt": "分区是以下哪种？", "options": ["逻辑切分（由 partitioner/输入切片决定）", "把文件在磁盘上物理劈成几块", "Driver 内存中的对象", "网络带宽的单位"], "correct_index": 0, "explanation": "分区是逻辑切片，由 partitioner 或输入格式决定，文件在磁盘上并未被物理劈开。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "为什么「分区数不影响结果正确性」？", "options": ["切 2 份还是 200 份答案一样，只影响快慢", "分区数越多结果越准", "分区决定算法", "分区只影响显示"], "correct_index": 0, "explanation": "分区只决定数据怎么分布并行，不改变计算结果，只影响性能。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "repartition(200) 后 count()，大约产生几个 Task？", "options": ["约 200 个", "1 个", "2 个", "0 个"], "correct_index": 0, "explanation": "分区数改为 200，Action 时约 200 个 Task 并行，每个 Task 处理一个分区。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "想减少「不必要的分区误解」，该怎么做？", "options": ["用 getNumPartitions() 看真实分区数", "直接默认 block 数就是分区数", "凭感觉设分区数", "认为分区越多越准"], "correct_index": 0, "explanation": "分区可能受算子/格式影响，应实际查看而非拍脑袋。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于「分区 vs 文件物理块」，正确的是？", "options": ["分区是逻辑视图，文件未被物理劈开", "分区一定等于物理文件块", "分区在 Driver 内存", "分区是网络概念"], "correct_index": 0, "explanation": "分区是「怎么读/怎么分配」的逻辑视图，不是磁盘切割。", "dimension": "comparison"}
-    ]},
-    {"lesson_slug": "l5-partition-count-parallelism", "questions": [
-        {"type": "single_choice", "prompt": "「并行度」在 Spark 中约等于？", "options": ["该 Stage 的分区数（Task 数）", "Executor 的硬盘大小", "SQL 行数", "网络带宽"], "correct_index": 0, "explanation": "并行度 = 同时执行的 Task 数 = 该 Stage 的分区数。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "为什么分区数太少会慢？", "options": ["Executor 闲置或单 Task 过大（长尾/OOM）", "分区少结果算错", "分区少必 Shuffle", "分区少网络更堵"], "correct_index": 0, "explanation": "分区远少于核数时算力闲置；单分区过大则长尾任务、易 OOM。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "写下 df.repartition(10000).count() 会发生什么？", "options": ["起 1 万个 Task，多数只处理几 KB，调度开销反噬", "只起 1 个 Task", "结果变准", "不切分区"], "correct_index": 0, "explanation": "海量小 Task 的调度/启动开销可能超过计算本身，且易产生小文件。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "想避免「百核集群 98 核闲置」，应该？", "options": ["让分区数匹配集群并行能力（合理设置分区数）", "把分区降到 1", "增加 block 数硬凑", "无能为力"], "correct_index": 0, "explanation": "分区数应大致匹配可用并行度，否则资源浪费（具体最优值调优留 L7）。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于「分区数 vs 结果正确性」，正确的是？", "options": ["只影响性能，不影响正确性", "分区数决定答案", "分区少答案错", "分区多答案才对"], "correct_index": 0, "explanation": "分区是性能旋钮，不是正确性旋钮。", "dimension": "comparison"},
-        {"type": "single_choice", "prompt": "默认 shuffle 分区数（spark.sql.shuffle.partitions）通常是？", "options": ["200（默认值，非最优保证）", "1", "等于核数", "无限"], "correct_index": 0, "explanation": "默认 200，只是默认值，是否适合你的数据需结合规模判断（调优留 L7）。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "为什么本课不给「最优分区数经验公式」？", "options": ["最优值取决于数据量/核数/记录大小，是 L7 调优主题", "公式不存在", "作者忘了", "Spark 自动完美"], "correct_index": 0, "explanation": "最优分区数依数据和集群而定，本课只建原理直觉，定量调优留 L7。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "分区太多除了调度开销，还容易带来？", "options": ["海量小文件（每 Task 一个输出）", "结果错误", "必然 Shuffle", "内存溢出到 Driver"], "correct_index": 0, "explanation": "每个 Task 通常产生一个输出文件，分区过多易产生小文件问题。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "评估一段作业是否「分区过少」应看？", "options": ["任务并行度是否远低于可用核数", "文件大小", "SQL 行数", "网络延迟"], "correct_index": 0, "explanation": "并行度（Task 数）远低于核数即资源浪费，是分区过少的信号。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于「分区越多越并行越快」，正确的是？", "options": ["不一定，太多调度开销反噬", "永远成立", "分区与并行无关", "只影响正确性"], "correct_index": 0, "explanation": "分区数是平衡杠杆，不是越大越好。", "dimension": "comparison"}
-    ]},
-    {"lesson_slug": "l5-what-is-shuffle", "questions": [
-        {"type": "single_choice", "prompt": "Shuffle 最准确的定位是？", "options": ["跨节点按 key 重新分布数据", "把文件物理劈开", "Driver 中转数据", "一种排序算法"], "correct_index": 0, "explanation": "Shuffle 是宽依赖时跨节点按 key 重分布数据的物理过程。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "为什么 groupBy / join / orderBy 会触发 Shuffle？", "options": ["需要全局按 key 汇聚 / 全局有序，必须跨节点重排", "它们写错了", "Driver 要求", "为了显示进度"], "correct_index": 0, "explanation": "这些操作需要「全局按 key 汇聚或全局有序」，无法在本地完成，必须跨节点重排。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "写下 df.groupBy('city').count() 触发 Action 后，Shuffle 阶段发生什么？", "options": ["按 city 哈希、序列化、跨网络发到目标 Executor、反序列化归并", "数据回 Driver 再分发", "不移动数据", "只排序不传输"], "correct_index": 0, "explanation": "map 端按 key 分区/combine、序列化、网络传输到目标端、反序列化归并，完成跨节点重排。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "在计划里认出 Shuffle，应该看哪个节点？", "options": ["Exchange", "Scan", "Project", "Filter"], "correct_index": 0, "explanation": "Exchange 节点就是 Shuffle 的物理信号，复用 L4 的读法。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于 Shuffle 与宽依赖，正确的是？", "options": ["Shuffle 是宽依赖的物化，不是错误", "Shuffle 是写错代码", "宽依赖不 Shuffle", "Shuffle 只发生在 Driver"], "correct_index": 0, "explanation": "只要计算需全局按 key 汇聚，Shuffle 必然发生，它是代价不是错误。", "dimension": "comparison"},
-        {"type": "single_choice", "prompt": "Shuffle 发生时数据在谁之间传输？", "options": ["Executor 之间直接互传", "先回 Driver 再分发", "只在磁盘内", "经网络到客户端"], "correct_index": 0, "explanation": "Shuffle 是 Executor 之间跨节点互传，Driver 不抱数据。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "为什么 Shuffle 是「某些操作特别慢」的根源？", "options": ["它涉及跨节点重分布（序列化+网络+反序列化+排序）", "它不改代码", "它只排序", "它很快"], "correct_index": 0, "explanation": "跨节点重分布带来多环节开销，是作业中最昂贵的操作之一。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "df.groupBy('city').count().explain() 会显示几个 Stage？", "options": ["2 个（1 次 Shuffle 切出）", "1 个", "0 个", "10 个"], "correct_index": 0, "explanation": "1 次 Exchange（Shuffle）→ 2 个 Stage（本地预聚合 / 跨节点合并）。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "看到代码里有 Exchange，第一反应应是？", "options": ["注意这是 Shuffle，是性能重点信号", "代码写错了", "结果会错", "无需关心"], "correct_index": 0, "explanation": "Exchange = Shuffle，是性能重点信号，但未必是错误。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于「Shuffle 能否避免」，正确的是？", "options": ["需要全局汇聚时必然发生，躲不掉（除非无需汇聚）", "永远可避免", "永远无法发生", "只有 join 才 Shuffle"], "correct_index": 0, "explanation": "宽依赖的必然代价，需要全局按 key 汇聚时无法避免。", "dimension": "comparison"}
-    ]},
-    {"lesson_slug": "l5-shuffle-cost", "questions": [
-        {"type": "single_choice", "prompt": "Shuffle 代价主要来自哪些环节？", "options": ["序列化 → 网络传输 → 反序列化 → 排序/聚合", "只排序", "只读取", "只写磁盘"], "correct_index": 0, "explanation": "Shuffle 跨节点重排涉及序列化、网络、反序列化、排序/聚合多环节开销。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "为什么 Shuffle 比「内存里挪一下数据」贵得多？", "options": ["它跨网络、要序列化/反序列化、可能 spill 磁盘", "它不改变数据", "它只排序", "它很快"], "correct_index": 0, "explanation": "Shuffle 是多环节重活，涉及网络与序列化，还可能 spill，远非零成本内存操作。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "写下 df.groupBy('city').sum('amount')，Shuffle 在 map/reduce 端各做什么？", "options": ["map 端分区+排序+combine，reduce 端 fetch+反序列化+归并", "两端都不动", "只 reduce 端排序", "只 map 端读"], "correct_index": 0, "explanation": "map 端按 key 分区、排序/combine、写块；reduce 端 fetch、反序列化、归并。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "想直观感受 Shuffle 代价，看计划里哪个节点？", "options": ["Exchange（背后即序列化+网络+重排）", "Scan", "Project", "Filter"], "correct_index": 0, "explanation": "Exchange 即 Shuffle，其背后是一串跨节点开销。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于 spill 到磁盘，正确的是？", "options": ["内存不足时 spill，磁盘 I/O 慢几个数量级，放大代价", "spill 让 Shuffle 更快", "spill 不会发生", "spill 只影响显示"], "correct_index": 0, "explanation": "spill 把中间结果写磁盘，I/O 远慢于内存，是 Shuffle 贵的重要放大器。", "dimension": "comparison"},
-        {"type": "single_choice", "prompt": "本课对 spark.shuffle.file.buffer / compression 等参数怎么处理？", "options": ["只讲原理，具体调优参数留 Level 7", "本课就教怎么调", "不需要这些参数", "参数已最优"], "correct_index": 0, "explanation": "本课只建立「贵在哪」的原理直觉，具体调优参数留 L7。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "数据倾斜为什么会放大 Shuffle 代价？", "options": ["少数 key 的货极多，单节点被压垮拖慢整体", "倾斜让 Shuffle 消失", "倾斜只影响显示", "倾斜加快网络"], "correct_index": 0, "explanation": "倾斜时某些 key 的 Shuffle 块远超其他，单节点瓶颈拖垮整体（调优留 L7）。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "reduce 端拉取（fetch）属于 Shuffle 的哪类开销？", "options": ["网络传输环节（跨节点拉取自己负责的分区）", "本地排序", "Driver 计算", "结果显示"], "correct_index": 0, "explanation": "reduce 端通过网络 fetch 属于自己的分区数据，是网络传输环节。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "评估一段作业是否受 Shuffle 主导，应关注？", "options": ["Exchange 数量与数据量（计划/UI）", "文件大小", "SQL 长度", "显示效果"], "correct_index": 0, "explanation": "Shuffle 主导的作业通常 Exchange 多、传输量大，可在计划与 Spark UI 观察。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于 Shuffle 代价环节，正确的是？", "options": ["map 端排序+combine，reduce 端 fetch+归并，都花钱", "只有网络花钱", "只有排序花钱", "都不花钱"], "correct_index": 0, "explanation": "排序、combine、序列化、网络、归并每个环节在大数据量下都可能是瓶颈。", "dimension": "comparison"}
-    ]},
-    {"lesson_slug": "l5-narrow-wide-partition", "questions": [
-        {"type": "single_choice", "prompt": "在分区层面，窄依赖意味着？", "options": ["子分区只依赖父局部分区，无需重排", "子分区依赖父全部分区", "必 Shuffle", "跨节点"], "correct_index": 0, "explanation": "窄依赖中子分区只由有限个（通常 1 个）父分区计算，无需跨节点重排。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "为什么宽依赖处必然切 Stage？", "options": ["子分区要等所有上游同 key 货到齐，天然跨节点", "宽依赖更快", "宽依赖无 Shuffle", "随机切"], "correct_index": 0, "explanation": "宽依赖的子分区依赖全局同 key 数据，必须跨节点重分布，无法留在同一段连续工序。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "写下 df.filter(...).select(...) 与 df.groupBy('city').count()，Stage 划分有何不同？", "options": ["前者无 Exchange 同 Stage，后者有 Exchange 切 Stage", "两者都切 Stage", "两者都不切", "前者切后者不切"], "correct_index": 0, "explanation": "filter/select 是窄依赖，同 Stage 融合；groupBy 是宽依赖，Exchange 处切 Stage。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "想判断「分区会不会被重分配」，应看？", "options": ["依赖类型（窄/宽）与是否需全局重分布", "文件大小", "SQL 行数", "显示设置"], "correct_index": 0, "explanation": "宽依赖（需全局按 key 汇聚）才会重分配分区，窄依赖就地处理。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于「Stage 边界 = Shuffle 切口」，正确的是？", "options": ["宽依赖处的 Shuffle 就是 Stage 边界", "窄依赖切 Stage", "Stage 由 Executor 数决定", "Stage 与 Shuffle 无关"], "correct_index": 0, "explanation": "宽依赖处的 Exchange（Shuffle）即 Stage 边界，也是融合断点。", "dimension": "comparison"},
-        {"type": "single_choice", "prompt": "L5 对窄/宽依赖的「定义」怎么处理？", "options": ["定义 L4 已讲，L5 只延展到分区物化与 Stage 切口", "L5 重讲定义", "定义已过时", "不再提及"], "correct_index": 0, "explanation": "L5 重点在分区如何被重新分配与 Stage 边界，不重复 L4 定义。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "为什么宽依赖失败恢复比窄依赖贵？", "options": ["下游依赖全局重排，上游任何分区丢都要整体重算", "宽依赖不恢复", "一样贵", "窄依赖更贵"], "correct_index": 0, "explanation": "宽依赖下游依赖全局按 key 汇聚，上游丢失需整体重算，代价大（呼应 L4）。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "groupBy 在分区层面属于？", "options": ["宽依赖，父分区数据发往多个子分区（必 Shuffle）", "窄依赖", "不分配", "本地"], "correct_index": 0, "explanation": "groupBy 需跨节点按 key 重分布，父分区数据发往多个子分区。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "评估「某算子是否切 Stage」应看？", "options": ["有没有 Exchange（宽依赖），而非算子数量", "代码行数", "文件数", "显示效果"], "correct_index": 0, "explanation": "只有宽依赖（Exchange）切 Stage，窄算子在同一 Stage 融合。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于窄依赖与分区，正确的是？", "options": ["父→子分区是局部分配，无跨节点重排", "窄依赖也跨节点", "窄依赖必 Shuffle", "窄依赖切 Stage"], "correct_index": 0, "explanation": "窄依赖中父→子分区是局部分配，不触发跨节点重分布。", "dimension": "comparison"}
-    ]},
-    {"lesson_slug": "l5-shuffle-trigger-operators", "questions": [
-        {"type": "single_choice", "prompt": "以下哪组算子通常一定触发 Shuffle？", "options": ["groupBy / orderBy / distinct / join", "select / filter / map", "union（同 schema）", "cache"], "correct_index": 0, "explanation": "这些操作需全局按 key 汇聚或全局有序，必然或通常触发 Shuffle。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "判断一个算子是否 Shuffle 的真正判据是？", "options": ["是否需要全局按 key 汇聚 / 全局有序", "算子名字好不好听", "代码行数", "是否用了 SQL"], "correct_index": 0, "explanation": "是否需全局重分布才是判据，不是算子名本身。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "写下 dfA.join(dfB, 'id').explain()，计划里出现什么？", "options": ["Exchange（两表按 id 重分布，Shuffle）", "无 Exchange", "只在 Driver 算", "不重排"], "correct_index": 0, "explanation": "join 按 key 重分布两表，产生 Exchange（Shuffle）。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "想减少不必要的 Shuffle，第一步该？", "options": ["认出触发 Shuffle 的算子清单", "加大内存", "加分区", "改 SQL 方言"], "correct_index": 0, "explanation": "先认得哪些操作会叫空中货运，才能有意识地避开不必要的飞货。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于 union（同 schema），正确的是？", "options": ["通常只拼接分区，不 Shuffle", "一定 Shuffle", "比 join 更易 Shuffle", "必须排序"], "correct_index": 0, "explanation": "同 schema union 只是拼接分区，通常不触发 Shuffle。", "dimension": "comparison"},
-        {"type": "single_choice", "prompt": "本课对 join 的策略（broadcast/sort-merge）怎么处理？", "options": ["只点 join 是宽依赖会 Shuffle，深类型留 Level 6", "本课展开所有 join 策略", "join 不 Shuffle", "join 只 broadcast"], "correct_index": 0, "explanation": "join 深类型（broadcast 等怎么选）是 Level 6 内容，本课只点「会 Shuffle」。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "为什么 repartition 会 Shuffle？", "options": ["它强制跨节点重分布数据", "它只读数据", "它排序不重排", "它不移动数据"], "correct_index": 0, "explanation": "repartition 通过对数据 hash 重分布改分区数，必然触发 Shuffle。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "reduceByKey / aggregateByKey 通常属于？", "options": ["按 key，通常需跨节点合并（Shuffle）", "绝不 Shuffle", "只本地", "只排序"], "correct_index": 0, "explanation": "按 key 的聚合通常需在 reduce 端跨节点合并，属 Shuffle 算子。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "评估「某个可能 Shuffle 的算子是否真 Shuffle」，应看？", "options": ["计划里有无 Exchange，取决于上游分区分布", "只听名字", "文件大小", "显示设置"], "correct_index": 0, "explanation": "是否实际 Shuffle 取决于上游是否已是目标分区分布，看计划最准。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于「触发 Shuffle 的清单」，正确的是？", "options": ["是『需要全局重分布』的算子集合，非死记名字", "背名字即可无需理解", "只有 groupBy", "只有 join"], "correct_index": 0, "explanation": "清单的本质是「需全局按 key 汇聚/有序」，理解判据比背名字重要。", "dimension": "comparison"}
-    ]},
-    {"lesson_slug": "l5-reducebykey-vs-groupbykey", "questions": [
-        {"type": "single_choice", "prompt": "reduceByKey 比 groupByKey 省 Shuffle 的根本原因是？", "options": ["map 端先做本地 combine，传输量小", "reduceByKey 不 Shuffle", "groupByKey 排序", "reduceByKey 更快的网络"], "correct_index": 0, "explanation": "reduceByKey 在 map 端本地聚合（combine），只传部分和，跨网络传输量远小于原始记录数。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "为什么 groupByKey 传输量大？", "options": ["不做 combine，所有 value 原样 Shuffle", "它不聚合", "它只排序", "它更快"], "correct_index": 0, "explanation": "groupByKey 不做 map 端 combine，每个 key 的全部 value 原样飞到目标端再分组。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "写下 rdd.map(...).reduceByKey(_+_) 触发 Action 时，map 端发生什么？", "options": ["同 key 先在本地相加成部分和，再 Shuffle 部分和", "所有 value 原样飞走", "不聚合", "只排序"], "correct_index": 0, "explanation": "每个 Executor 先在本地把同 key 的 value 相加成部分和，Shuffle 时只传这些部分和。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "可换的聚合优先用哪个以减少飞货？", "options": ["reduceByKey / aggregateByKey", "groupByKey", "collect 后 Python 算", "不限"], "correct_index": 0, "explanation": "可换的聚合优先 reduceByKey / aggregateByKey，利用 map 端 combine 省传输。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于 combine 的前提，正确的是？", "options": ["聚合函数须可交换、可结合（如 sum/min/max）", "任何聚合都能 combine", "只有 groupByKey 能 combine", "combine 不需要前提"], "correct_index": 0, "explanation": "只有可交换可结合的聚合才能安全地在 map 端预聚合，否则会算错。", "dimension": "comparison"},
-        {"type": "single_choice", "prompt": "reduceByKey 是否完全消除 Shuffle？", "options": ["否，仍有一次 Shuffle，只是传输量小", "是，零 Shuffle", "从不 Shuffle", "只排序不 Shuffle"], "correct_index": 0, "explanation": "reduceByKey 优化的是 Shuffle 传输体积，仍至少有一次 Shuffle。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "为什么不能对所有聚合都用 map 端 combine？", "options": ["依赖全局顺序的聚合不可结合（如中位数）", "combine 总是错", "Spark 不支持", "只有 sum 能用"], "correct_index": 0, "explanation": "依赖全局顺序的聚合不满足可结合性，本地先聚合会得到错误结果。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "groupByKey 在 Shuffle 阶段传输的是什么？", "options": ["每个 key 的全部 value（原样）", "部分和", "只 key", "排序结果"], "correct_index": 0, "explanation": "groupByKey 不做 combine，传输量 = 原始 value 总数。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "评估「能否用 reduceByKey 替代 groupByKey」，应看？", "options": ["聚合是否可交换可结合", "文件大小", "SQL 长度", "显示设置"], "correct_index": 0, "explanation": "可换的聚合（sum/min/max 等）可改 reduceByKey 省飞货；不可结合的不能。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于本课 tuning 代码（partitioner/分区数），正确的是？", "options": ["只讲原理，调优代码留 Level 7", "本课就教怎么调最优", "不需要", "已最优"], "correct_index": 0, "explanation": "本课只讲「为什么 reduceByKey 更省」，设 partitioner/调分区数留 L7。", "dimension": "comparison"}
-    ]},
-    {"lesson_slug": "l5-repartition-coalesce", "questions": [
-        {"type": "single_choice", "prompt": "repartition 与 coalesce 的核心区别是？", "options": ["repartition 必 Shuffle 可增可减；coalesce 默认不 Shuffle 只能减", "两者都必 Shuffle", "两者都不 Shuffle", "coalesce 能增分区"], "correct_index": 0, "explanation": "repartition 一定 Shuffle、可增可减；coalesce 默认窄合并不 Shuffle、只能减。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "为什么「想减分区又不想白付 Shuffle」选 coalesce？", "options": ["coalesce 默认走窄依赖合并，不触发 Shuffle", "coalesce 更快的网络", "repartition 不能减", "coalesce 必 Shuffle"], "correct_index": 0, "explanation": "coalesce 默认 shuffle=False，合并相邻分区，不触发 Shuffle，适合纯减分区。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "写下 df.repartition(200) 与 df.coalesce(2)，计划里 Exchange 有何不同？", "options": ["repartition 有 Exchange（Shuffle），coalesce 无", "两者都有", "两者都无", "coalesce 有 repartition 无"], "correct_index": 0, "explanation": "repartition 必产生 Exchange；coalesce 默认不 Shuffle，无 Exchange。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "想增加分区数，应该用？", "options": ["repartition（coalesce 不能增）", "coalesce", "limit", "cache"], "correct_index": 0, "explanation": "coalesce 只合并、不能凭空增多分区，增分区必须用 repartition。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于 coalesce 不能增分区，正确的是？", "options": ["它只合并现有分区，无法创造新分区", "它能增但很慢", "它能随意增", "增分区用 coalesce"], "correct_index": 0, "explanation": "coalesce 是合并操作，分区数只能减少不能增加。", "dimension": "comparison"},
-        {"type": "single_choice", "prompt": "repartition(n) 是否会触发 Shuffle？", "options": ["一定触发（无论增还是减）", "从不", "只在减时", "只在增时"], "correct_index": 0, "explanation": "repartition 通过 hash 重分布改分区数，任何方向都付一次 Shuffle。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "为什么 repartition 任何方向都 Shuffle？", "options": ["它要对数据做 hash 重分布到新分区数", "它读数据", "它只排序", "它不移动"], "correct_index": 0, "explanation": "repartition 必须跨节点重分布数据以达到目标分区数，必然 Shuffle。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "coalesce 跨节点合并时，数据会怎样？", "options": ["仍可能移动数据（shuffle=False 主要同节点合并）", "绝对零移动", "必回 Driver", "只排序"], "correct_index": 0, "explanation": "coalesce 默认同节点合并，但跨节点合并仍可能移动数据，并非绝对零移动。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "评估「减分区该用哪个」，应看？", "options": ["是否想避免 Shuffle → 优先 coalesce", "文件大小", "SQL 长度", "显示设置"], "correct_index": 0, "explanation": "纯减分区且不想付 Shuffle，优先 coalesce。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "关于两者与不可变语义，正确的是？", "options": ["都返回新 DataFrame，原 DataFrame 不变", "会改原 DataFrame", "两者都改原", "不支持链式"], "correct_index": 0, "explanation": "repartition/coalesce 都返回新的 DataFrame，遵循不可变语义。", "dimension": "comparison"}
-    ]},
-    {"lesson_slug": "l5-comprehensive", "questions": [
-        {"type": "single_choice", "prompt": "综合读图的第一步是？", "options": ["找 Shuffle（空中飞货：groupBy/orderBy/join）", "数 Task", "打开 UI", "改代码"], "correct_index": 0, "explanation": "先找触发 Shuffle 的算子，它们是性能重点信号与 Stage 边界。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "数 Stage 的公式是？", "options": ["Shuffle 数 + 1", "分区数", "Task 数", "Action 数"], "correct_index": 0, "explanation": "Stage 数 = Shuffle（Exchange）数 + 1。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "一段 logs.groupBy('city').count().orderBy(desc).limit(10) 通常有几处 Shuffle？", "options": ["2（groupBy + orderBy；limit 不 Shuffle）", "1", "3", "0"], "correct_index": 0, "explanation": "groupBy 与 orderBy 各一处 Exchange，limit 不 Shuffle，共 2 处。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "如何估计一段作业的并行度？", "options": ["看分区数（Task 数 = 分区数）", "看 SQL 行数", "看文件大小", "看显示"], "correct_index": 0, "explanation": "并行度 ≈ 该 Stage 的分区数，即 Task 数。", "dimension": "apply"},
-        {"type": "single_choice", "prompt": "为什么「计划相同 ≠ 运行时性能相同」？", "options": ["数据倾斜、分区数等运行时因素影响真实耗时", "计划本身有错", "两者无关", "Spark 随机变慢"], "correct_index": 0, "explanation": "同样计划在不同数据分布/分区数下真实耗时差异大，倾斜等是运行时因素（L7）。", "dimension": "why"},
-        {"type": "single_choice", "prompt": "Level 5 综合练习的达标标准是？", "options": ["读懂：认 Shuffle、数 Stage、估并行度、指出 reduceByKey 优化点", "把代码改快", "完全重写", "立即调优"], "correct_index": 0, "explanation": "综合只验收「看得懂分区与 Shuffle、能识别触发点」，不要求调优。", "dimension": "comparison"},
-        {"type": "single_choice", "prompt": "看到 groupByKey 后 sum，可指出什么优化点（原理）？", "options": ["改用 reduceByKey 类做 map 端 combine，减少飞货", "加大内存", "加分区", "改 SQL 方言"], "correct_index": 0, "explanation": "可换的聚合优先 reduceByKey，利用 combine 省 Shuffle（只点原理，不写 tuning）。", "dimension": "mechanism"},
-        {"type": "single_choice", "prompt": "综合读图练习用什么工具最划算？", "options": ["explain()（不执行，零成本）", "show()", "write()", "collect()"], "correct_index": 0, "explanation": "explain() 不触发执行，是随时可做、零成本的读图手段。", "dimension": "concept"},
-        {"type": "single_choice", "prompt": "关于「综合练习与调优」，正确的是？", "options": ["综合只验读懂，调优留 L6/L7", "必须当场调优", "不用读图", "读图无用"], "correct_index": 0, "explanation": "本课目标是「看得懂分区与 Shuffle」，定量调优在 L6（Join）/L7（性能）。", "dimension": "comparison"},
-        {"type": "single_choice", "prompt": "数 Stage 时容易漏算什么？", "options": ["初始 Stage（Stage 数 = Shuffle 数 + 1，从 1 起算）", "最后的 Stage", "中间的 Stage", "都不易漏"], "correct_index": 0, "explanation": "易漏「初始 Stage」，记住从 1 开始加，Shuffle 数 + 1。", "dimension": "mechanism"}
-    ]}
+  {
+    "lesson_slug": "l5-what-is-partition",
+    "questions": [
+      {
+        "type": "single_choice",
+        "prompt": "分区（Partition）最准确的定位是？",
+        "options": [
+          "分区是保证计算结果正确的关键，切错分区答案就错",
+          "分区是把文件在磁盘上物理劈开的固定 128MB 块",
+          "Spark 并行计算的最小数据单元，一个分区由一个 Task 处理",
+          "分区是 Driver 端用来暂存 shuffle 数据的内存容器"
+        ],
+        "correct_index": 2,
+        "explanation": "分区是并行计算的最小数据单元，一个分区由一个 Task 在一个 Executor 上处理；它是逻辑切片，不是磁盘物理切割。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "为什么分区数影响并行度？",
+        "options": [
+          "分区数 = 并行 Task 数 = 理论并行度",
+          "分区数等于 Executor 数，有几个工人就有几个分区",
+          "分区越多，最终结果越精确、误差越小",
+          "分区数等于 Stage 数，每个分区对应一个 Stage"
+        ],
+        "correct_index": 0,
+        "explanation": "每个分区对应一个 Task，所以分区数直接决定同时执行的 Task 数（并行度）。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "写下 df = spark.read.parquet('sales') 后调用 df.count()，Spark 内部发生什么？",
+        "options": [
+          "为各分区各起一个 Task 并行处理",
+          "先把整张表读进 Driver 内存再统一计算",
+          "DataFrame 不切分区，直接整体串行算",
+          "只为整个作业起一个全局 Task 统筹"
+        ],
+        "correct_index": 0,
+        "explanation": "Action 触发时，Spark 为当前每个分区起一个 Task，分派给 Executor 并行处理，Task 数 = 分区数。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "想查看当前 DataFrame 的分区数，用？",
+        "options": [
+          "df.rdd.getNumPartitions()",
+          "df.count()，数出的总行数就是分区数",
+          "df.show()，界面显示的行数代表分区数",
+          "spark.conf.get('partitions')，从配置项里查分区数"
+        ],
+        "correct_index": 0,
+        "explanation": "getNumPartitions() 直接返回当前分区数，是看清并行度的入口。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于分区与 HDFS block，正确的是？",
+        "options": [
+          "分区与 block 不是 1:1，输入格式/算子会改变分区数",
+          "分区数一定等于 HDFS block 数，二者一一对应",
+          "block 就是分区，两者是同一个概念",
+          "分区完全由 Driver 决定，跟 block 毫无关系"
+        ],
+        "correct_index": 0,
+        "explanation": "默认分区可能按 block 数给，但 repartition / 不同输入格式会改变它，二者非 1:1。",
+        "dimension": "comparison"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "分区是以下哪种？",
+        "options": [
+          "逻辑切分（由 partitioner/输入切片决定）",
+          "把文件在磁盘上物理劈成几块来分别读取",
+          "Driver 内存里拆分出来的数据对象",
+          "衡量网络带宽吞吐量的一个物理单位"
+        ],
+        "correct_index": 0,
+        "explanation": "分区是逻辑切片，由 partitioner 或输入格式决定，文件在磁盘上并未被物理劈开。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "为什么「分区数不影响结果正确性」？",
+        "options": [
+          "分区数越多，计算结果的精度就越高",
+          "切 2 份还是 200 份答案一样，只影响快慢",
+          "分区数决定了 Spark 具体选用哪种算法",
+          "分区只影响前端界面中数据如何显示"
+        ],
+        "correct_index": 1,
+        "explanation": "分区只决定数据怎么分布并行，不改变计算结果，只影响性能。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "repartition(200) 后 count()，大约产生几个 Task？",
+        "options": [
+          "约 1 个（几乎不并行）",
+          "约 2 个（只有两个分区）",
+          "约 200 个",
+          "约 0 个（不起 Task）"
+        ],
+        "correct_index": 2,
+        "explanation": "分区数改为 200，Action 时约 200 个 Task 并行，每个 Task 处理一个分区。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "想减少「不必要的分区误解」，该怎么做？",
+        "options": [
+          "直接默认 HDFS block 数就是当前分区数",
+          "凭经验随手设一个分区数就当真相",
+          "认为分区越多结果越准，于是盲目加分区",
+          "用 getNumPartitions() 看真实分区数"
+        ],
+        "correct_index": 3,
+        "explanation": "分区可能受算子/格式影响，应实际查看而非拍脑袋。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于「分区 vs 文件物理块」，正确的是？",
+        "options": [
+          "分区是逻辑视图，文件未被物理劈开",
+          "分区一定等于物理文件块的大小",
+          "分区存在于 Driver 的内存里",
+          "分区是网络传输层的一个概念"
+        ],
+        "correct_index": 0,
+        "explanation": "分区是「怎么读/怎么分配」的逻辑视图，不是磁盘切割。",
+        "dimension": "comparison"
+      }
+    ]
+  },
+  {
+    "lesson_slug": "l5-partition-count-parallelism",
+    "questions": [
+      {
+        "type": "single_choice",
+        "prompt": "「并行度」在 Spark 中约等于？",
+        "options": [
+          "该 Stage 的分区数（Task 数）",
+          "Executor 硬盘容量的大小决定并行度",
+          "SQL 查询所返回的总行数",
+          "集群网络带宽的兆比特数"
+        ],
+        "correct_index": 0,
+        "explanation": "并行度 = 同时执行的 Task 数 = 该 Stage 的分区数。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "为什么分区数太少会慢？",
+        "options": [
+          "分区少会直接导致计算结果出错",
+          "分区少必然触发一次额外的 Shuffle 重排",
+          "分区少会让网络变得更加拥堵",
+          "Executor 闲置或单 Task 过大（长尾/OOM）"
+        ],
+        "correct_index": 3,
+        "explanation": "分区远少于核数时算力闲置；单分区过大则长尾任务、易 OOM。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "写下 df.repartition(10000).count() 会发生什么？",
+        "options": [
+          "只起 1 个 Task，整张表串行处理",
+          "起 1 万个 Task，多数只处理几 KB，调度开销反噬",
+          "结果会比默认分区时更精确可靠",
+          "DataFrame 不再切分区，直接在内存算"
+        ],
+        "correct_index": 1,
+        "explanation": "海量小 Task 的调度/启动开销可能超过计算本身，且易产生小文件。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "想避免「百核集群 98 核闲置」，应该？",
+        "options": [
+          "让分区数匹配集群并行能力（合理设置分区数）",
+          "把分区数降到 1 最省事也最快",
+          "硬凑更多 block 数来人为凑并行度",
+          "集群慢是硬件问题，对此无能为力"
+        ],
+        "correct_index": 0,
+        "explanation": "分区数应大致匹配可用并行度，否则资源浪费（具体最优值调优留 L7）。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于「分区数 vs 结果正确性」，正确的是？",
+        "options": [
+          "分区数直接决定最终答案",
+          "分区少答案就会算错",
+          "分区多答案才正确",
+          "只影响性能，不影响正确性"
+        ],
+        "correct_index": 3,
+        "explanation": "分区是性能旋钮，不是正确性旋钮。",
+        "dimension": "comparison"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "默认 shuffle 分区数（spark.sql.shuffle.partitions）通常是？",
+        "options": [
+          "1（最小值就是 1）",
+          "200（默认值，非最优保证）",
+          "等于集群 CPU 的总核数",
+          "无限大，按需自动扩展"
+        ],
+        "correct_index": 1,
+        "explanation": "默认 200，只是默认值，是否适合你的数据需结合规模判断（调优留 L7）。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "为什么本课不给「最优分区数经验公式」？",
+        "options": [
+          "有固定经验公式，照抄即可不用想",
+          "是作者漏写导致的课程遗漏",
+          "最优值取决于数据量/核数/记录大小，是 L7 调优主题",
+          "Spark 能自动算出完美值，无需操心"
+        ],
+        "correct_index": 2,
+        "explanation": "最优分区数依数据和集群而定，本课只建原理直觉，定量调优留 L7。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "分区太多除了调度开销，还容易带来？",
+        "options": [
+          "会导致计算结果出错",
+          "必然触发一次 Shuffle 重排",
+          "内存溢出到 Driver 端",
+          "海量小文件（每 Task 一个输出）"
+        ],
+        "correct_index": 3,
+        "explanation": "每个 Task 通常产生一个输出文件，分区过多易产生小文件问题。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "评估一段作业是否「分区过少」应看？",
+        "options": [
+          "输入文件的大小决定并行度",
+          "任务并行度是否远低于可用核数",
+          "SQL 语句的行数决定并行度",
+          "网络延迟的高低决定并行度"
+        ],
+        "correct_index": 1,
+        "explanation": "并行度（Task 数）远低于核数即资源浪费，是分区过少的信号。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于「分区越多越并行越快」，正确的是？",
+        "options": [
+          "永远成立，分区越多越快",
+          "分区与并行度毫无关系",
+          "不一定，太多调度开销反噬",
+          "只影响正确性不影响速度"
+        ],
+        "correct_index": 2,
+        "explanation": "分区数是平衡杠杆，不是越大越好。",
+        "dimension": "comparison"
+      }
+    ]
+  },
+  {
+    "lesson_slug": "l5-what-is-shuffle",
+    "questions": [
+      {
+        "type": "single_choice",
+        "prompt": "Shuffle 最准确的定位是？",
+        "options": [
+          "把文件在磁盘上物理劈开",
+          "数据先回 Driver 再中转分发",
+          "一种本地磁盘排序算法",
+          "跨节点按 key 重新分布数据"
+        ],
+        "correct_index": 3,
+        "explanation": "Shuffle 是宽依赖时跨节点按 key 重分布数据的物理过程。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "为什么 groupBy / orderBy 通常会触发 Shuffle？（join 要分策略）",
+        "options": [
+          "因为这类操作必须把数据先全部拉回 Driver 端汇总，再重新下发给各工人",
+          "需要全局按 key 汇聚 / 全局有序，通常要跨节点重排（上游已按该 key 分区时可省）",
+          "因为 Spark 出于稳妥，会对每一个算子都强制插入一次重排",
+          "因为要先把中间结果写进磁盘排序、读完才能交给下一步处理"
+        ],
+        "correct_index": 1,
+        "explanation": "这些操作需要「全局按 key 汇聚或全局有序」，无法在本地完成，必须跨节点重排。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "写下 df.groupBy('city').count() 触发 Action 后，Shuffle 阶段发生什么？",
+        "options": [
+          "按 city 哈希、序列化、跨网络发到目标 Executor、反序列化归并",
+          "数据先回 Driver 汇总成一份再分发给各工人",
+          "数据完全不移动，直接在本地就地计算",
+          "只做本地排序，从不跨网络做传输"
+        ],
+        "correct_index": 0,
+        "explanation": "map 端按 key 分区/combine、序列化、网络传输到目标端、反序列化归并，完成跨节点重排。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "在计划里认出 Shuffle，应该看哪个节点？",
+        "options": [
+          "Scan",
+          "Project",
+          "Filter",
+          "Exchange"
+        ],
+        "correct_index": 3,
+        "explanation": "Exchange 节点就是 Shuffle 的物理信号，复用 L4 的读法。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于 Shuffle 与宽依赖，正确的是？",
+        "options": [
+          "Shuffle 是代码写错才抛出的异常",
+          "Shuffle 是宽依赖的物化，不是错误",
+          "宽依赖根本不会发生 Shuffle",
+          "Shuffle 只发生在 Driver 端内部"
+        ],
+        "correct_index": 1,
+        "explanation": "只要计算需全局按 key 汇聚，Shuffle 必然发生，它是代价不是错误。",
+        "dimension": "comparison"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "Shuffle 发生时数据在谁之间传输？",
+        "options": [
+          "先回 Driver 中转再发下去",
+          "只在单个磁盘内部移动",
+          "Executor 之间直接互传",
+          "经网络发到客户端浏览器"
+        ],
+        "correct_index": 2,
+        "explanation": "Shuffle 是 Executor 之间跨节点互传，Driver 不抱数据。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "为什么 Shuffle 是「某些操作特别慢」的根源？",
+        "options": [
+          "它根本不改变任何代码的逻辑结构",
+          "它只在内存里做一次轻量排序",
+          "它其实非常快，性能可忽略不计",
+          "它涉及跨节点重分布（序列化+网络+反序列化+排序）"
+        ],
+        "correct_index": 3,
+        "explanation": "跨节点重分布带来多环节开销，是作业中最昂贵的操作之一。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "df.groupBy('city').count().explain() 会显示几个 Stage？",
+        "options": [
+          "1 个（不切 Stage）",
+          "2 个（1 次 Shuffle 切出）",
+          "0 个（没有 Stage）",
+          "10 个（每算子一个）"
+        ],
+        "correct_index": 1,
+        "explanation": "1 次 Exchange（Shuffle）→ 2 个 Stage（本地预聚合 / 跨节点合并）。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "看到代码里有 Exchange，第一反应应是？",
+        "options": [
+          "说明代码写错了，必须立刻改",
+          "说明最终结果一定会算错",
+          "注意这是 Shuffle，是性能重点信号",
+          "无需关心，这只是正常现象"
+        ],
+        "correct_index": 2,
+        "explanation": "Exchange = Shuffle，是性能重点信号，但未必是错误。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于「Shuffle 能否避免」，正确的是？",
+        "options": [
+          "通常需要；上游已按该 key 分区或走 Broadcast Join 时可省",
+          "永远可以靠配置一个参数就彻底避免 Shuffle 的发生",
+          "Shuffle 在 Spark 里永远不可能发生，这只是谣言",
+          "只有 join 这一种操作才会触发 Shuffle"
+        ],
+        "correct_index": 0,
+        "explanation": "宽依赖的必然代价，需要全局按 key 汇聚时无法避免。",
+        "dimension": "comparison"
+      }
+    ]
+  },
+  {
+    "lesson_slug": "l5-shuffle-cost",
+    "questions": [
+      {
+        "type": "single_choice",
+        "prompt": "Shuffle 代价主要来自哪些环节？",
+        "options": [
+          "只做排序这一步，不涉及任何其他环节",
+          "序列化 → 网络传输 → 反序列化 → 排序/聚合",
+          "只做数据读取，根本不做任何传输",
+          "只写磁盘，完全不进入网络"
+        ],
+        "correct_index": 1,
+        "explanation": "Shuffle 跨节点重排涉及序列化、网络、反序列化、排序/聚合多环节开销。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "为什么 Shuffle 比「内存里挪一下数据」贵得多？",
+        "options": [
+          "它跨网络、要序列化/反序列化、可能 spill 磁盘",
+          "它根本不改变数据本身的内容",
+          "它只在内存里做一次轻量排序",
+          "它其实非常快，性能可忽略不计"
+        ],
+        "correct_index": 0,
+        "explanation": "Shuffle 是多环节重活，涉及网络与序列化，还可能 spill，远非零成本内存操作。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "写下 df.groupBy('city').sum('amount')，Shuffle 在 map/reduce 端各做什么？",
+        "options": [
+          "Shuffle 发生时两边都不需要移动任何数据、原地完成",
+          "只在 reduce 端做排序，map 端这一步完全不做事",
+          "只在 map 端读取，reduce 端这一步完全不做事",
+          "map 端分区+排序+combine，reduce 端 fetch+反序列化+归并"
+        ],
+        "correct_index": 3,
+        "explanation": "map 端按 key 分区、排序/combine、写块；reduce 端 fetch、反序列化、归并。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "想直观感受 Shuffle 代价，看计划里哪个节点？",
+        "options": [
+          "Scan 节点（扫描数据）",
+          "Exchange（背后即序列化+网络+重排）",
+          "Project 节点（投影列）",
+          "Filter 节点（过滤行）"
+        ],
+        "correct_index": 1,
+        "explanation": "Exchange 即 Shuffle，其背后是一串跨节点开销。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于 spill 到磁盘，正确的是？",
+        "options": [
+          "spill 能把 Shuffle 的速度变得更快、反而更优",
+          "spill 在 Spark 的实际运行里根本不会发生",
+          "内存不足时 spill，磁盘 I/O 通常比内存慢 1~2 个数量级，放大代价",
+          "spill 只影响前端界面的显示效果、无关性能"
+        ],
+        "correct_index": 2,
+        "explanation": "spill 把中间结果写磁盘，I/O 远慢于内存，是 Shuffle 贵的重要放大器。",
+        "dimension": "comparison"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "本课对 spark.shuffle.file.buffer / compression 等参数怎么处理？",
+        "options": [
+          "本课就手把手教你怎么调优",
+          "这些参数完全用不着去管",
+          "参数默认值已经是最优解",
+          "只讲原理，具体调优参数留 Level 7"
+        ],
+        "correct_index": 3,
+        "explanation": "本课只建立「贵在哪」的原理直觉，具体调优参数留 L7。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "数据倾斜为什么会放大 Shuffle 代价？",
+        "options": [
+          "倾斜会让 Shuffle 直接消失",
+          "少数 key 的货极多，单节点被压垮拖慢整体",
+          "倾斜只影响前端界面的显示",
+          "倾斜反而能加快网络传输"
+        ],
+        "correct_index": 1,
+        "explanation": "倾斜时某些 key 的 Shuffle 块远超其他，单节点瓶颈拖垮整体（调优留 L7）。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "reduce 端拉取（fetch）属于 Shuffle 的哪类开销？",
+        "options": [
+          "本地排序环节（不涉及网络）",
+          "Driver 端计算环节",
+          "网络传输环节（跨节点拉取自己负责的分区）",
+          "最终结果展示环节"
+        ],
+        "correct_index": 2,
+        "explanation": "reduce 端通过网络 fetch 属于自己的分区数据，是网络传输环节。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "评估一段作业是否受 Shuffle 主导，应关注？",
+        "options": [
+          "Exchange 数量与数据量（计划/UI）",
+          "输入文件的大小是主要因素",
+          "SQL 语句的长度决定一切",
+          "界面显示的效果好坏"
+        ],
+        "correct_index": 0,
+        "explanation": "Shuffle 主导的作业通常 Exchange 多、传输量大，可在计划与 Spark UI 观察。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于 Shuffle 代价环节，正确的是？",
+        "options": [
+          "只有网络传输这一个环节会真正消耗资源花钱",
+          "只有排序这一个环节会真正消耗资源花钱",
+          "这些环节全都不消耗任何资源、完全免费",
+          "map 端排序+combine，reduce 端 fetch+归并，都花钱"
+        ],
+        "correct_index": 3,
+        "explanation": "排序、combine、序列化、网络、归并每个环节在大数据量下都可能是瓶颈。",
+        "dimension": "comparison"
+      }
+    ]
+  },
+  {
+    "lesson_slug": "l5-narrow-wide-partition",
+    "questions": [
+      {
+        "type": "single_choice",
+        "prompt": "在分区层面，窄依赖意味着？",
+        "options": [
+          "子分区只依赖父局部分区，无需重排",
+          "子分区依赖父全部分区",
+          "一定触发 Shuffle",
+          "需要跨节点做传输"
+        ],
+        "correct_index": 0,
+        "explanation": "窄依赖中子分区只由有限个（通常 1 个）父分区计算，无需跨节点重排。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "为什么宽依赖处必然切 Stage？",
+        "options": [
+          "宽依赖反而比窄依赖跑得更快",
+          "宽依赖根本不发生 Shuffle",
+          "Stage 是随机切出来的",
+          "子分区要等所有上游同 key 货到齐，天然跨节点"
+        ],
+        "correct_index": 3,
+        "explanation": "宽依赖的子分区依赖全局同 key 数据，必须跨节点重分布，无法留在同一段连续工序。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "写下 df.filter(...).select(...) 与 df.groupBy('city').count()，Stage 划分有何不同？",
+        "options": [
+          "filter 与 groupBy 都会各自切出一个全新的 Stage 边界",
+          "前者无 Exchange 同 Stage，后者有 Exchange 切 Stage",
+          "filter 与 groupBy 都在同一 Stage 里、完全不切分",
+          "只有 filter 切 Stage、groupBy 始终不切"
+        ],
+        "correct_index": 1,
+        "explanation": "filter/select 是窄依赖，同 Stage 融合；groupBy 是宽依赖，Exchange 处切 Stage。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "想判断「分区会不会被重分配」，应看？",
+        "options": [
+          "输入文件的大小决定一切",
+          "SQL 语句行数的多少决定",
+          "依赖类型（窄/宽）与是否需全局重分布",
+          "界面显示的设置决定"
+        ],
+        "correct_index": 2,
+        "explanation": "宽依赖（需全局按 key 汇聚）才会重分配分区，窄依赖就地处理。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于「Stage 边界 = Shuffle 切口」，正确的是？",
+        "options": [
+          "窄依赖也会切 Stage",
+          "Stage 由 Executor 数量决定",
+          "Stage 与 Shuffle 完全没有任何关系",
+          "宽依赖处的 Shuffle 就是 Stage 边界"
+        ],
+        "correct_index": 3,
+        "explanation": "宽依赖处的 Exchange（Shuffle）即 Stage 边界，也是融合断点。",
+        "dimension": "comparison"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "L5 对窄/宽依赖的「定义」怎么处理？",
+        "options": [
+          "L5 会重新讲一遍窄/宽依赖的定义",
+          "定义 L4 已讲，L5 只延展到分区物化与 Stage 切口",
+          "L4 的定义已经过时、需要作废",
+          "L5 不再提及窄/宽依赖的概念"
+        ],
+        "correct_index": 1,
+        "explanation": "L5 重点在分区如何被重新分配与 Stage 边界，不重复 L4 定义。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "为什么宽依赖失败恢复比窄依赖贵？",
+        "options": [
+          "宽依赖的 Shuffle 输出即使丢了也无需做任何恢复",
+          "窄依赖与宽依赖的恢复代价是完全相同的",
+          "Shuffle 输出丢失时可能要重跑相关上游 map task，恢复成本远高于本地重算一个分区",
+          "窄依赖一旦丢失，恢复起来反而比宽依赖更贵"
+        ],
+        "correct_index": 2,
+        "explanation": "宽依赖下游依赖全局按 key 汇聚，上游丢失需整体重算，代价大（呼应 L4）。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "groupBy 在分区层面属于？",
+        "options": [
+          "宽依赖，父分区数据发往多个子分区（通常需 Shuffle；上游已按该 key 分区时可省）",
+          "窄依赖，子分区的数据完全不跨分区做传输",
+          "分组操作完全不做任何数据分配或重分布",
+          "数据完全在本地不移动、就地完成计算"
+        ],
+        "correct_index": 0,
+        "explanation": "groupBy 需跨节点按 key 重分布，父分区数据发往多个子分区。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "评估「某算子是否切 Stage」应看？",
+        "options": [
+          "代码行数的多少决定切不切 Stage",
+          "输入文件的数量决定切不切 Stage",
+          "界面显示的效果决定切不切 Stage",
+          "有没有 Exchange（宽依赖），而非算子数量"
+        ],
+        "correct_index": 3,
+        "explanation": "只有宽依赖（Exchange）切 Stage，窄算子在同一 Stage 融合。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于窄依赖与分区，正确的是？",
+        "options": [
+          "窄依赖也跨节点重排",
+          "父→子分区是局部分配，无跨节点重排",
+          "窄依赖必然 Shuffle",
+          "窄依赖也会切 Stage"
+        ],
+        "correct_index": 1,
+        "explanation": "窄依赖中父→子分区是局部分配，不触发跨节点重分布。",
+        "dimension": "comparison"
+      }
+    ]
+  },
+  {
+    "lesson_slug": "l5-shuffle-trigger-operators",
+    "questions": [
+      {
+        "type": "single_choice",
+        "prompt": "以下哪组算子通常一定触发 Shuffle？",
+        "options": [
+          "select / filter / map 这类纯窄算子通常也会触发 Shuffle",
+          "union（同 schema 直接拼接）必然触发 Shuffle",
+          "cache（纯缓存）也会让数据重分布",
+          "groupBy / orderBy / distinct / repartition"
+        ],
+        "correct_index": 3,
+        "explanation": "这些操作需全局按 key 汇聚或全局有序，必然或通常触发 Shuffle。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "判断一个算子是否 Shuffle 的真正判据是？",
+        "options": [
+          "算子名字好不好听、炫不炫",
+          "是否需要全局按 key 汇聚 / 全局有序",
+          "代码行数的多少",
+          "是否用了 SQL 接口"
+        ],
+        "correct_index": 1,
+        "explanation": "是否需全局重分布才是判据，不是算子名本身。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "写下 dfA.join(dfB, 'id').explain()，计划里出现什么？",
+        "options": [
+          "计划里没有任何 Exchange 节点出现",
+          "所有计算都在 Driver 端本地完成",
+          "若走 Sort Merge Join 则两侧各一个 Exchange；若小表走 Broadcast Join 则只有 BroadcastExchange，大表不 Shuffle",
+          "数据原地做笛卡尔积，完全不重排"
+        ],
+        "correct_index": 2,
+        "explanation": "join 按 key 重分布两表，产生 Exchange（Shuffle）。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "想减少不必要的 Shuffle，第一步该？",
+        "options": [
+          "盲目加大内存配置来回避",
+          "一味增加分区数量来回避",
+          "改 SQL 方言换写法来回避",
+          "认出触发 Shuffle 的算子清单"
+        ],
+        "correct_index": 3,
+        "explanation": "先认得哪些操作会叫空中货运，才能有意识地避开不必要的飞货。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于 union（同 schema），正确的是？",
+        "options": [
+          "一定触发 Shuffle",
+          "通常只拼接分区，不 Shuffle",
+          "比 join 更容易 Shuffle",
+          "必须做全局排序才能合并"
+        ],
+        "correct_index": 1,
+        "explanation": "同 schema union 只是拼接分区，通常不触发 Shuffle。",
+        "dimension": "comparison"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "本课对 join 的策略（broadcast/sort-merge）怎么处理？",
+        "options": [
+          "本课会展开所有 join 策略的具体细节与调优代码",
+          "join 在任何情况下都永远不会发生任何 Shuffle",
+          "只点 join 通常要按 key 重分布（Broadcast Join 可免），深类型留 Level 6",
+          "join 在任何情况下都只会走 broadcast 这一种策略"
+        ],
+        "correct_index": 2,
+        "explanation": "join 深类型（broadcast 等怎么选）是 Level 6 内容，本课只点「会 Shuffle」。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "为什么 repartition 会 Shuffle？",
+        "options": [
+          "它强制跨节点重分布数据",
+          "它只读数据不重排",
+          "它只排序不重分布",
+          "它不移动任何数据"
+        ],
+        "correct_index": 0,
+        "explanation": "repartition 通过对数据 hash 重分布改分区数，必然触发 Shuffle。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "reduceByKey / aggregateByKey 通常属于？",
+        "options": [
+          "这类聚合绝不触发任何 Shuffle 重排",
+          "全部只在本地完成不跨任何节点",
+          "只做排序并不做合并",
+          "按 key，通常需跨节点合并；上游已按相同 key 分区时可省"
+        ],
+        "correct_index": 3,
+        "explanation": "按 key 的聚合通常需在 reduce 端跨节点合并，属 Shuffle 算子。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "评估「某个可能 Shuffle 的算子是否真 Shuffle」，应看？",
+        "options": [
+          "只听算子名字就能判断",
+          "计划里有无 Exchange，取决于上游分区分布",
+          "输入文件的大小决定",
+          "界面显示的设置决定"
+        ],
+        "correct_index": 1,
+        "explanation": "是否实际 Shuffle 取决于上游是否已是目标分区分布，看计划最准。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于「触发 Shuffle 的清单」，正确的是？",
+        "options": [
+          "是『需要全局重分布』的算子集合，非死记名字",
+          "背名字即可，无需理解原理",
+          "只有 groupBy 会 Shuffle",
+          "只有 join 会 Shuffle"
+        ],
+        "correct_index": 0,
+        "explanation": "清单的本质是「需全局按 key 汇聚/有序」，理解判据比背名字重要。",
+        "dimension": "comparison"
+      }
+    ]
+  },
+  {
+    "lesson_slug": "l5-reducebykey-vs-groupbykey",
+    "questions": [
+      {
+        "type": "single_choice",
+        "prompt": "reduceByKey 比 groupByKey 省 Shuffle 的根本原因是？",
+        "options": [
+          "reduceByKey 根本不 Shuffle",
+          "map 端先做本地 combine，传输量小",
+          "groupByKey 也先做本地 combine",
+          "reduceByKey 走的是更快的网络"
+        ],
+        "correct_index": 1,
+        "explanation": "reduceByKey 在 map 端本地聚合（combine），只传部分和，跨网络传输量远小于原始记录数。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "为什么 groupByKey 传输量大？",
+        "options": [
+          "它在 map 端就提前聚合并发走",
+          "它只做排序并不做传输",
+          "不做 combine，所有 value 原样 Shuffle",
+          "它比 reduceByKey 跑得更快"
+        ],
+        "correct_index": 2,
+        "explanation": "groupByKey 不做 map 端 combine，每个 key 的全部 value 原样飞到目标端再分组。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "写下 rdd.map(...).reduceByKey(_+_) 触发 Action 时，map 端发生什么？",
+        "options": [
+          "所有 value 原样飞往目标端不合并",
+          "本地完全不做任何聚合",
+          "只做排序并不做传输",
+          "同 key 先在本地相加成部分和，再 Shuffle 部分和"
+        ],
+        "correct_index": 3,
+        "explanation": "每个 Executor 先在本地把同 key 的 value 相加成部分和，Shuffle 时只传这些部分和。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "可换的聚合优先用哪个以减少飞货？",
+        "options": [
+          "groupByKey",
+          "reduceByKey / aggregateByKey",
+          "collect 回 Driver 用 Python 算",
+          "随便用哪个都行，不限"
+        ],
+        "correct_index": 1,
+        "explanation": "可换的聚合优先 reduceByKey / aggregateByKey，利用 map 端 combine 省传输。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于 combine 的前提，正确的是？",
+        "options": [
+          "任何聚合都能安全做 combine",
+          "只有 groupByKey 能做 combine",
+          "聚合函数须可结合（sum/min/max 等，通常同时可交换）",
+          "combine 不需要任何前提条件"
+        ],
+        "correct_index": 2,
+        "explanation": "只有可交换可结合的聚合才能安全地在 map 端预聚合，否则会算错。",
+        "dimension": "comparison"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "reduceByKey 是否完全消除 Shuffle？",
+        "options": [
+          "否，仍有一次 Shuffle，只是传输量小",
+          "是，零 Shuffle",
+          "reduceByKey 从不 Shuffle",
+          "只排序不 Shuffle"
+        ],
+        "correct_index": 0,
+        "explanation": "reduceByKey 优化的是 Shuffle 传输体积，仍至少有一次 Shuffle。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "为什么不能对所有聚合都用 map 端 combine？",
+        "options": [
+          "combine 永远会算错",
+          "Spark 不支持 combine",
+          "只有 sum 能用 combine",
+          "依赖全局顺序的聚合不可结合（如中位数）"
+        ],
+        "correct_index": 3,
+        "explanation": "依赖全局顺序的聚合不满足可结合性，本地先聚合会得到错误结果。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "groupByKey 在 Shuffle 阶段传输的是什么？",
+        "options": [
+          "只传输每个 key 的部分和",
+          "每个 key 的全部 value（原样）",
+          "只传 key 不传 value",
+          "传输排好序的结果"
+        ],
+        "correct_index": 1,
+        "explanation": "groupByKey 不做 combine，传输量 = 原始 value 总数。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "评估「能否用 reduceByKey 替代 groupByKey」，应看？",
+        "options": [
+          "聚合是否可结合（能否安全本地预聚合）",
+          "输入文件的大小决定一切",
+          "SQL 语句的长度决定一切",
+          "界面显示的设置决定"
+        ],
+        "correct_index": 0,
+        "explanation": "可换的聚合（sum/min/max 等）可改 reduceByKey 省飞货；不可结合的不能。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于本课 tuning 代码（partitioner/分区数），正确的是？",
+        "options": [
+          "本课就教你调到最优",
+          "这些调优完全不需要做",
+          "默认值已经是最优解",
+          "只讲原理，调优代码留 Level 7"
+        ],
+        "correct_index": 3,
+        "explanation": "本课只讲「为什么 reduceByKey 更省」，设 partitioner/调分区数留 L7。",
+        "dimension": "comparison"
+      }
+    ]
+  },
+  {
+    "lesson_slug": "l5-repartition-coalesce",
+    "questions": [
+      {
+        "type": "single_choice",
+        "prompt": "repartition 与 coalesce 的核心区别是？",
+        "options": [
+          "两者都必然触发一次 Shuffle 重排、行为完全一致",
+          "两者都不会触发任何 Shuffle、随便用哪个都行",
+          "repartition 必 Shuffle 可增可减；coalesce 默认不 Shuffle 只能减",
+          "coalesce 能凭空增加分区数、和 repartition 等价"
+        ],
+        "correct_index": 2,
+        "explanation": "repartition 一定 Shuffle、可增可减；coalesce 默认窄合并不 Shuffle、只能减。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "为什么「想减分区又不想白付 Shuffle」选 coalesce？",
+        "options": [
+          "coalesce 用更快的网络传输",
+          "repartition 不能减少分区",
+          "coalesce 必然触发 Shuffle",
+          "coalesce 默认走窄依赖合并，不触发 Shuffle"
+        ],
+        "correct_index": 3,
+        "explanation": "coalesce 默认 shuffle=False，合并相邻分区，不触发 Shuffle，适合纯减分区。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "写下 df.repartition(200) 与 df.coalesce(2)，计划里 Exchange 有何不同？",
+        "options": [
+          "两者都会产生 Exchange 节点、没有区别",
+          "repartition 有 Exchange（Shuffle），coalesce 无",
+          "两者都不会产生 Exchange、没有区别",
+          "coalesce 有 Exchange 而 repartition 没有"
+        ],
+        "correct_index": 1,
+        "explanation": "repartition 必产生 Exchange；coalesce 默认不 Shuffle，无 Exchange。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "想增加分区数，应该用？",
+        "options": [
+          "coalesce（只能合并不能增）",
+          "limit（只截断行数用）",
+          "repartition（coalesce 不能增）",
+          "cache（只缓存数据用）"
+        ],
+        "correct_index": 2,
+        "explanation": "coalesce 只合并、不能凭空增多分区，增分区必须用 repartition。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于 coalesce 不能增分区，正确的是？",
+        "options": [
+          "它只合并现有分区，无法创造新分区",
+          "它能增但速度很慢",
+          "它能随意增任意多",
+          "增分区也用 coalesce"
+        ],
+        "correct_index": 0,
+        "explanation": "coalesce 是合并操作，分区数只能减少不能增加。",
+        "dimension": "comparison"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "repartition(n) 是否会触发 Shuffle？",
+        "options": [
+          "无论何时都从不触发",
+          "只在减分区时才触发",
+          "只在增分区时才触发",
+          "一定触发（无论增还是减）"
+        ],
+        "correct_index": 3,
+        "explanation": "repartition 通过 hash 重分布改分区数，任何方向都付一次 Shuffle。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "为什么 repartition 任何方向都 Shuffle？",
+        "options": [
+          "repartition 其实只是把数据原样读取一遍，并不做任何重新打散或移动",
+          "它用 round-robin 把数据重新打散到 n 个新分区（不保证同 key 同分区）",
+          "repartition 只按 key 做本地排序，并不把数据跨节点重分布",
+          "repartition 根本不移动数据，只在每个分区内部原地整理"
+        ],
+        "correct_index": 1,
+        "explanation": "repartition 必须跨节点重分布数据以达到目标分区数，必然 Shuffle。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "coalesce 跨节点合并时，数据会怎样？",
+        "options": [
+          "仍可能移动数据（shuffle=False 主要同节点合并）",
+          "绝对零移动，完全不动数据",
+          "必然先回 Driver 中转一下",
+          "只做排序并不移动数据"
+        ],
+        "correct_index": 0,
+        "explanation": "coalesce 默认同节点合并，但跨节点合并仍可能移动数据，并非绝对零移动。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "评估「减分区该用哪个」，应看？",
+        "options": [
+          "输入文件的大小是判断依据",
+          "SQL 语句的长度是判断依据",
+          "界面显示的设置是依据",
+          "是否想避免 Shuffle → 优先 coalesce"
+        ],
+        "correct_index": 3,
+        "explanation": "纯减分区且不想付 Shuffle，优先 coalesce。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于两者与不可变语义，正确的是？",
+        "options": [
+          "会就地修改原 DataFrame",
+          "都返回新 DataFrame，原 DataFrame 不变",
+          "两者都改原 DataFrame",
+          "不支持链式调用方式"
+        ],
+        "correct_index": 1,
+        "explanation": "repartition/coalesce 都返回新的 DataFrame，遵循不可变语义。",
+        "dimension": "comparison"
+      }
+    ]
+  },
+  {
+    "lesson_slug": "l5-comprehensive",
+    "questions": [
+      {
+        "type": "single_choice",
+        "prompt": "综合读图的第一步是？",
+        "options": [
+          "先数一共有多少个 Task 就能定位性能瓶颈",
+          "先打开 Spark UI 界面看任务的运行时长",
+          "直接改代码加并行度就能解决所有问题",
+          "找 Shuffle（空中飞货：groupBy/orderBy/join）"
+        ],
+        "correct_index": 3,
+        "explanation": "先找触发 Shuffle 的算子，它们是性能重点信号与 Stage 边界。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "对单条线性依赖链，估算 Stage 数的公式是？",
+        "options": [
+          "等于该作业的总分区数",
+          "Shuffle（Exchange）边界数 + 1",
+          "等于 Task 的总数",
+          "等于 Action 的调用次数"
+        ],
+        "correct_index": 1,
+        "explanation": "Stage 数 = Shuffle（Exchange）数 + 1。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "一段 logs.groupBy('city').count().orderBy(desc).limit(10) 通常有几处 Shuffle？",
+        "options": [
+          "1 处（只有 groupBy 触发一处 Exchange）",
+          "3 处（每个算子各触发一处 Exchange）",
+          "2（groupBy + orderBy；limit 不 Shuffle）",
+          "0 处（整条链路从头到尾都不 Shuffle）"
+        ],
+        "correct_index": 2,
+        "explanation": "groupBy 与 orderBy 各一处 Exchange，limit 不 Shuffle，共 2 处。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "如何估计一段作业的并行度？",
+        "options": [
+          "看分区数（Task 数 = 分区数）",
+          "看 SQL 语句的行数多少",
+          "看输入文件的大小",
+          "看界面显示的效果"
+        ],
+        "correct_index": 0,
+        "explanation": "并行度 ≈ 该 Stage 的分区数，即 Task 数。",
+        "dimension": "apply"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "为什么「计划相同 ≠ 运行时性能相同」？",
+        "options": [
+          "是计划本身写错了",
+          "两者其实毫无关系",
+          "Spark 会随机变慢",
+          "数据倾斜、分区数等运行时因素影响真实耗时"
+        ],
+        "correct_index": 3,
+        "explanation": "同样计划在不同数据分布/分区数下真实耗时差异大，倾斜等是运行时因素（L7）。",
+        "dimension": "why"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "Level 5 综合练习的达标标准是？",
+        "options": [
+          "综合练习要求把作业代码改到最快、做出最优性能",
+          "读懂：认 Shuffle、数 Stage、估并行度、指出 reduceByKey 优化点",
+          "综合练习要求把功能完全重写一遍才算真正学会",
+          "综合练习要求立刻做出完整参数调优才算验收通过"
+        ],
+        "correct_index": 1,
+        "explanation": "综合只验收「看得懂分区与 Shuffle、能识别触发点」，不要求调优。",
+        "dimension": "comparison"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "看到 groupByKey 后 sum，可指出什么优化点（原理）？",
+        "options": [
+          "改用 reduceByKey 类做 map 端 combine，减少飞货",
+          "盲目加大内存配置就能回避所有的飞货",
+          "一味增加分区数量就能回避所有的飞货",
+          "改 SQL 方言换写法就能回避所有的飞货"
+        ],
+        "correct_index": 0,
+        "explanation": "可换的聚合优先 reduceByKey，利用 combine 省 Shuffle（只点原理，不写 tuning）。",
+        "dimension": "mechanism"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "综合读图练习用什么工具最划算？",
+        "options": [
+          "show() 直接看结果",
+          "write() 写盘再看",
+          "collect() 拉回本地",
+          "explain()（不执行，零成本）"
+        ],
+        "correct_index": 3,
+        "explanation": "explain() 不触发执行，是随时可做、零成本的读图手段。",
+        "dimension": "concept"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "关于「综合练习与调优」，正确的是？",
+        "options": [
+          "必须当场做参数调优",
+          "综合只验读懂，调优留 L6/L7",
+          "不用读图直接写代码",
+          "读图对调优毫无用处"
+        ],
+        "correct_index": 1,
+        "explanation": "本课目标是「看得懂分区与 Shuffle」，定量调优在 L6（Join）/L7（性能）。",
+        "dimension": "comparison"
+      },
+      {
+        "type": "single_choice",
+        "prompt": "数 Stage 时容易漏算什么？",
+        "options": [
+          "数 Stage 时最容易被人漏算的是最后一个收尾的 Stage",
+          "数 Stage 时最容易被人漏算的是中间过渡的 Stage",
+          "初始 Stage（单条线性链：Stage 数 = Shuffle 数 + 1，从 1 起算）",
+          "数 Stage 其实从开头到结尾每一个都不容易漏算"
+        ],
+        "correct_index": 2,
+        "explanation": "易漏「初始 Stage」，记住从 1 开始加，Shuffle 数 + 1。",
+        "dimension": "mechanism"
+      }
+    ]
+  }
 ]
 
 
